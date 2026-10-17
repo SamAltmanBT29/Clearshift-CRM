@@ -1,0 +1,11 @@
+{
+  "name": "@clearshift/crm-4",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM-4 Marketing Lists and Campaign History \u2014 Team crm-marketing",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@clearshift/crm-5",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM-5 Migration Control Center and Reports \u2014 Team crm-reports",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}

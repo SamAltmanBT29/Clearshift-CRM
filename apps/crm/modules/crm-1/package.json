@@ -1,0 +1,11 @@
+{
+  "name": "@clearshift/crm-1",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM-1 Contacts, Companies and Leads \u2014 Team crm-contacts",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}

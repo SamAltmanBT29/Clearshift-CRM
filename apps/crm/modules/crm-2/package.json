@@ -1,0 +1,11 @@
+{
+  "name": "@clearshift/crm-2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM-2 Deals, Pipeline and Quotes \u2014 Team crm-deals",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}

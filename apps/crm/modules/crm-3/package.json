@@ -1,0 +1,11 @@
+{
+  "name": "@clearshift/crm-3",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CRM-3 Support Tickets and Activities \u2014 Team crm-support",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
+}
