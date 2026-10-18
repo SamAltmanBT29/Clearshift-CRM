@@ -1,7 +1,10 @@
-/**
- * CRM-3 Support Tickets and Activities
- * Team: crm-support
- */
+import { crm3Resolver } from "./public.js";
 
-export const MODULE_ID = 'crm-3';
-export const MODULE_NAME = 'CRM-3 Support Tickets and Activities';
+export const moduleDefinition = {
+  id: "crm3",
+  schema: "crm3",
+  routePrefix: "/api/v1/crm-tickets",
+  referenceResolvers: crm3Resolver
+};
+
+export default moduleDefinition;
