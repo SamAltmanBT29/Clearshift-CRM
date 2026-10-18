@@ -1,11 +1,23 @@
 {
-  "name": "@clearshift/crm-5",
-  "version": "0.1.0",
+  "name": "@cs/mod-crm5",
+  "version": "1.0.0",
   "private": true,
-  "description": "CRM-5 Migration Control Center and Reports \u2014 Team crm-reports",
-  "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./public": "./dist/public.js"
+  },
   "scripts": {
-    "test": "vitest run"
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@cs/kernel": "workspace:*",
+    "@cs/core": "workspace:*",
+    "@cs/kit": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
   }
 }

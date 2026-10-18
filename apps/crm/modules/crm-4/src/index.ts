@@ -1,7 +1,10 @@
-/**
- * CRM-4 Marketing Lists and Campaign History
- * Team: crm-marketing
- */
+import { crm4Resolver } from "./public.js";
 
-export const MODULE_ID = 'crm-4';
-export const MODULE_NAME = 'CRM-4 Marketing Lists and Campaign History';
+export const moduleDefinition = {
+  id: "crm4",
+  schema: "crm4",
+  routePrefix: "/api/v1/crm-marketing",
+  referenceResolvers: crm4Resolver
+};
+
+export default moduleDefinition;
