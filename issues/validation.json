@@ -1,0 +1,31 @@
+{
+  "catalog_title": "ClearShift V1 Detailed Module Issue Catalog",
+  "revision": "2.0",
+  "standard": "30 Issues per Workstream (Symmetric)",
+  "issue_count": 360,
+  "dependency_edge_count": 683,
+  "missing_dependencies": [],
+  "cycle_count": 0,
+  "counts_by_module": {
+    "ERP1": 30,
+    "ERP2": 30,
+    "ERP3": 30,
+    "ERP4": 30,
+    "ERP5": 30,
+    "CRM1": 30,
+    "CRM2": 30,
+    "CRM3": 30,
+    "CRM4": 30,
+    "CRM5": 30
+  },
+  "counts_by_stream": {
+    "PLT": 12,
+    "KIT": 18,
+    "INT": 6,
+    "QA": 8,
+    "REL": 4,
+    "PMO": 12
+  },
+  "total_workstreams": 12,
+  "validation_status": "PASSED"
+}
