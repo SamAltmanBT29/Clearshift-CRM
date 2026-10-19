@@ -1,7 +1,10 @@
-/**
- * CRM-2 Deals, Pipeline and Quotes
- * Team: crm-deals
- */
+import { crm2Resolver } from "./public.js";
 
-export const MODULE_ID = 'crm-2';
-export const MODULE_NAME = 'CRM-2 Deals, Pipeline and Quotes';
+export const moduleDefinition = {
+  id: "crm2",
+  schema: "crm2",
+  routePrefix: "/api/v1/crm-deals",
+  referenceResolvers: crm2Resolver
+};
+
+export default moduleDefinition;

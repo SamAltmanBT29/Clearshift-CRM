@@ -1,11 +1,23 @@
 {
-  "name": "@clearshift/crm-1",
-  "version": "0.1.0",
+  "name": "@cs/mod-crm1",
+  "version": "1.0.0",
   "private": true,
-  "description": "CRM-1 Contacts, Companies and Leads \u2014 Team crm-contacts",
-  "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./public": "./dist/public.js"
+  },
   "scripts": {
-    "test": "vitest run"
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@cs/kernel": "*",
+    "@cs/core": "*",
+    "@cs/kit": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
   }
 }

@@ -1,5 +1,1 @@
-/**
- * @clearshift/ui — Shared UI Components and Tokens
- */
-
-export const UI_VERSION = '1.0.0';
+export const TOKENS_CSS_PATH = "./tokens/tokens.css";
