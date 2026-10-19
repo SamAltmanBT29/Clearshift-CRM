@@ -10,12 +10,16 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@clearshift/contracts": "*",
     "@cs/kernel": "*",
     "@cs/core": "*",
-    "@cs/kit": "*"
+    "@cs/kit": "*",
+    "@cs/db": "*",
+    "fastify": "^5.12.7"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

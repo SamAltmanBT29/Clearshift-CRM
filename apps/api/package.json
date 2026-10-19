@@ -21,6 +21,7 @@
     "@cs/mod-crm3": "*",
     "@cs/mod-crm4": "*",
     "@cs/mod-crm5": "*",
+    "@clearshift/contracts": "*",
     "fastify": "^5.2.0",
     "zod": "^3.24.0"
   },

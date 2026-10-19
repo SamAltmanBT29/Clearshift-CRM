@@ -4,6 +4,10 @@ export const MODULE_ID = 'crm-5';
 export const MODULE_NAME = 'CRM-5 Migration Control Center and Reports';
 
 export * from '../db/schema.js';
+export * from './services/control-center.service.js';
+export * from './routes/control-center.routes.js';
+export * from './app.js';
+
 export const moduleDefinition = {
   id: "crm5",
   schema: "crm5",

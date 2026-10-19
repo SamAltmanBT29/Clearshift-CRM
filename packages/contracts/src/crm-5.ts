@@ -35,10 +35,44 @@ export type MigrationRunStatus = z.infer<typeof MigrationRunStatusSchema>;
 export const ReconciliationStatusSchema = z.enum(['OK', 'UNBALANCED']);
 export type ReconciliationStatus = z.infer<typeof ReconciliationStatusSchema>;
 
-// Bounded Pagination Query
-export const PaginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+// Standard Error Envelope Schema
+export const ErrorEnvelopeSchema = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    details: z.unknown().optional(),
+  }),
+});
+export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
+
+// Bounded Pagination Query (hard cap of 100, rejects > 100 with 400)
+export const BasePaginationQuerySchema = z.object({
+  page: z.coerce
+    .number()
+    .int({ message: 'page must be an integer' })
+    .min(1, { message: 'page must be >= 1' })
+    .default(1),
+  pageSize: z.coerce
+    .number()
+    .int({ message: 'pageSize must be an integer' })
+    .min(1, { message: 'pageSize must be >= 1' })
+    .max(100, { message: 'pageSize cannot exceed 100' })
+    .optional(),
+  limit: z.coerce
+    .number()
+    .int({ message: 'limit must be an integer' })
+    .min(1, { message: 'limit must be >= 1' })
+    .max(100, { message: 'limit cannot exceed 100' })
+    .optional(),
+});
+
+export const PaginationQuerySchema = BasePaginationQuerySchema.transform((data) => {
+  const size = data.pageSize ?? data.limit ?? 20;
+  return {
+    page: data.page,
+    pageSize: size,
+    limit: size,
+  };
 });
 export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
 
@@ -63,10 +97,20 @@ export const MigrationRunSchema = z.object({
 });
 export type MigrationRun = z.infer<typeof MigrationRunSchema>;
 
-export const RunsQuerySchema = PaginationQuerySchema.extend({
+export const RunsQuerySchema = BasePaginationQuerySchema.extend({
   module: CrmModuleSchema.optional(),
   batchId: z.string().optional(),
   status: MigrationRunStatusSchema.optional(),
+}).transform((data) => {
+  const size = data.pageSize ?? data.limit ?? 20;
+  return {
+    page: data.page,
+    pageSize: size,
+    limit: size,
+    module: data.module,
+    batchId: data.batchId,
+    status: data.status,
+  };
 });
 export type RunsQuery = z.infer<typeof RunsQuerySchema>;
 
@@ -74,6 +118,7 @@ export const PaginatedRunsResponseSchema = z.object({
   items: z.array(MigrationRunSchema),
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
   limit: z.number().int().positive(),
   totalPages: z.number().int().nonnegative(),
 });
@@ -108,9 +153,18 @@ export const QualityScoreSchema = z.object({
 });
 export type QualityScore = z.infer<typeof QualityScoreSchema>;
 
-export const ScoresQuerySchema = PaginationQuerySchema.extend({
+export const ScoresQuerySchema = BasePaginationQuerySchema.extend({
   module: CrmModuleSchema.optional(),
   batchId: z.string().optional(),
+}).transform((data) => {
+  const size = data.pageSize ?? data.limit ?? 20;
+  return {
+    page: data.page,
+    pageSize: size,
+    limit: size,
+    module: data.module,
+    batchId: data.batchId,
+  };
 });
 export type ScoresQuery = z.infer<typeof ScoresQuerySchema>;
 
@@ -118,6 +172,7 @@ export const ScoresResponseSchema = z.object({
   items: z.array(QualityScoreSchema),
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
   limit: z.number().int().positive(),
   averageScore: z.number().min(0).max(100).nullable(),
 });
@@ -165,9 +220,18 @@ export const MigrationRejectSchema = z.object({
 });
 export type MigrationReject = z.infer<typeof MigrationRejectSchema>;
 
-export const RejectsQuerySchema = PaginationQuerySchema.extend({
+export const RejectsQuerySchema = BasePaginationQuerySchema.extend({
   module: CrmModuleSchema.optional(),
   batchId: z.string().optional(),
+}).transform((data) => {
+  const size = data.pageSize ?? data.limit ?? 20;
+  return {
+    page: data.page,
+    pageSize: size,
+    limit: size,
+    module: data.module,
+    batchId: data.batchId,
+  };
 });
 export type RejectsQuery = z.infer<typeof RejectsQuerySchema>;
 
@@ -175,6 +239,7 @@ export const PaginatedRejectsResponseSchema = z.object({
   items: z.array(MigrationRejectSchema),
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
   limit: z.number().int().positive(),
 });
 export type PaginatedRejectsResponse = z.infer<typeof PaginatedRejectsResponseSchema>;
@@ -239,8 +304,7 @@ export function verifyReconciliation(input: ReconciliationInput): Reconciliation
  */
 export function sanitizeCsvFormula(value: string): string {
   if (typeof value !== 'string') return String(value);
-  const trimmed = value.trim();
-  if (/^[=+\-@\t\r]/.test(trimmed)) {
+  if (/^[=+\-@\t\r]/.test(value) || /^[=+\-@]/.test(value.trimStart())) {
     return `'${value}`;
   }
   return value;
