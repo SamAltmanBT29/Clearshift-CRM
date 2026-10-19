@@ -137,3 +137,16 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 1. **No Raw Secrets:** No passwords, bearer tokens, or full credit card / bank accounts are ever stored in CRM-5 tables.
 2. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
 3. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
+
+---
+
+## 4. Public API Endpoint Directory (`/api/v1/crm-control`)
+
+| Method | Endpoint | Query / Path Parameters | Bounded Paging | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/health` | None | N/A | Health check returning service status, module ID, and version |
+| `GET` | `/runs` | `module`, `batchId`, `status`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Paginated migration run projections; sorted by `startedAt desc, id asc` |
+| `GET` | `/scores` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
+| `GET` | `/rejects` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
+| `GET` | `/reconciliation/:batch` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
+

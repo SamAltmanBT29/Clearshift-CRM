@@ -24,3 +24,14 @@ For the central repository reference, see:
 4. **`crm5_reconciliation_reports`**: Conservation balance sheet.
    * Invariant: `source = loaded + rejected + merged + skipped + unaccounted`.
    * Status is `OK` if and only if `unaccounted = 0`.
+
+---
+
+## Public API Endpoints (`/api/v1/crm-control`)
+
+* `GET /health`: Health check and version verification.
+* `GET /runs`: Paginated migration run projections (bounded page size <= 100, deterministic sort: `startedAt desc, id asc`).
+* `GET /scores`: Quality score cards and system average score (bounded page size <= 100, deterministic sort: `scoredAt desc`).
+* `GET /rejects`: Paginated row-level reject audits (bounded page size <= 100, deterministic sort: `rowIndex asc`).
+* `GET /reconciliation/:batch`: Conservation balance sheet for a migration batch.
+
