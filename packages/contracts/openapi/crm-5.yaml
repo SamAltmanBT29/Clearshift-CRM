@@ -91,8 +91,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Ingest or update migration run projection
+      description: Ingests run execution state with idempotency deduplication and domain count validation.
+      operationId: postMigrationRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRunInput'
+      responses:
+        '201':
+          description: Run projection created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '200':
+          description: Idempotent duplicate run projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Conflict (illegal state transition)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Unprocessable Entity (business count violation)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   /scores:
+
     get:
       summary: List data quality scores
       description: Returns quality scores across 5 dimensions and the overall average score. Page size is capped at 100.
@@ -145,8 +187,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Ingest quality score
+      description: Ingests quality score dimensions and computes overall weighted quality score.
+      operationId: postQualityScore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScoreInput'
+      responses:
+        '201':
+          description: Quality score created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityScore'
+        '200':
+          description: Idempotent duplicate quality score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityScore'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Unprocessable Entity (dimension out of 0..1 bounds)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   /rejects:
+
     get:
       summary: List migration reject projections
       description: Audits failed records row-by-row with error codes and sanitized hashes. Page size is capped at 100.
@@ -199,8 +277,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Ingest migration reject audit record
+      description: Ingests rejected record audit with sanitized/escaped error message to prevent CSV formula injection.
+      operationId: postMigrationReject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRejectInput'
+      responses:
+        '201':
+          description: Rejection record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationReject'
+        '200':
+          description: Idempotent duplicate rejection record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationReject'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Unprocessable Entity (e.g. rowIndex < 1)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /reconciliation:
+    post:
+      summary: Ingest and verify batch reconciliation report
+      description: Verifies exact 4-term conservation equation Source = Loaded + Rejected + Merged + Skipped + Unaccounted. Status is OK only if Unaccounted = 0.
+      operationId: postBatchReconciliation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReconciliationInput'
+      responses:
+        '201':
+          description: Reconciliation report created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationReport'
+        '200':
+          description: Idempotent duplicate reconciliation report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationReport'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Conflict (reconciliation report already exists for batch)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Unprocessable Entity (negative counts)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   /reconciliation/{batch}:
+
     get:
       summary: Get batch reconciliation balance sheet
       description: Verifies exact equation Source = Loaded + Rejected + Merged + Skipped + Unaccounted. Status is OK only if Unaccounted = 0.
@@ -515,3 +672,148 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    CreateRunInput:
+      type: object
+      required:
+        - batchId
+        - module
+        - step
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+          enum: [extract, profile, clean, map, load, validate, reconcile]
+        status:
+          type: string
+          enum: [pending, running, completed, failed, halted]
+          default: pending
+        recordsIn:
+          type: integer
+          minimum: 0
+          default: 0
+        recordsOut:
+          type: integer
+          minimum: 0
+          default: 0
+        recordsRejected:
+          type: integer
+          minimum: 0
+          default: 0
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        idempotencyKey:
+          type: string
+
+    CreateScoreInput:
+      type: object
+      required:
+        - batchId
+        - module
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        completeness:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        validity:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        duplicateRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        rejectRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        linkIntegrity:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        idempotencyKey:
+          type: string
+
+    CreateReconciliationInput:
+      type: object
+      required:
+        - batchId
+        - module
+        - sourceCount
+        - loadedCount
+        - rejectedCount
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        sourceCount:
+          type: integer
+          minimum: 0
+        loadedCount:
+          type: integer
+          minimum: 0
+        rejectedCount:
+          type: integer
+          minimum: 0
+        mergedCount:
+          type: integer
+          minimum: 0
+          default: 0
+        skippedCount:
+          type: integer
+          minimum: 0
+          default: 0
+        idempotencyKey:
+          type: string
+
+    CreateRejectInput:
+      type: object
+      required:
+        - batchId
+        - module
+        - rowIndex
+        - errorCode
+        - errorMessage
+        - rawPayloadHash
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        rowIndex:
+          type: integer
+          minimum: 1
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        rawPayloadHash:
+          type: string
+        idempotencyKey:
+          type: string
+

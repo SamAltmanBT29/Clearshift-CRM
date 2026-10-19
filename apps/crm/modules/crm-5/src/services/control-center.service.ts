@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type {
   MigrationRun,
   RunsQuery,
@@ -9,7 +10,17 @@ import type {
   RejectsQuery,
   PaginatedRejectsResponse,
   ReconciliationReport,
+  CreateRunInput,
+  CreateScoreInput,
+  CreateReconciliationInput,
+  CreateRejectInput,
 } from '@clearshift/contracts';
+import {
+  calculateQualityScore,
+  verifyReconciliation,
+  sanitizeCsvFormula,
+} from '@clearshift/contracts';
+import { DomainValidationError, DomainConflictError } from '../domain/errors.js';
 
 /**
  * CRM-5 Control Center Service
@@ -152,8 +163,292 @@ export class ControlCenterService {
   }
 
   // ---------------------------------------------------------------------------
+  // 5. Mutation API Methods with Domain Validation
+  // ---------------------------------------------------------------------------
+
+  public recordRun(input: CreateRunInput): { run: MigrationRun; isDuplicate: boolean } {
+    // 1. Business Invariant Checks
+    if (input.recordsIn < 0 || input.recordsOut < 0 || input.recordsRejected < 0) {
+      throw new DomainValidationError('Record counts cannot be negative', {
+        recordsIn: input.recordsIn,
+        recordsOut: input.recordsOut,
+        recordsRejected: input.recordsRejected,
+      });
+    }
+
+    if (input.recordsOut + input.recordsRejected > input.recordsIn) {
+      throw new DomainValidationError(
+        'Invariant violation: sum of recordsOut and recordsRejected cannot exceed recordsIn',
+        {
+          recordsIn: input.recordsIn,
+          recordsOut: input.recordsOut,
+          recordsRejected: input.recordsRejected,
+        }
+      );
+    }
+
+    // 2. Idempotency & Conflict Check
+    const existingIndex = this.runs.findIndex(
+      (r) => r.batchId === input.batchId && r.step === input.step
+    );
+
+    const now = new Date();
+
+    if (existingIndex >= 0) {
+      const existing = this.runs[existingIndex]!;
+      // Exact duplicate data -> return existing (idempotent)
+      if (
+        existing.status === input.status &&
+        existing.recordsIn === input.recordsIn &&
+        existing.recordsOut === input.recordsOut &&
+        existing.recordsRejected === input.recordsRejected
+      ) {
+        return { run: existing, isDuplicate: true };
+      }
+
+      // Check illegal transitions: terminal states cannot be changed to pending
+      if (
+        (existing.status === 'completed' || existing.status === 'halted') &&
+        input.status === 'pending'
+      ) {
+        throw new DomainConflictError(
+          `Cannot revert run from terminal state '${existing.status}' to 'pending'`,
+          { currentStatus: existing.status, requestedStatus: input.status }
+        );
+      }
+
+      // Valid update (e.g. from pending/running to completed/failed)
+      const updatedRun: MigrationRun = {
+        ...existing,
+        status: input.status,
+        recordsIn: input.recordsIn,
+        recordsOut: input.recordsOut,
+        recordsRejected: input.recordsRejected,
+        completedAt:
+          input.completedAt ??
+          (input.status === 'completed' || input.status === 'failed' || input.status === 'halted'
+            ? now
+            : existing.completedAt),
+        metadata: input.metadata ?? existing.metadata,
+        updatedAt: now,
+      };
+
+      this.runs[existingIndex] = updatedRun;
+      return { run: updatedRun, isDuplicate: false };
+    }
+
+    // New run projection
+    const newRun: MigrationRun = {
+      id: randomUUID(),
+      batchId: input.batchId,
+      module: input.module,
+      step: input.step,
+      status: input.status,
+      recordsIn: input.recordsIn,
+      recordsOut: input.recordsOut,
+      recordsRejected: input.recordsRejected,
+      startedAt: input.startedAt ?? now,
+      completedAt: input.completedAt ?? (input.status === 'completed' ? now : null),
+      metadata: input.metadata ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.runs.push(newRun);
+    return { run: newRun, isDuplicate: false };
+  }
+
+  public recordScore(input: CreateScoreInput): { score: QualityScore; isDuplicate: boolean } {
+    // Validate bounds 0..1
+    const dims = [
+      { name: 'completeness', val: input.completeness },
+      { name: 'validity', val: input.validity },
+      { name: 'duplicateRate', val: input.duplicateRate },
+      { name: 'rejectRate', val: input.rejectRate },
+      { name: 'linkIntegrity', val: input.linkIntegrity },
+    ];
+
+    for (const d of dims) {
+      if (d.val != null && (d.val < 0 || d.val > 1)) {
+        throw new DomainValidationError(`Dimension ${d.name} must be between 0.0 and 1.0`, {
+          field: d.name,
+          value: d.val,
+        });
+      }
+    }
+
+    const isFullyScored =
+      input.completeness != null &&
+      input.validity != null &&
+      input.duplicateRate != null &&
+      input.rejectRate != null &&
+      input.linkIntegrity != null;
+
+    const calculatedScore = isFullyScored
+      ? calculateQualityScore({
+          completeness: input.completeness!,
+          validity: input.validity!,
+          duplicateRate: input.duplicateRate!,
+          rejectRate: input.rejectRate!,
+          linkIntegrity: input.linkIntegrity!,
+        })
+      : null;
+
+    const existingIndex = this.scores.findIndex((s) => s.batchId === input.batchId);
+    const now = new Date();
+
+    if (existingIndex >= 0) {
+      const existing = this.scores[existingIndex]!;
+      if (
+        existing.completeness === input.completeness &&
+        existing.validity === input.validity &&
+        existing.duplicateRate === input.duplicateRate &&
+        existing.rejectRate === input.rejectRate &&
+        existing.linkIntegrity === input.linkIntegrity
+      ) {
+        return { score: existing, isDuplicate: true };
+      }
+
+      const updatedScore: QualityScore = {
+        ...existing,
+        completeness: input.completeness ?? existing.completeness,
+        validity: input.validity ?? existing.validity,
+        duplicateRate: input.duplicateRate ?? existing.duplicateRate,
+        rejectRate: input.rejectRate ?? existing.rejectRate,
+        linkIntegrity: input.linkIntegrity ?? existing.linkIntegrity,
+        score: calculatedScore ?? existing.score,
+        isFullyScored,
+        scoredAt: now,
+      };
+
+      this.scores[existingIndex] = updatedScore;
+      return { score: updatedScore, isDuplicate: false };
+    }
+
+    const newScore: QualityScore = {
+      id: randomUUID(),
+      batchId: input.batchId,
+      module: input.module,
+      completeness: input.completeness ?? null,
+      validity: input.validity ?? null,
+      duplicateRate: input.duplicateRate ?? null,
+      rejectRate: input.rejectRate ?? null,
+      linkIntegrity: input.linkIntegrity ?? null,
+      score: calculatedScore,
+      isFullyScored,
+      scoredAt: now,
+      createdAt: now,
+    };
+
+    this.scores.push(newScore);
+    return { score: newScore, isDuplicate: false };
+  }
+
+  public recordReconciliation(input: CreateReconciliationInput): {
+    report: ReconciliationReport;
+    isDuplicate: boolean;
+  } {
+    if (
+      input.sourceCount < 0 ||
+      input.loadedCount < 0 ||
+      input.rejectedCount < 0 ||
+      input.mergedCount < 0 ||
+      input.skippedCount < 0
+    ) {
+      throw new DomainValidationError('Reconciliation counts cannot be negative', input);
+    }
+
+    const existing = this.reconciliations.get(input.batchId);
+    if (existing) {
+      const isExactMatch =
+        existing.sourceCount === input.sourceCount &&
+        existing.loadedCount === input.loadedCount &&
+        existing.rejectedCount === input.rejectedCount &&
+        existing.mergedCount === input.mergedCount &&
+        existing.skippedCount === input.skippedCount;
+
+      if (isExactMatch) {
+        return { report: existing, isDuplicate: true };
+      }
+
+      throw new DomainConflictError(
+        `Reconciliation report for batch '${input.batchId}' already exists and cannot be modified with different counts`,
+        { batchId: input.batchId }
+      );
+    }
+
+    const verification = verifyReconciliation({
+      sourceCount: input.sourceCount,
+      loadedCount: input.loadedCount,
+      rejectedCount: input.rejectedCount,
+      mergedCount: input.mergedCount,
+      skippedCount: input.skippedCount,
+    });
+
+    const now = new Date();
+    const report: ReconciliationReport = {
+      id: randomUUID(),
+      batchId: input.batchId,
+      module: input.module,
+      sourceCount: input.sourceCount,
+      loadedCount: input.loadedCount,
+      rejectedCount: input.rejectedCount,
+      mergedCount: input.mergedCount,
+      skippedCount: input.skippedCount,
+      unaccountedCount: verification.unaccountedCount,
+      status: verification.status,
+      reconciledAt: now,
+      createdAt: now,
+    };
+
+    this.reconciliations.set(input.batchId, report);
+    return { report, isDuplicate: false };
+  }
+
+  public recordReject(input: CreateRejectInput): {
+    reject: MigrationReject;
+    isDuplicate: boolean;
+  } {
+    if (input.rowIndex < 1) {
+      throw new DomainValidationError('rowIndex must be a positive integer starting at 1', {
+        rowIndex: input.rowIndex,
+      });
+    }
+
+    // Formula injection defense: neutralize spreadsheet formula prefixes
+    const safeErrorMessage = sanitizeCsvFormula(input.errorMessage);
+
+    const existing = this.rejects.find(
+      (r) =>
+        r.batchId === input.batchId &&
+        r.rowIndex === input.rowIndex &&
+        r.errorCode === input.errorCode
+    );
+
+    if (existing) {
+      return { reject: existing, isDuplicate: true };
+    }
+
+    const now = new Date();
+    const reject: MigrationReject = {
+      id: randomUUID(),
+      batchId: input.batchId,
+      module: input.module,
+      rowIndex: input.rowIndex,
+      errorCode: input.errorCode,
+      errorMessage: safeErrorMessage,
+      rawPayloadHash: input.rawPayloadHash,
+      createdAt: now,
+    };
+
+    this.rejects.push(reject);
+    return { reject, isDuplicate: false };
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers for testing / ingestion
   // ---------------------------------------------------------------------------
+
 
   public addRun(run: MigrationRun): void {
     // Tolerates duplicate events and deduplicates by id

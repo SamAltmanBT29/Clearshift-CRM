@@ -2,7 +2,9 @@ import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 
 export default defineConfig({
+  css: false,
   test: {
+
     globals: true,
     environment: 'node',
     passWithNoTests: true,

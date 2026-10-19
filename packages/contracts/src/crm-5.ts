@@ -203,6 +203,8 @@ export function computeQualityScore(c: QualityScoreComponents): number | null {
     5;
   return Math.round(raw * 100) / 100;
 }
+export const calculateQualityScore = computeQualityScore;
+
 
 // ---------------------------------------------------------------------------
 // 4. Migration Rejects Schemas
@@ -309,3 +311,58 @@ export function sanitizeCsvFormula(value: string): string {
   }
   return value;
 }
+
+// ---------------------------------------------------------------------------
+// 6. Mutation Input Schemas
+// ---------------------------------------------------------------------------
+
+export const CreateRunInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: CrmModuleSchema,
+  step: MigrationStepSchema,
+  status: MigrationRunStatusSchema.default('pending'),
+  recordsIn: z.number().int({ message: 'recordsIn must be an integer' }).nonnegative({ message: 'recordsIn cannot be negative' }).default(0),
+  recordsOut: z.number().int({ message: 'recordsOut must be an integer' }).nonnegative({ message: 'recordsOut cannot be negative' }).default(0),
+  recordsRejected: z.number().int({ message: 'recordsRejected must be an integer' }).nonnegative({ message: 'recordsRejected cannot be negative' }).default(0),
+  startedAt: z.coerce.date().optional(),
+  completedAt: z.coerce.date().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  idempotencyKey: z.string().max(128).optional(),
+});
+export type CreateRunInput = z.infer<typeof CreateRunInputSchema>;
+
+export const CreateScoreInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: CrmModuleSchema,
+  completeness: z.number().min(0, 'completeness must be >= 0').max(1, 'completeness must be <= 1').nullable().optional(),
+  validity: z.number().min(0, 'validity must be >= 0').max(1, 'validity must be <= 1').nullable().optional(),
+  duplicateRate: z.number().min(0, 'duplicateRate must be >= 0').max(1, 'duplicateRate must be <= 1').nullable().optional(),
+  rejectRate: z.number().min(0, 'rejectRate must be >= 0').max(1, 'rejectRate must be <= 1').nullable().optional(),
+  linkIntegrity: z.number().min(0, 'linkIntegrity must be >= 0').max(1, 'linkIntegrity must be <= 1').nullable().optional(),
+  idempotencyKey: z.string().max(128).optional(),
+});
+export type CreateScoreInput = z.infer<typeof CreateScoreInputSchema>;
+
+export const CreateReconciliationInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: CrmModuleSchema,
+  sourceCount: z.number().int({ message: 'sourceCount must be an integer' }).nonnegative({ message: 'sourceCount cannot be negative' }),
+  loadedCount: z.number().int({ message: 'loadedCount must be an integer' }).nonnegative({ message: 'loadedCount cannot be negative' }),
+  rejectedCount: z.number().int({ message: 'rejectedCount must be an integer' }).nonnegative({ message: 'rejectedCount cannot be negative' }),
+  mergedCount: z.number().int({ message: 'mergedCount must be an integer' }).nonnegative({ message: 'mergedCount cannot be negative' }).default(0),
+  skippedCount: z.number().int({ message: 'skippedCount must be an integer' }).nonnegative({ message: 'skippedCount cannot be negative' }).default(0),
+  idempotencyKey: z.string().max(128).optional(),
+});
+export type CreateReconciliationInput = z.infer<typeof CreateReconciliationInputSchema>;
+
+export const CreateRejectInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: CrmModuleSchema,
+  rowIndex: z.number().int({ message: 'rowIndex must be an integer' }).min(1, { message: 'rowIndex must be >= 1' }),
+  errorCode: z.string().min(1, 'errorCode is required').max(64),
+  errorMessage: z.string().min(1, 'errorMessage is required'),
+  rawPayloadHash: z.string().min(16).max(64),
+  idempotencyKey: z.string().max(128).optional(),
+});
+export type CreateRejectInput = z.infer<typeof CreateRejectInputSchema>;
+
