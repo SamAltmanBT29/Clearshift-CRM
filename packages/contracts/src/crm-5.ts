@@ -550,4 +550,78 @@ export const BatchSummarySchema = z.object({
 });
 export type BatchSummaryContract = z.infer<typeof BatchSummarySchema>;
 
+// ---------------------------------------------------------------------------
+// 8. Idempotent Retry & Chunked Load Execution Contracts (CRM5-13)
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_CHUNK_SIZE = 500;
+export const DEFAULT_FAILURE_THRESHOLD = 0.10;
+export const DEFAULT_MIN_ATTEMPTED_ROWS = 50;
+export const DEFAULT_MAX_RETRIES = 3;
+
+export const BatchExecutionStatusSchema = z.enum([
+  'COMPLETED',
+  'STOPPED_EXCESSIVE_FAILURES',
+  'FAILED',
+]);
+export type BatchExecutionStatus = z.infer<typeof BatchExecutionStatusSchema>;
+
+export const BatchRecordInputSchema = z.object({
+  sourceRow: z.number().int({ message: 'sourceRow must be an integer' }).min(1),
+  idempotencyKey: z.string().min(1, 'idempotencyKey is required').max(128),
+  data: z.record(z.string(), z.unknown()),
+});
+export type BatchRecordInput = z.infer<typeof BatchRecordInputSchema>;
+
+export const ExecuteBatchLoadInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: CrmModuleSchema,
+  step: MigrationStepSchema.default('load'),
+  chunkSize: z.number().int().min(1).max(1000).default(DEFAULT_CHUNK_SIZE),
+  maxRetries: z.number().int().min(0).max(5).default(DEFAULT_MAX_RETRIES),
+  failureThreshold: z.number().min(0).max(1).default(DEFAULT_FAILURE_THRESHOLD),
+  minAttemptedRows: z.number().int().min(1).default(DEFAULT_MIN_ATTEMPTED_ROWS),
+  records: z.array(BatchRecordInputSchema).min(1, 'records must not be empty'),
+});
+export type ExecuteBatchLoadInput = z.infer<typeof ExecuteBatchLoadInputSchema>;
+
+export const ImportReceiptSchema = z.object({
+  batchId: z.string(),
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  targetId: z.string(),
+  kind: z.enum(['created', 'linked']).default('created'),
+  committedAt: z.coerce.date(),
+});
+export type ImportReceipt = z.infer<typeof ImportReceiptSchema>;
+
+export const FailedRowSchema = z.object({
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  errorCode: z.string(),
+  errorMessage: z.string(),
+  retryAttempts: z.number().int(),
+  payloadHash: z.string().optional(),
+});
+export type FailedRow = z.infer<typeof FailedRowSchema>;
+
+export const BatchExecutionReportSchema = z.object({
+  batchId: z.string(),
+  module: CrmModuleSchema,
+  step: MigrationStepSchema,
+  status: BatchExecutionStatusSchema,
+  totalRecords: z.number().int().nonnegative(),
+  attemptedRecords: z.number().int().nonnegative(),
+  committedRecords: z.number().int().nonnegative(),
+  failedRecords: z.number().int().nonnegative(),
+  chunksProcessed: z.number().int().nonnegative(),
+  chunkSize: z.number().int(),
+  failureRate: z.number().min(0).max(1),
+  haltReason: z.string().nullable().optional(),
+  committedReceipts: z.array(ImportReceiptSchema),
+  failedRows: z.array(FailedRowSchema),
+  executedAt: z.coerce.date(),
+});
+export type BatchExecutionReport = z.infer<typeof BatchExecutionReportSchema>;
+
 

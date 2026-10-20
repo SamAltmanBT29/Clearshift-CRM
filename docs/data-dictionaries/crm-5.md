@@ -157,6 +157,60 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 | `GET` | `/duplicates/held` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
 | `POST` | `/duplicates/resolve` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
 | `GET` | `/duplicates/audit` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
+| `POST` | `/batches/execute-load` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
+
+---
+
+## 5. Exact Duplicate Key Policy & Human Review Policy (CRM5-12)
+
+### 5.1 Deterministic Key Normalization Rules
+To ensure consistent, deterministic duplicate detection across modules and ingest streams without fuzzy heuristics, exact keys are normalized according to strict rules:
+
+| Key Type | Normalization Rule | Example Input | Normalized Output |
+| :--- | :--- | :--- | :--- |
+| `email` | Trim whitespace, convert to lowercase | `"  Lead.Ops@Example.COM  "` | `"lead.ops@example.com"` |
+| `tax_id` | Trim whitespace, uppercase, remove hyphens/spaces/dots/slashes | `" 12-345.678/9 "` | `"123456789"` |
+| `sku` | Trim whitespace, uppercase, collapse internal whitespace | `"  item-xyz  400 "` | `"ITEM-XYZ 400"` |
+| `phone` | Trim whitespace, strip non-digits, preserve leading `+` | `" +1 (555) 019-2834 "` | `"+15550192834"` |
+| `composite` | Deterministic sorted key-value serialization | `{ batchId: "b1", step: "load" }` | `"batchId=b1;step=load"` |
+
+### 5.2 Deterministic Candidate Holding Policy
+1. Records sharing an identical normalized key are grouped and flagged deterministically as `duplicate_candidate`.
+2. **Zero Automatic Merging in V1:** Automatic fuzzy merging is strictly prohibited. Any request requesting automated merge throws an unprocessable error (`AUTO_MERGE_FORBIDDEN` / HTTP 422).
+3. All ambiguous or duplicate candidates transition to `held_for_review` until an authorized human operator provides a merge or separation decision.
+
+### 5.3 Human Merge Decision Audit Requirements
+Every human review resolution creates an immutable audit log entry recording:
+* `id`: UUID of the audit entry.
+* `candidate_id`: ID of the resolved candidate group.
+* `decision`: `MERGE` | `REJECT_DUPLICATE` | `KEEP_SEPARATE`.
+* `actor_id`: Non-empty string identifier of the authorized human reviewer.
+* `timestamp`: Precise UTC timestamp of the decision.
+* `kept_id`: ID of the surviving/canonical record.
+* `merged_id`: ID of the absorbed duplicate record (`kept_id !== merged_id` enforced for `MERGE`).
+* `reason`: Mandatory audit justification for traceability.
+
+---
+
+## 6. Chunked Batch Ingestion & Partial-Load Stop Behavior (CRM5-13)
+
+### 6.1 Chunked Processing (500 Rows)
+All load operations slice large input datasets into sequential chunks of 500 records (`DEFAULT_CHUNK_SIZE = 500`). This bounds database transaction sizes, memory allocation, and lock retention times.
+
+### 6.2 Idempotent Retry with Exponential Backoff
+Transient worker or network failures trigger bounded exponential backoff retries:
+$$\text{delay} = \text{baseBackoffMs} \times 2^{\text{attempt}}$$
+* **Maximum Retries:** Default 3 attempts (`DEFAULT_MAX_RETRIES = 3`).
+* **Idempotency Protection:** The unique `idempotencyKey` passed per source row is strictly preserved across all retry attempts and never mutated.
+
+### 6.3 10% Partial-Load Stop Policy (`STOPPED_EXCESSIVE_FAILURES`)
+To prevent cascading data corruption or runaway failure cascades:
+$$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemptedRows}}$$
+* When `cumulativeAttemptedRows >= 50` and `failureRate > 0.10` (10%):
+  1. Batch execution ceases immediately.
+  2. Batch status transitions to `STOPPED_EXCESSIVE_FAILURES` (recorded as `halted` in `crm5_runs`).
+  3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
+  4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
 
 ---
 

@@ -62,4 +62,19 @@ export class IllegalStateTransitionError extends DomainConflictError {
   }
 }
 
+export class BatchLoadHaltedError extends Error {
+  public readonly code = 'STOPPED_EXCESSIVE_FAILURES';
+  public readonly statusCode = 422;
+  public readonly details?: unknown;
+
+  constructor(
+    message = 'Batch execution stopped immediately: row failures exceeded the 10% threshold.',
+    details?: unknown
+  ) {
+    super(message);
+    this.name = 'BatchLoadHaltedError';
+    this.details = details;
+  }
+}
+
 
