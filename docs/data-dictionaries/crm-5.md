@@ -275,19 +275,44 @@ Every human review resolution creates an immutable audit log entry recording:
 
 ---
 
-## 7. KIT-08 Target Adapter Contract & Durable Receipts (CRM5-11)
+## 7. Frontend Module Routes, Navigation & Layout Shell (CRM5-16)
 
-### 7.1 Target Adapter Port Adherence
+### 7.1 Module Route Registration
+CRM-5 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-5/runs` | `crm5-runs` | Migration Run Projections | Runs | `control.read` |
+| `/crm-5/scores` | `crm5-scores` | Data Quality Scores | Quality Scores | `control.read` |
+| `/crm-5/rejects` | `crm5-rejects` | Row-Level Rejection Audit | Rejections | `control.read` |
+| `/crm-5/reconciliation` | `crm5-reconciliation` | Conservation Balance Sheet | Reconciliation | `control.read` |
+| `/crm-5/duplicates` | `crm5-duplicates` | Exact Duplicate Candidate Review | Duplicate Review | `control.read` |
+
+### 7.2 Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `control.read` capability. Users lacking this capability are redirected to `/access-denied?required=control.read`.
+
+### 7.3 Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-5 - <View Title>`.
+
+---
+
+## 8. KIT-08 Target Adapter Contract & Durable Receipts (CRM5-11)
+
+### 8.1 Target Adapter Port Adherence
 CRM-5 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
 * **Caller Privilege Boundary:** Migration Kit and external clients possess zero direct SQL insert/update permissions on CRM-5 tables. All writes enter through the public API (`POST /api/v1/crm-control/import/row`) or in-process adapter method `importRow()`.
 * **Atomic Transaction Guarantee:** The mutated business record (`crm5_runs`, `crm5_scores`, `crm5_rejects`, or `crm5_reconciliation_reports`) and the durable receipt (`crm5_import_receipts`) commit atomically in one local PostgreSQL transaction. If either operation fails, the transaction is completely rolled back.
 
-### 7.2 Strict Idempotency & Conflict Semantics
+### 8.2 Strict Idempotency & Conflict Semantics
 * **Canonical Payload Hash:** Input payloads are deterministically serialized with sorted keys and hashed via SHA-256 (`payload_hash`).
 * **Identical Replay (HTTP 200):** If an incoming row presents an existing `idempotencyKey` and matching `payload_hash`, the prior execution result is returned without mutating data or duplicating receipts.
 * **Payload Conflict (HTTP 409):** If an incoming row reuses an existing `idempotencyKey` with an altered payload (`new_hash !== existing_hash`), the request is rejected with `IDEMPOTENCY_CONFLICT` (HTTP 409) and zero mutations occur.
 
-### 7.3 Error Classification Invariants
+### 8.3 Error Classification Invariants
 * **Domain Validation Failures:** Business rule violations (e.g. `recordsOut + recordsRejected > recordsIn`, out-of-range quality dimensions, unparseable payloads) are classified as business rejections (`VALIDATION_ERROR` / HTTP 422) with machine-readable reason codes and safe error messages. Corrupt records are never committed.
 * **Infrastructure Failures:** Transient network, database, or worker outages (e.g. HTTP 503) are marked `retryable: true` and are **never** recorded in `crm5_rejects` as invalid data.
-
