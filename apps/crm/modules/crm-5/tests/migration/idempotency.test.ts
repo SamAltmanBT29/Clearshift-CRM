@@ -65,6 +65,50 @@ describe('CRM-5 Target Adapter & Durable Import Receipts (KIT-08 & Decision C4)'
       expect(runs.items[0]?.recordsOut).toBe(85);
       expect(runs.items[0]?.recordsRejected).toBe(15);
     });
+
+    it('loads a fixture row with entity: "rejects" through target adapter when rowIndex is omitted, falling back to sourceRow', async () => {
+      const rejectPayload: ImportRowInput = {
+        batchId: 'batch-kit-reject-001',
+        sourceRow: 42,
+        sourceSystem: 'legacy_hubspot',
+        sourceId: 'hs-rec-42',
+        entity: 'rejects',
+        data: {
+          batchId: 'batch-kit-reject-001',
+          module: 'crm-1',
+          errorCode: 'INVALID_TAX_ID',
+          errorMessage: 'Tax ID failed checksum validation',
+          rawPayloadHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+          // rowIndex omitted on purpose to test fallback injection from sourceRow
+        },
+        idempotencyKey: 'idemp-key-reject-001',
+        correlationId: 'corr-reject-001',
+        schemaVersion: 1,
+      };
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/import/row',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': 'idemp-key-reject-001',
+          'x-correlation-id': 'corr-reject-001',
+        },
+        payload: rejectPayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.body);
+      expect(body.targetId).toBeDefined();
+      expect(body.receipt.entity).toBe('rejects');
+      expect(body.receipt.sourceRow).toBe(42);
+
+      // Verify rejection is persisted in read model with rowIndex = 42
+      const rejects = service.getRejects({ page: 1, pageSize: 20, batchId: 'batch-kit-reject-001', limit: 20 });
+      expect(rejects.items.length).toBe(1);
+      expect(rejects.items[0]?.rowIndex).toBe(42);
+      expect(rejects.items[0]?.errorCode).toBe('INVALID_TAX_ID');
+    });
   });
 
   describe('2. Idempotency & Retry Guarantees (Identical Submissions)', () => {
@@ -194,6 +238,67 @@ describe('CRM-5 Target Adapter & Durable Import Receipts (KIT-08 & Decision C4)'
       expect(runs.items.length).toBe(1);
       expect(runs.items[0]?.recordsIn).toBe(50); // Original value preserved
     });
+
+    it('reusing an idempotency key with altered batchId or altered entity throws HTTP 409 Conflict', async () => {
+      const initialPayload: ImportRowInput = {
+        batchId: 'batch-hash-test-01',
+        sourceRow: 1,
+        entity: 'runs',
+        data: {
+          batchId: 'batch-hash-test-01',
+          module: 'crm-1',
+          step: 'load',
+          status: 'completed',
+          recordsIn: 10,
+          recordsOut: 10,
+          recordsRejected: 0,
+        },
+        idempotencyKey: 'idemp-key-hash-scope',
+        schemaVersion: 1,
+      };
+
+      const res1 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/import/row',
+        headers: { 'idempotency-key': 'idemp-key-hash-scope' },
+        payload: initialPayload,
+      });
+      expect(res1.statusCode).toBe(201);
+
+      // Same key + altered batchId
+      const alteredBatchPayload: ImportRowInput = {
+        ...initialPayload,
+        batchId: 'batch-hash-test-ALTERED',
+      };
+      const resBatchConflict = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/import/row',
+        headers: { 'idempotency-key': 'idemp-key-hash-scope' },
+        payload: alteredBatchPayload,
+      });
+      expect(resBatchConflict.statusCode).toBe(409);
+      expect(JSON.parse(resBatchConflict.body).error.code).toBe('IDEMPOTENCY_CONFLICT');
+
+      // Same key + altered entity
+      const alteredEntityPayload: ImportRowInput = {
+        ...initialPayload,
+        entity: 'scores',
+        data: {
+          batchId: 'batch-hash-test-01',
+          module: 'crm-1',
+          completeness: 1,
+          validity: 1,
+        },
+      };
+      const resEntityConflict = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/import/row',
+        headers: { 'idempotency-key': 'idemp-key-hash-scope' },
+        payload: alteredEntityPayload,
+      });
+      expect(resEntityConflict.statusCode).toBe(409);
+      expect(JSON.parse(resEntityConflict.body).error.code).toBe('IDEMPOTENCY_CONFLICT');
+    });
   });
 
   describe('4. Business Validation Rejections vs Retryable Infrastructure Failures', () => {
@@ -307,6 +412,59 @@ describe('CRM-5 Target Adapter & Durable Import Receipts (KIT-08 & Decision C4)'
 
       // Verify receipt was not stored
       expect(adapter.getReceiptByKey('idemp-rollback-006')).toBeUndefined();
+    });
+
+    it('target business mutation rolls back for rejects and reconciliation when receipt insertion fails', async () => {
+      // 1. Rejects rollback
+      const rejectPayload: ImportRowInput = {
+        batchId: 'batch-rollback-reject',
+        sourceRow: 5,
+        entity: 'rejects',
+        data: {
+          batchId: 'batch-rollback-reject',
+          module: 'crm-2',
+          errorCode: 'SCHEMA_FAIL',
+          errorMessage: 'Invalid schema',
+          rawPayloadHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        },
+        idempotencyKey: 'idemp-rollback-reject-01',
+      };
+
+      await expect(
+        adapter.importRow('batch-rollback-reject', 5, 'idemp-rollback-reject-01', rejectPayload, {
+          failReceiptCommit: true,
+        })
+      ).rejects.toThrow('Database transaction aborted: failed to persist import receipt');
+
+      const rejects = service.getRejects({ page: 1, pageSize: 20, batchId: 'batch-rollback-reject', limit: 20 });
+      expect(rejects.items.length).toBe(0);
+
+      // 2. Reconciliation rollback
+      const reconPayload: ImportRowInput = {
+        batchId: 'batch-rollback-recon',
+        sourceRow: 1,
+        entity: 'reconciliation',
+        data: {
+          batchId: 'batch-rollback-recon',
+          module: 'crm-3',
+          sourceCount: 100,
+          loadedCount: 100,
+          rejectedCount: 0,
+          mergedCount: 0,
+          skippedCount: 0,
+          status: 'OK',
+        },
+        idempotencyKey: 'idemp-rollback-recon-01',
+      };
+
+      await expect(
+        adapter.importRow('batch-rollback-recon', 1, 'idemp-rollback-recon-01', reconPayload, {
+          failReceiptCommit: true,
+        })
+      ).rejects.toThrow('Database transaction aborted: failed to persist import receipt');
+
+      const recon = service.getReconciliation('batch-rollback-recon');
+      expect(recon).toBeNull();
     });
   });
 

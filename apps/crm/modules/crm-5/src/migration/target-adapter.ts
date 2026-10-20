@@ -64,16 +64,24 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
   ): Promise<Result<{ validCount: number; rejectCount: number }, TargetAdapterError>> {
     let validCount = 0;
     let rejectCount = 0;
+    let index = 1;
 
     for (const raw of rows) {
       const entity = this.inferEntity(raw);
       const data = (raw as ImportRowInput).data ?? raw;
-      const validation = this.validateEntityData(entity, { ...data, batchId });
+      const sourceRow = (raw as ImportRowInput).sourceRow ?? (data as any).rowIndex ?? index;
+      const dataWithBatch = {
+        ...data,
+        batchId,
+        ...(entity === 'rejects' ? { rowIndex: (data as any).rowIndex ?? sourceRow } : {}),
+      };
+      const validation = this.validateEntityData(entity, dataWithBatch);
       if (validation.ok) {
         validCount++;
       } else {
         rejectCount++;
       }
+      index++;
     }
 
     return ok({ validCount, rejectCount });
@@ -97,9 +105,15 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
       });
     }
 
-    // 2. Canonical payload hashing
+    // 2. Determine entity & canonical payload hashing (including entity, batchId, sourceRow, and data)
+    const entity = this.inferEntity(cleanData);
     const normalizedData = (cleanData as ImportRowInput).data ?? cleanData;
-    const currentPayloadHash = computeCanonicalPayloadHash(normalizedData);
+    const currentPayloadHash = computeCanonicalPayloadHash({
+      entity,
+      batchId,
+      sourceRow,
+      data: normalizedData,
+    });
 
     // 3. Idempotency Check
     const existingReceipt = this.receipts.get(idempotencyKey);
@@ -129,11 +143,11 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
       });
     }
 
-    // 4. Determine entity and validate domain business rules
-    const entity = this.inferEntity(cleanData);
+    // 4. Validate domain business rules with injected rowIndex for rejects
     const dataWithBatch = {
       ...normalizedData,
       batchId,
+      ...(entity === 'rejects' ? { rowIndex: (normalizedData as any).rowIndex ?? sourceRow } : {}),
     };
 
     const validationResult = this.validateEntityData(entity, dataWithBatch);
@@ -153,9 +167,11 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
     const schemaVersion = (cleanData as ImportRowInput).schemaVersion ?? 1;
 
     try {
-      // Snapshot state for atomic rollback guarantee
+      // Snapshot state for atomic rollback guarantee across all entities
       const snapshotRuns = [...(this.service as any).runs];
       const snapshotScores = [...(this.service as any).scores];
+      const snapshotRejects = [...(this.service as any).rejects];
+      const snapshotReconciliations = new Map<string, any>((this.service as any).reconciliations);
 
       let targetId: string;
 
@@ -172,10 +188,7 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
           break;
         }
         case 'rejects': {
-          const rejectRes = this.service.recordReject({
-            ...(validationResult.data as any),
-            rowIndex: (validationResult.data as any).rowIndex ?? sourceRow,
-          });
+          const rejectRes = this.service.recordReject(validationResult.data as any);
           targetId = rejectRes.reject.id;
           break;
         }
@@ -188,8 +201,13 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
 
       // Simulate receipt insertion failure to test atomic rollback
       if (options?.failReceiptCommit) {
-        // Rollback target mutation
-        this.rollbackServiceState(snapshotRuns, snapshotScores);
+        // Rollback target mutation across all entities
+        this.rollbackServiceState(
+          snapshotRuns,
+          snapshotScores,
+          snapshotRejects,
+          snapshotReconciliations
+        );
         throw new Error('Database transaction aborted: failed to persist import receipt');
       }
 
@@ -245,10 +263,17 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
     }
   }
 
-  private rollbackServiceState(previousRuns: any[], previousScores: any[]): void {
-    // Restore runs and scores in the service
+  private rollbackServiceState(
+    previousRuns: any[],
+    previousScores: any[],
+    previousRejects: any[],
+    previousReconciliations: Map<string, any>
+  ): void {
+    // Restore all entity collections in the service
     (this.service as any).runs = [...previousRuns];
     (this.service as any).scores = [...previousScores];
+    (this.service as any).rejects = [...previousRejects];
+    (this.service as any).reconciliations = new Map(previousReconciliations);
   }
 
   private inferEntity(cleanData: ImportRowInput | Record<string, unknown>): Crm5TargetEntity {
