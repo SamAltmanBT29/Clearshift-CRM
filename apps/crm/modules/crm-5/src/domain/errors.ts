@@ -26,3 +26,16 @@ export class DomainConflictError extends Error {
     this.details = details;
   }
 }
+
+export class IllegalStateTransitionError extends DomainConflictError {
+  constructor(fromState: string, toState: string, details?: unknown) {
+    const msg =
+      fromState === 'completed' || fromState === 'failed'
+        ? `Cannot revert run from terminal state '${fromState}' to '${toState}'. Illegal state transition.`
+        : `Illegal state transition from '${fromState}' to '${toState}'. Allowed transitions are strictly enforced by the state machine.`;
+    super(msg, details ?? { fromState, toState });
+    this.name = 'IllegalStateTransitionError';
+  }
+}
+
+
