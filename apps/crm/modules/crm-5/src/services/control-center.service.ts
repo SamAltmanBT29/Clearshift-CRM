@@ -14,6 +14,10 @@ import type {
   CreateScoreInput,
   CreateReconciliationInput,
   CreateRejectInput,
+  DuplicateCandidate,
+  ResolveDuplicateInput,
+  DuplicateAuditLogEntry,
+  DetectDuplicatesInput,
 } from '@clearshift/contracts';
 import {
   calculateQualityScore,
@@ -21,6 +25,11 @@ import {
   sanitizeCsvFormula,
 } from '@clearshift/contracts';
 import { DomainValidationError, DomainConflictError } from '../domain/errors.js';
+import {
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+  type DuplicateDetectionResult,
+} from '../domain/duplicate-policy.js';
 import { assertValidTransition } from '../domain/transitions.js';
 import { buildBatchSummary, type BatchSummary } from '../domain/relationships.js';
 
@@ -35,6 +44,7 @@ export class ControlCenterService {
   private scores: QualityScore[] = [];
   private rejects: MigrationReject[] = [];
   private reconciliations: Map<string, ReconciliationReport> = new Map();
+  private duplicateQueue: DuplicateReviewQueue = new DuplicateReviewQueue();
 
   constructor() {
     this.seedSyntheticData();
@@ -508,6 +518,7 @@ export class ControlCenterService {
     this.scores = [];
     this.rejects = [];
     this.reconciliations.clear();
+    this.duplicateQueue.clear();
   }
 
   private seedSyntheticData(): void {
@@ -586,5 +597,58 @@ export class ControlCenterService {
       reconciledAt: now,
       createdAt: now,
     });
+
+    this.duplicateQueue.addCandidate({
+      id: 'e0000000-0000-0000-0000-000000000001',
+      batchId: 'batch-contacts-01',
+      keyType: 'email',
+      normalizedKey: 'lead.ops@example.com',
+      recordIds: ['rec-001', 'rec-002'],
+      status: 'held_for_review',
+      detectedAt: now,
+      metadata: {
+        originalKeys: ['  Lead.Ops@Example.COM  ', 'lead.ops@example.com'],
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Duplicate Key Policy & Human Review Audit (CRM5-12)
+  // ---------------------------------------------------------------------------
+
+  public detectDuplicates(input: DetectDuplicatesInput): DuplicateDetectionResult {
+    const result = detectExactDuplicates(input.records, input.keyType, {
+      batchId: input.batchId,
+      autoMerge: input.autoMerge,
+    });
+
+    if (result.duplicateCandidates.length > 0) {
+      this.duplicateQueue.addCandidates(result.duplicateCandidates);
+    }
+
+    return result;
+  }
+
+  public getHeldDuplicates(query?: { batchId?: string | undefined; keyType?: string | undefined }): DuplicateCandidate[] {
+    return this.duplicateQueue.listHeld(query);
+  }
+
+  public resolveDuplicate(input: ResolveDuplicateInput): DuplicateAuditLogEntry {
+    return this.duplicateQueue.resolve(input);
+  }
+
+  public getDuplicateAuditLogs(query?: {
+    candidateId?: string | undefined;
+    actorId?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): {
+    items: DuplicateAuditLogEntry[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  } {
+    return this.duplicateQueue.getAuditLogs(query);
   }
 }

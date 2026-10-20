@@ -149,4 +149,43 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 | `GET` | `/scores` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
 | `GET` | `/rejects` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
 | `GET` | `/reconciliation/:batch` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
+| `POST` | `/runs` | Body: `CreateRunInput` | N/A | Records migration step projection; idempotent by `idempotencyKey` |
+| `POST` | `/scores` | Body: `CreateScoreInput` | N/A | Records quality score card; computes weighted score automatically |
+| `POST` | `/reconciliation` | Body: `CreateReconciliationInput` | N/A | Records conservation balance sheet; evaluates conservation invariant |
+| `POST` | `/rejects` | Body: `CreateRejectInput` | N/A | Ingests row rejection audit record with payload SHA-256 hash |
+| `POST` | `/duplicates/detect` | Body: `DetectDuplicatesInput` | N/A | Detects exact duplicates using normalized keys; holds candidates for review |
+| `GET` | `/duplicates/held` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
+| `POST` | `/duplicates/resolve` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
+| `GET` | `/duplicates/audit` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
+
+---
+
+## 5. Exact Duplicate Key Policy & Human Review Policy (CRM5-12)
+
+### 5.1 Deterministic Key Normalization Rules
+To ensure consistent, deterministic duplicate detection across modules and ingest streams without fuzzy heuristics, exact keys are normalized according to strict rules:
+
+| Key Type | Normalization Rule | Example Input | Normalized Output |
+| :--- | :--- | :--- | :--- |
+| `email` | Trim whitespace, convert to lowercase | `"  Lead.Ops@Example.COM  "` | `"lead.ops@example.com"` |
+| `tax_id` | Trim whitespace, uppercase, remove hyphens/spaces/dots/slashes | `" 12-345.678/9 "` | `"123456789"` |
+| `sku` | Trim whitespace, uppercase, collapse internal whitespace | `"  item-xyz  400 "` | `"ITEM-XYZ 400"` |
+| `phone` | Trim whitespace, strip non-digits, preserve leading `+` | `" +1 (555) 019-2834 "` | `"+15550192834"` |
+| `composite` | Deterministic sorted key-value serialization | `{ batchId: "b1", step: "load" }` | `"batchId=b1;step=load"` |
+
+### 5.2 Deterministic Candidate Holding Policy
+1. Records sharing an identical normalized key are grouped and flagged deterministically as `duplicate_candidate`.
+2. **Zero Automatic Merging in V1:** Automatic fuzzy merging is strictly prohibited. Any request requesting automated merge throws an unprocessable error (`AUTO_MERGE_FORBIDDEN` / HTTP 422).
+3. All ambiguous or duplicate candidates transition to `held_for_review` until an authorized human operator provides a merge or separation decision.
+
+### 5.3 Human Merge Decision Audit Requirements
+Every human review resolution creates an immutable audit log entry recording:
+* `id`: UUID of the audit entry.
+* `candidate_id`: ID of the resolved candidate group.
+* `decision`: `MERGE` | `REJECT_DUPLICATE` | `KEEP_SEPARATE`.
+* `actor_id`: Non-empty string identifier of the authorized human reviewer.
+* `timestamp`: Precise UTC timestamp of the decision.
+* `kept_id`: ID of the surviving/canonical record.
+* `merged_id`: ID of the absorbed duplicate record (`kept_id !== merged_id` enforced for `MERGE`).
+* `reason`: Mandatory audit justification for traceability.
 

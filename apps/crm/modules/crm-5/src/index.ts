@@ -5,6 +5,7 @@ export const MODULE_NAME = 'CRM-5 Migration Control Center and Reports';
 
 export * from '../db/schema.js';
 export * from './domain/errors.js';
+export * from './domain/duplicate-policy.js';
 export * from './domain/transitions.js';
 export * from './domain/relationships.js';
 export * from './services/control-center.service.js';

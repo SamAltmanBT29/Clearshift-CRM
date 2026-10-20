@@ -367,6 +367,157 @@ export const CreateRejectInputSchema = z.object({
 export type CreateRejectInput = z.infer<typeof CreateRejectInputSchema>;
 
 // ---------------------------------------------------------------------------
+// 7. Exact Duplicate Key Policy Contracts & Normalizers (CRM5-12)
+// ---------------------------------------------------------------------------
+
+export const ExactKeyTypeSchema = z.enum([
+  'email',
+  'tax_id',
+  'sku',
+  'phone',
+  'composite',
+]);
+export type ExactKeyType = z.infer<typeof ExactKeyTypeSchema>;
+
+export const DuplicateCandidateStatusSchema = z.enum([
+  'unique',
+  'duplicate_candidate',
+  'held_for_review',
+  'resolved',
+]);
+export type DuplicateCandidateStatus = z.infer<typeof DuplicateCandidateStatusSchema>;
+
+export const DuplicateReviewDecisionSchema = z.enum([
+  'MERGE',
+  'REJECT_DUPLICATE',
+  'KEEP_SEPARATE',
+]);
+export type DuplicateReviewDecision = z.infer<typeof DuplicateReviewDecisionSchema>;
+
+/**
+ * Normalization Rules:
+ * 1. Email: trimmed and lowercased.
+ * 2. Tax ID: trimmed, uppercased, stripped of punctuation and whitespace.
+ * 3. SKU: trimmed, uppercased, collapsed internal whitespace.
+ * 4. Phone: trimmed, stripped of punctuation, retains leading '+' if present.
+ * 5. Composite: deterministic sorted key:value serialization.
+ */
+export function normalizeEmail(value: string): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+export function normalizeTaxId(value: string): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toUpperCase().replace(/[\s\-_./]/g, '');
+}
+
+export function normalizeSku(value: string): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+export function normalizePhone(value: string): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  return hasPlus ? `+${digits}` : digits;
+}
+
+export function normalizeCompositeKey(parts: Record<string, unknown> | Array<unknown>): string {
+  if (Array.isArray(parts)) {
+    return parts.map((p) => String(p ?? '').trim()).join(':');
+  }
+  const keys = Object.keys(parts).sort();
+  return keys
+    .map((k) => `${k}=${String(parts[k] ?? '').trim()}`)
+    .join(';');
+}
+
+export function normalizeExactKey(type: ExactKeyType | string, value: string): string {
+  switch (type) {
+    case 'email':
+      return normalizeEmail(value);
+    case 'tax_id':
+      return normalizeTaxId(value);
+    case 'sku':
+      return normalizeSku(value);
+    case 'phone':
+      return normalizePhone(value);
+    case 'composite':
+      return value.trim().toLowerCase();
+    default:
+      return value.trim();
+  }
+}
+
+export const DuplicateCandidateSchema = z.object({
+  id: z.string().uuid(),
+  batchId: z.string().min(1).max(128).optional(),
+  module: CrmModuleSchema.optional(),
+  keyType: ExactKeyTypeSchema,
+  normalizedKey: z.string().min(1),
+  recordIds: z.array(z.string()).min(2),
+  status: DuplicateCandidateStatusSchema,
+  detectedAt: z.coerce.date(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+export type DuplicateCandidate = z.infer<typeof DuplicateCandidateSchema>;
+
+export const ResolveDuplicateInputSchema = z
+  .object({
+    candidateId: z.string().min(1, 'candidateId is required'),
+    decision: DuplicateReviewDecisionSchema,
+    actorId: z.string().min(1, 'actorId is required'),
+    keptId: z.string().min(1, 'keptId is required'),
+    mergedId: z.string().min(1, 'mergedId is required'),
+    reason: z.string().min(1, 'reason is required'),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.decision === 'MERGE') {
+        return data.keptId !== data.mergedId;
+      }
+      return true;
+    },
+    {
+      message: 'keptId and mergedId cannot be the same entity for MERGE decision',
+      path: ['mergedId'],
+    }
+  );
+export type ResolveDuplicateInput = z.infer<typeof ResolveDuplicateInputSchema>;
+
+export const DuplicateAuditLogEntrySchema = z.object({
+  id: z.string().uuid(),
+  candidateId: z.string(),
+  decision: DuplicateReviewDecisionSchema,
+  actorId: z.string(),
+  timestamp: z.coerce.date(),
+  keptId: z.string(),
+  mergedId: z.string(),
+  reason: z.string(),
+  keyType: ExactKeyTypeSchema.optional(),
+  normalizedKey: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+export type DuplicateAuditLogEntry = z.infer<typeof DuplicateAuditLogEntrySchema>;
+
+export const DetectDuplicatesInputSchema = z.object({
+  batchId: z.string().min(1).max(128).optional(),
+  module: CrmModuleSchema.optional(),
+  keyType: ExactKeyTypeSchema,
+  autoMerge: z.boolean().optional().default(false),
+  records: z.array(
+    z.object({
+      id: z.string().min(1, 'record id is required'),
+      keyValue: z.string().min(1, 'keyValue is required'),
+      payload: z.record(z.string(), z.unknown()).optional(),
+    })
+  ).min(1, 'At least one record is required for duplicate detection'),
+});
+export type DetectDuplicatesInput = z.infer<typeof DetectDuplicatesInputSchema>;
 // 7. Batch Aggregates & Consistency Schemas
 // ---------------------------------------------------------------------------
 
