@@ -243,3 +243,29 @@ Every human review resolution creates an immutable audit log entry recording:
 * `merged_id`: ID of the absorbed duplicate record (`kept_id !== merged_id` enforced for `MERGE`).
 * `reason`: Mandatory audit justification for traceability.
 
+---
+
+## 7. Frontend Module Routes, Navigation & Layout Shell (CRM5-16)
+
+### 7.1 Module Route Registration
+CRM-5 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-5/runs` | `crm5-runs` | Migration Run Projections | Runs | `control.read` |
+| `/crm-5/scores` | `crm5-scores` | Data Quality Scores | Quality Scores | `control.read` |
+| `/crm-5/rejects` | `crm5-rejects` | Row-Level Rejection Audit | Rejections | `control.read` |
+| `/crm-5/reconciliation` | `crm5-reconciliation` | Conservation Balance Sheet | Reconciliation | `control.read` |
+| `/crm-5/duplicates` | `crm5-duplicates` | Exact Duplicate Candidate Review | Duplicate Review | `control.read` |
+
+### 7.2 Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `control.read` capability. Users lacking this capability are redirected to `/access-denied?required=control.read`.
+
+### 7.3 Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-5 - <View Title>`.
+
