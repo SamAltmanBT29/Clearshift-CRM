@@ -26,3 +26,28 @@ export class DomainConflictError extends Error {
     this.details = details;
   }
 }
+
+export class AutoMergeForbiddenError extends Error {
+  public readonly code = 'AUTO_MERGE_FORBIDDEN';
+  public readonly statusCode = 422;
+  public readonly details?: unknown;
+
+  constructor(
+    message = 'Automatic fuzzy or unreviewed merging is forbidden in V1. Duplicate candidates must be held for authorized human review.',
+    details?: unknown
+  ) {
+    super(message);
+    this.name = 'AutoMergeForbiddenError';
+    this.details = details;
+  }
+}
+
+export class DuplicateCandidateNotFoundError extends Error {
+  public readonly code = 'NOT_FOUND';
+  public readonly statusCode = 404;
+
+  constructor(id: string) {
+    super(`Duplicate candidate with ID '${id}' not found`);
+    this.name = 'DuplicateCandidateNotFoundError';
+  }
+}
