@@ -1,20 +1,35 @@
 import React from 'react';
+import { DataTable } from '../components/DataTable.js';
+import { RUNS_COLUMNS } from '../table/columns.js';
+import type { TableSortState, TablePaginationState } from '../table/types.js';
 
 export interface RunsOverviewPageProps {
+  data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | null;
+  sort?: TableSortState | undefined;
+  onSortChange?: ((columnKey: string) => void) | undefined;
+  pagination?: TablePaginationState | undefined;
+  onPageChange?: ((newPage: number) => void) | undefined;
 }
 
 /**
  * Migration Runs Overview Page Shell
- * Integrates with /api/v1/crm-control/runs
+ * Integrates with /api/v1/crm-control/runs and paginated DataTable
  */
 export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
+  data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  sort,
+  onSortChange,
+  pagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  onPageChange,
 }) => {
+  const displayData = isEmpty ? [] : data;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -26,9 +41,9 @@ export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
 
       {isLoading && (
         <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading run projections">
-          <div className="cs-skeleton-line" style={{ width: '100%' }} />
-          <div className="cs-skeleton-line" style={{ width: '80%' }} />
-          <div className="cs-skeleton-line" style={{ width: '60%' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
           <p className="cs-loading-text">Loading migration runs from server...</p>
         </div>
       )}
@@ -39,21 +54,20 @@ export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
         </div>
       )}
 
-      {!isLoading && !error && isEmpty && (
-        <div className="cs-empty-state" role="status">
-          <h3 className="cs-empty-title">No records found</h3>
-          <p className="cs-empty-text">
-            No migration run projections currently recorded. Run events will project here automatically.
-          </p>
-        </div>
-      )}
-
-      {!isLoading && !error && !isEmpty && (
-        <div className="cs-content-placeholder" id="runs-table-container">
-          {/* Table container for Issue #190 */}
-          <p className="cs-ready-notice">Ready for paginated data table integration.</p>
-        </div>
+      {!isLoading && !error && (
+        <DataTable
+          columns={RUNS_COLUMNS}
+          data={displayData}
+          loading={false}
+          emptyTitle="No records found"
+          emptyDescription="No migration run projections currently recorded. Run events will project here automatically."
+          sort={sort}
+          onSortChange={onSortChange}
+          pagination={pagination}
+          onPageChange={onPageChange}
+        />
       )}
     </div>
   );
 };
+

@@ -316,3 +316,27 @@ CRM-5 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KI
 ### 8.3 Error Classification Invariants
 * **Domain Validation Failures:** Business rule violations (e.g. `recordsOut + recordsRejected > recordsIn`, out-of-range quality dimensions, unparseable payloads) are classified as business rejections (`VALIDATION_ERROR` / HTTP 422) with machine-readable reason codes and safe error messages. Corrupt records are never committed.
 * **Infrastructure Failures:** Transient network, database, or worker outages (e.g. HTTP 503) are marked `retryable: true` and are **never** recorded in `crm5_rejects` as invalid data.
+
+---
+
+## 9. Main Paginated Data Table with Server-Side Sorting & Filtering (CRM5-17)
+
+### 9.1 Stable Column Configurations
+The CRM-5 primary collection table renders structured data matching the entity dictionary schemas:
+
+| Entity Collection | Primary Columns | Sortable Columns |
+| :--- | :--- | :--- |
+| `crm5_runs` | `batchId`, `module`, `step`, `status`, `recordsIn`, `recordsOut`, `recordsRejected`, `startedAt`, `completedAt` | `batchId`, `module`, `step`, `status`, `recordsIn`, `recordsOut`, `recordsRejected`, `startedAt` |
+| `crm5_scores` | `batchId`, `module`, `score`, `completeness`, `validity`, `duplicateRate`, `rejectRate`, `linkIntegrity`, `isFullyScored`, `scoredAt` | `batchId`, `module`, `score`, `completeness`, `validity`, `duplicateRate`, `rejectRate`, `linkIntegrity`, `scoredAt` |
+| `crm5_rejects` | `id`, `batchId`, `module`, `rowIndex`, `errorCode`, `errorMessage`, `rawPayloadHash`, `createdAt` | `batchId`, `module`, `rowIndex`, `errorCode`, `createdAt` |
+| `crm5_reconciliation_reports` | `batchId`, `module`, `sourceCount`, `loadedCount`, `rejectedCount`, `mergedCount`, `skippedCount`, `unaccountedCount`, `status`, `reconciledAt` | `batchId`, `module`, `sourceCount`, `loadedCount`, `rejectedCount`, `mergedCount`, `skippedCount`, `unaccountedCount`, `status`, `reconciledAt` |
+
+### 9.2 Bounded Server-Side Pagination
+* **Page Size Ceilings:** Default page size is 20 rows (`DEFAULT_PAGE_SIZE = 20`), with a strict bounded ceiling of 100 rows (`MAX_PAGE_SIZE = 100`) to prevent DOM degradation and memory bloat.
+* **Navigation Controls:** First (`« First`), Previous (`‹ Prev`), Next (`Next ›`), and Last (`Last »`) controls with automatic boundary disabling (`aria-disabled="true"`).
+* **State Resets:** Adjusting `pageSize` or active sorting resets current page back to 1.
+
+### 9.3 Column Header Sorting Protocol
+* **Deterministic Toggle Cycle:** Clicking a sortable column header cycles through `asc` ↔ `desc`.
+* **WAI-ARIA Accessibility:** Headers announce sort direction via `aria-sort="ascending" | "descending" | "none"` and keyboard-accessible buttons (`<button class="cs-th-sort-btn">`).
+* **Query Serialization:** Binds to standard API parameters `sort=<columnKey>&order=asc|desc&page=<N>&pageSize=<N>&limit=<N>`.
