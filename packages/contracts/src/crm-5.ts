@@ -366,3 +366,37 @@ export const CreateRejectInputSchema = z.object({
 });
 export type CreateRejectInput = z.infer<typeof CreateRejectInputSchema>;
 
+// ---------------------------------------------------------------------------
+// 7. Batch Aggregates & Consistency Schemas
+// ---------------------------------------------------------------------------
+
+export const BatchTotalsSchema = z.object({
+  totalRecordsIn: z.number().int().nonnegative(),
+  totalRecordsOut: z.number().int().nonnegative(),
+  totalRecordsRejected: z.number().int().nonnegative(),
+  stepsCompleted: z.number().int().nonnegative(),
+  stepsTotal: z.number().int().positive(),
+  progressPercentage: z.number().int().min(0).max(100),
+});
+export type BatchTotalsContract = z.infer<typeof BatchTotalsSchema>;
+
+export const BatchConsistencySchema = z.object({
+  isConsistent: z.boolean(),
+  warnings: z.array(z.string()),
+  errors: z.array(z.string()),
+});
+export type BatchConsistencyContract = z.infer<typeof BatchConsistencySchema>;
+
+export const BatchSummarySchema = z.object({
+  batchId: z.string().min(1).max(128),
+  module: CrmModuleSchema,
+  status: MigrationRunStatusSchema,
+  totals: BatchTotalsSchema,
+  score: QualityScoreSchema.nullable(),
+  reconciliation: ReconciliationReportSchema.nullable(),
+  consistency: BatchConsistencySchema,
+  updatedAt: z.coerce.date(),
+});
+export type BatchSummaryContract = z.infer<typeof BatchSummarySchema>;
+
+
