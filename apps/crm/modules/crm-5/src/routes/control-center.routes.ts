@@ -118,9 +118,35 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     return reply.status(200).send(report);
   });
 
+  // 5. GET /batches/:batch - Aggregated batch summary & read-model consistency
+  fastify.get<{ Params: { batch: string } }>('/batches/:batch', async (request, reply) => {
+    const batchId = request.params.batch;
+    if (!batchId || batchId.trim().length === 0) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Batch identifier is required',
+        },
+      });
+    }
+
+    const summary = service.getBatchSummary(batchId);
+    if (!summary) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Batch summary not found for batch '${batchId}'`,
+        },
+      });
+    }
+
+    return reply.status(200).send(summary);
+  });
+
   // ---------------------------------------------------------------------------
   // Mutation API Endpoints (POST /runs, /scores, /reconciliation, /rejects)
   // ---------------------------------------------------------------------------
+
 
   // 5. POST /runs - Ingest/update run projection
   fastify.post('/runs', async (request, reply) => {

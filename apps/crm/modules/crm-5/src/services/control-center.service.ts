@@ -30,6 +30,8 @@ import {
   detectExactDuplicates,
   type DuplicateDetectionResult,
 } from '../domain/duplicate-policy.js';
+import { assertValidTransition } from '../domain/transitions.js';
+import { buildBatchSummary, type BatchSummary } from '../domain/relationships.js';
 
 /**
  * CRM-5 Control Center Service
@@ -173,7 +175,31 @@ export class ControlCenterService {
   }
 
   // ---------------------------------------------------------------------------
-  // 5. Mutation API Methods with Domain Validation
+  // 5. Batch Relationships & Aggregated Read Model
+  // ---------------------------------------------------------------------------
+
+  public getBatchSummary(batchId: string): BatchSummary | null {
+    const runs = this.runs.filter((r) => r.batchId === batchId);
+    if (runs.length === 0) {
+      return null;
+    }
+    const module = runs[0]!.module;
+    const score = this.scores.find((s) => s.batchId === batchId) ?? null;
+    const reconciliation = this.reconciliations.get(batchId) ?? null;
+    const rejects = this.rejects.filter((r) => r.batchId === batchId);
+
+    return buildBatchSummary({
+      batchId,
+      module,
+      runs,
+      score,
+      reconciliation,
+      rejects,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. Mutation API Methods with Domain Validation
   // ---------------------------------------------------------------------------
 
   public recordRun(input: CreateRunInput): { run: MigrationRun; isDuplicate: boolean } {
@@ -216,16 +242,11 @@ export class ControlCenterService {
         return { run: existing, isDuplicate: true };
       }
 
-      // Check illegal transitions: terminal states cannot be changed to pending
-      if (
-        (existing.status === 'completed' || existing.status === 'halted') &&
-        input.status === 'pending'
-      ) {
-        throw new DomainConflictError(
-          `Cannot revert run from terminal state '${existing.status}' to 'pending'`,
-          { currentStatus: existing.status, requestedStatus: input.status }
-        );
+      // Assert valid state transition across the formal state machine
+      if (existing.status !== input.status) {
+        assertValidTransition(existing.status, input.status);
       }
+
 
       // Valid update (e.g. from pending/running to completed/failed)
       const updatedRun: MigrationRun = {
