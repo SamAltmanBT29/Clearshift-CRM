@@ -529,6 +529,37 @@ paths:
               schema:
                 type: object
 
+  /batches/execute-load:
+    post:
+      summary: Execute chunked batch load with bounded retries and stop threshold
+      description: Slices input into 500-row chunks, retries transient failures with exponential backoff while preserving idempotency keys, and stops immediately if failures exceed 10%.
+      operationId: executeBatchLoad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteBatchLoadInput'
+      responses:
+        '200':
+          description: Batch load execution report with status (COMPLETED or STOPPED_EXCESSIVE_FAILURES)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExecutionReport'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Domain Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
 components:
 
   schemas:
@@ -1164,6 +1195,160 @@ components:
         consistency:
           $ref: '#/components/schemas/BatchConsistency'
         updatedAt:
+          type: string
+          format: date-time
+
+    BatchExecutionStatus:
+      type: string
+      enum: [COMPLETED, STOPPED_EXCESSIVE_FAILURES, FAILED]
+
+    BatchRecordInput:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - data
+      properties:
+        sourceRow:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+        data:
+          type: object
+
+    ExecuteBatchLoadInput:
+      type: object
+      required:
+        - batchId
+        - module
+        - records
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+          default: load
+        chunkSize:
+          type: integer
+          default: 500
+        maxRetries:
+          type: integer
+          default: 3
+        failureThreshold:
+          type: number
+          default: 0.10
+        minAttemptedRows:
+          type: integer
+          default: 50
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchRecordInput'
+
+    ImportReceipt:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - idempotencyKey
+        - targetId
+        - committedAt
+      properties:
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        targetId:
+          type: string
+        kind:
+          type: string
+          enum: [created, linked]
+          default: created
+        committedAt:
+          type: string
+          format: date-time
+
+    FailedRow:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - errorCode
+        - errorMessage
+        - retryAttempts
+      properties:
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryAttempts:
+          type: integer
+        payloadHash:
+          type: string
+
+    BatchExecutionReport:
+      type: object
+      required:
+        - batchId
+        - module
+        - step
+        - status
+        - totalRecords
+        - attemptedRecords
+        - committedRecords
+        - failedRecords
+        - chunksProcessed
+        - chunkSize
+        - failureRate
+        - committedReceipts
+        - failedRows
+        - executedAt
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+        status:
+          $ref: '#/components/schemas/BatchExecutionStatus'
+        totalRecords:
+          type: integer
+        attemptedRecords:
+          type: integer
+        committedRecords:
+          type: integer
+        failedRecords:
+          type: integer
+        chunksProcessed:
+          type: integer
+        chunkSize:
+          type: integer
+        failureRate:
+          type: number
+        haltReason:
+          type: string
+          nullable: true
+        committedReceipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportReceipt'
+        failedRows:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailedRow'
+        executedAt:
           type: string
           format: date-time
 

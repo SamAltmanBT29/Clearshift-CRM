@@ -18,6 +18,8 @@ import type {
   ResolveDuplicateInput,
   DuplicateAuditLogEntry,
   DetectDuplicatesInput,
+  ExecuteBatchLoadInput,
+  BatchExecutionReport,
 } from '@clearshift/contracts';
 import {
   calculateQualityScore,
@@ -32,6 +34,10 @@ import {
 } from '../domain/duplicate-policy.js';
 import { assertValidTransition } from '../domain/transitions.js';
 import { buildBatchSummary, type BatchSummary } from '../domain/relationships.js';
+import {
+  executeChunkedBatchLoad,
+  type BatchLoaderOptions,
+} from '../domain/batch-loader.js';
 
 /**
  * CRM-5 Control Center Service
@@ -650,5 +656,75 @@ export class ControlCenterService {
     totalPages: number;
   } {
     return this.duplicateQueue.getAuditLogs(query);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9. Idempotent Retry & Chunked Load Execution (CRM5-13)
+  // ---------------------------------------------------------------------------
+
+  public async executeBatchLoad(
+    input: ExecuteBatchLoadInput,
+    options?: BatchLoaderOptions
+  ): Promise<BatchExecutionReport> {
+    const report = await executeChunkedBatchLoad(input, options);
+
+    const now = new Date();
+    const runStatus =
+      report.status === 'COMPLETED'
+        ? 'completed'
+        : report.status === 'STOPPED_EXCESSIVE_FAILURES'
+          ? 'halted'
+          : 'failed';
+
+    const existingRunIndex = this.runs.findIndex(
+      (r) => r.batchId === input.batchId && r.step === input.step
+    );
+
+    const runData: MigrationRun = {
+      id: existingRunIndex >= 0 ? this.runs[existingRunIndex]!.id : randomUUID(),
+      batchId: input.batchId,
+      module: input.module,
+      step: input.step,
+      status: runStatus,
+      recordsIn: report.attemptedRecords,
+      recordsOut: report.committedRecords,
+      recordsRejected: report.failedRecords,
+      startedAt: existingRunIndex >= 0 ? this.runs[existingRunIndex]!.startedAt : now,
+      completedAt:
+        runStatus === 'completed' || runStatus === 'halted' || runStatus === 'failed'
+          ? now
+          : null,
+      metadata: {
+        status: report.status,
+        haltReason: report.haltReason,
+        failureRate: report.failureRate,
+        chunkSize: report.chunkSize,
+        chunksProcessed: report.chunksProcessed,
+      },
+      createdAt: existingRunIndex >= 0 ? this.runs[existingRunIndex]!.createdAt : now,
+      updatedAt: now,
+    };
+
+    if (existingRunIndex >= 0) {
+      this.runs[existingRunIndex] = runData;
+    } else {
+      this.runs.push(runData);
+    }
+
+    // Record failed rows as rejects
+    for (const fail of report.failedRows) {
+      this.rejects.push({
+        id: randomUUID(),
+        batchId: input.batchId,
+        module: input.module,
+        rowIndex: fail.sourceRow,
+        errorCode: fail.errorCode,
+        errorMessage: fail.errorMessage,
+        rawPayloadHash: `hash-${fail.idempotencyKey.slice(0, 16)}`,
+        createdAt: now,
+      });
+    }
+
+    return report;
   }
 }

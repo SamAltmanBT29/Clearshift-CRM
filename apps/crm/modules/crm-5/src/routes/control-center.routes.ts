@@ -9,6 +9,7 @@ import {
   CreateRejectInputSchema,
   DetectDuplicatesInputSchema,
   ResolveDuplicateInputSchema,
+  ExecuteBatchLoadInputSchema,
 } from '@clearshift/contracts';
 import { ControlCenterService } from '../services/control-center.service.js';
 import {
@@ -402,6 +403,36 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
   }>('/duplicates/audit', async (request, reply) => {
     const logs = service.getDuplicateAuditLogs(request.query);
     return reply.status(200).send(logs);
+  });
+
+  // 13. POST /batches/execute-load - Execute chunked batch load with bounded retries & stop threshold
+  fastify.post('/batches/execute-load', async (request, reply) => {
+    const parsed = ExecuteBatchLoadInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid batch load execution payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const report = await service.executeBatchLoad(parsed.data);
+      return reply.status(200).send(report);
+    } catch (err: unknown) {
+      if (err instanceof DomainValidationError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
   });
 };
 
