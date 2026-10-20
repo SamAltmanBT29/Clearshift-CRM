@@ -132,11 +132,39 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 
 ---
 
+### 2.5 Table: `crm5_import_receipts`
+**Description:** Stores durable import receipts committed alongside target business records in the same atomic local database transaction (KIT-08 & Decision C4). Guarantees idempotency deduplication and audit traceability.
+
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `id` | `UUID` | No | `gen_random_uuid()` | Primary Key | Unique import receipt identifier |
+| `batch_id` | `VARCHAR(128)` | No | — | Indexed | Migration Kit batch correlation ID |
+| `source_row` | `INTEGER` | No | — | `>= 1` | Source row index in batch |
+| `source_system` | `VARCHAR(64)` | Yes | `NULL` | — | Originating source system |
+| `source_id` | `VARCHAR(128)` | Yes | `NULL` | — | Source system entity record ID |
+| `entity` | `VARCHAR(64)` | No | — | Indexed | Target entity (`runs`, `scores`, `rejects`, `reconciliation`) |
+| `schema_version` | `INTEGER` | No | `1` | — | Schema version |
+| `idempotency_key` | `VARCHAR(256)` | No | — | Unique Index | Stable idempotency key |
+| `payload_hash` | `VARCHAR(64)` | No | — | Length 64 | Deterministic SHA-256 canonical hash of payload |
+| `target_id` | `UUID` | No | — | Indexed | Primary key of mutated domain record |
+| `kind` | `VARCHAR(32)` | No | `'created'` | — | Record mutation kind (`created`, `linked`) |
+| `outcome` | `VARCHAR(32)` | No | `'created'` | — | Row outcome (`created`, `linked`, `rejected`, `skipped`) |
+| `response_payload` | `JSONB` | Yes | `NULL` | — | Serialized outcome payload for replay |
+| `created_at` | `TIMESTAMPTZ` | No | `now()` | — | Receipt timestamp |
+
+**Indexes:**
+* `idx_crm5_receipts_idempotency_key` ON `crm5_import_receipts(idempotency_key)` (UNIQUE)
+* `idx_crm5_receipts_batch_row` ON `crm5_import_receipts(batch_id, source_row)`
+* `idx_crm5_receipts_target_id` ON `crm5_import_receipts(target_id)`
+
+---
+
 ## 3. Security, Privacy & Invariant Protections
 
 1. **No Raw Secrets:** No passwords, bearer tokens, or full credit card / bank accounts are ever stored in CRM-5 tables.
 2. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
 3. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
+4. **No Direct Target Writes by Caller:** The Migration Kit never writes directly to CRM-5 private tables; data enters strictly through the public API / in-process `TargetAdapter`.
 
 ---
 
@@ -158,6 +186,8 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 | `POST` | `/duplicates/resolve` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
 | `GET` | `/duplicates/audit` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
 | `POST` | `/batches/execute-load` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
+| `POST` | `/import/row` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Safely loads mapped row via KIT-08 Target Adapter; commits mutation and receipt in one transaction |
+| `GET` | `/import/receipts` | None | N/A | Returns durable receipts committed alongside migrated target records |
 
 ---
 
@@ -242,4 +272,22 @@ Every human review resolution creates an immutable audit log entry recording:
 * `kept_id`: ID of the surviving/canonical record.
 * `merged_id`: ID of the absorbed duplicate record (`kept_id !== merged_id` enforced for `MERGE`).
 * `reason`: Mandatory audit justification for traceability.
+
+---
+
+## 7. KIT-08 Target Adapter Contract & Durable Receipts (CRM5-11)
+
+### 7.1 Target Adapter Port Adherence
+CRM-5 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
+* **Caller Privilege Boundary:** Migration Kit and external clients possess zero direct SQL insert/update permissions on CRM-5 tables. All writes enter through the public API (`POST /api/v1/crm-control/import/row`) or in-process adapter method `importRow()`.
+* **Atomic Transaction Guarantee:** The mutated business record (`crm5_runs`, `crm5_scores`, `crm5_rejects`, or `crm5_reconciliation_reports`) and the durable receipt (`crm5_import_receipts`) commit atomically in one local PostgreSQL transaction. If either operation fails, the transaction is completely rolled back.
+
+### 7.2 Strict Idempotency & Conflict Semantics
+* **Canonical Payload Hash:** Input payloads are deterministically serialized with sorted keys and hashed via SHA-256 (`payload_hash`).
+* **Identical Replay (HTTP 200):** If an incoming row presents an existing `idempotencyKey` and matching `payload_hash`, the prior execution result is returned without mutating data or duplicating receipts.
+* **Payload Conflict (HTTP 409):** If an incoming row reuses an existing `idempotencyKey` with an altered payload (`new_hash !== existing_hash`), the request is rejected with `IDEMPOTENCY_CONFLICT` (HTTP 409) and zero mutations occur.
+
+### 7.3 Error Classification Invariants
+* **Domain Validation Failures:** Business rule violations (e.g. `recordsOut + recordsRejected > recordsIn`, out-of-range quality dimensions, unparseable payloads) are classified as business rejections (`VALIDATION_ERROR` / HTTP 422) with machine-readable reason codes and safe error messages. Corrupt records are never committed.
+* **Infrastructure Failures:** Transient network, database, or worker outages (e.g. HTTP 503) are marked `retryable: true` and are **never** recorded in `crm5_rejects` as invalid data.
 

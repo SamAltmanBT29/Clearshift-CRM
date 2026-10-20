@@ -5,3 +5,4 @@
 export const CRM_CONTRACT_VERSION = '1.0.0';
 
 export * from './crm-5.js';
+export * from './import-target.js';
