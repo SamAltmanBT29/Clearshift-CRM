@@ -77,4 +77,27 @@ export class BatchLoadHaltedError extends Error {
   }
 }
 
+export class IdempotencyConflictError extends DomainConflictError {
+  constructor(idempotencyKey: string, details?: unknown) {
+    super(
+      `Idempotency key '${idempotencyKey}' was already used with a different request payload.`,
+      details ?? { idempotencyKey }
+    );
+    this.name = 'IdempotencyConflictError';
+  }
+}
+
+export class RetryableInfrastructureError extends Error {
+  public readonly code = 'SERVICE_UNAVAILABLE';
+  public readonly statusCode = 503;
+  public readonly retryable = true;
+  public readonly details?: unknown;
+
+  constructor(message = 'Service temporarily unavailable; retryable infrastructure failure.', details?: unknown) {
+    super(message);
+    this.name = 'RetryableInfrastructureError';
+    this.details = details;
+  }
+}
+
 

@@ -4,13 +4,16 @@ export const MODULE_ID = 'crm-5';
 export const MODULE_NAME = 'CRM-5 Migration Control Center and Reports';
 
 export * from '../db/schema.js';
+export * from '../db/import-receipts.js';
 export * from './domain/errors.js';
 export * from './domain/duplicate-policy.js';
 export * from './domain/transitions.js';
 export * from './domain/relationships.js';
 export * from './domain/batch-loader.js';
+export * from './migration/target-adapter.js';
 export * from './services/control-center.service.js';
 export * from './routes/control-center.routes.js';
+export * from './routes/import.js';
 export * from './app.js';
 
 

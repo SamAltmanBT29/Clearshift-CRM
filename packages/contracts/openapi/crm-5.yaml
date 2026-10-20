@@ -560,6 +560,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /import/row:
+    post:
+      summary: Load row via KIT-08 Target Adapter
+      description: Safely loads a mapped V1 record and commits the domain mutation and durable import receipt atomically in one local transaction. Supports idempotent retries via Idempotency-Key.
+      operationId: importRow
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique idempotency key for this row operation
+          schema:
+            type: string
+        - name: X-Correlation-ID
+          in: header
+          required: false
+          description: Distributed tracing correlation identifier
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportRowInput'
+      responses:
+        '201':
+          description: Successfully created target record and durable receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportRowResponse'
+        '200':
+          description: Idempotent replay of previously committed key and payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportRowResponse'
+        '400':
+          description: Bad request (malformed payload or missing idempotency key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Conflict (idempotency key reused with different request payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Business validation rejection (domain invariant violation)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Service Unavailable (transient infrastructure failure, retryable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /import/receipts:
+    get:
+      summary: List durable import receipts
+      description: Returns durable receipts committed alongside migrated target records.
+      operationId: getImportReceipts
+      responses:
+        '200':
+          description: List of durable import receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImportReceiptContract'
+                  total:
+                    type: integer
+
 components:
 
   schemas:
@@ -1351,5 +1433,105 @@ components:
         executedAt:
           type: string
           format: date-time
+
+    ImportRowInput:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - entity
+        - data
+        - idempotencyKey
+      properties:
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+          minimum: 1
+        sourceSystem:
+          type: string
+        sourceId:
+          type: string
+        entity:
+          type: string
+          enum: [runs, scores, rejects, reconciliation]
+        data:
+          type: object
+        idempotencyKey:
+          type: string
+        correlationId:
+          type: string
+        schemaVersion:
+          type: integer
+          default: 1
+
+    ImportReceiptContract:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - entity
+        - idempotencyKey
+        - payloadHash
+        - targetId
+        - kind
+        - outcome
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+        sourceSystem:
+          type: string
+          nullable: true
+        sourceId:
+          type: string
+          nullable: true
+        entity:
+          type: string
+        schemaVersion:
+          type: integer
+        idempotencyKey:
+          type: string
+        payloadHash:
+          type: string
+        targetId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [created, linked]
+        outcome:
+          type: string
+          enum: [created, linked, rejected, skipped]
+        createdAt:
+          type: string
+          format: date-time
+
+    ImportRowResponse:
+      type: object
+      required:
+        - targetId
+        - version
+        - outcome
+        - receipt
+      properties:
+        targetId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        outcome:
+          type: string
+          enum: [created, linked, rejected, skipped]
+        receipt:
+          $ref: '#/components/schemas/ImportReceiptContract'
+        isExisting:
+          type: boolean
+          default: false
 
 
