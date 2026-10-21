@@ -114,3 +114,25 @@ The first run applies `crm1_v1`; the second reports it skipped from `public.sche
 DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm run db:migrate:test
 DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm test -- apps/crm/modules/crm-1/tests/db/schema.test.ts
 ```
+
+---
+
+## Public API Endpoints (`/api/v1/crm-contacts`)
+
+* `GET /health`: Health check and version verification.
+* `GET /contacts`: Paginated contacts list (search name/email, default pageSize 25, max 100, deterministic sort: `createdAt desc, id asc`).
+* `GET /contacts/:id`: Retrieve contact by UUID.
+* `POST /contacts`: Create contact (validates optional companyId and leadStatus).
+* `PATCH /contacts/:id`: Partial update of contact fields.
+* `GET /companies`: Paginated companies list (search name/taxNumber, default pageSize 20, max 100).
+* `GET /companies/:id`: Retrieve company by UUID.
+* `POST /companies`: Create company.
+* `PATCH /companies/:id`: Update company.
+* `GET /leads`: Paginated leads list (filter by status, search name/email, default pageSize 20, max 100).
+* `GET /leads/:id`: Retrieve lead by UUID.
+* `POST /leads`: Create lead.
+* `PATCH /leads/:id`: Update lead.
+* `POST /imports`: Initiate migration batch.
+* `GET /imports/:batch`: Check batch execution status.
+* `GET /imports/:batch/rejects`: Retrieve paginated rejected rows for review.
+

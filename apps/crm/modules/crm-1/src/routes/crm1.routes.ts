@@ -1,0 +1,460 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+import {
+  ContactsQuerySchema,
+  CreateContactInputSchema,
+  UpdateContactInputSchema,
+  CompaniesQuerySchema,
+  CreateCompanyInputSchema,
+  UpdateCompanyInputSchema,
+  LeadsQuerySchema,
+  CreateLeadInputSchema,
+  UpdateLeadInputSchema,
+  CreateCrm1ImportInputSchema,
+  Crm1RejectsQuerySchema,
+} from '@clearshift/contracts';
+import { Crm1Service } from '../services/crm1.service.js';
+import { DomainValidationError } from '../domain/errors.js';
+
+const UuidSchema = z.string().uuid();
+
+export interface Crm1RouteOptions {
+  service?: Crm1Service | undefined;
+}
+
+/**
+ * Fastify Routes for CRM-1 Contacts, Companies and Leads
+ * Base Prefix: /api/v1/crm-contacts
+ */
+export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
+  fastify,
+  opts
+) => {
+  const service = opts.service ?? new Crm1Service();
+
+  // Health check
+  fastify.get('/health', async () => {
+    return {
+      status: 'ok',
+      module: 'crm-1',
+      name: 'Contacts, Companies and Leads',
+      version: '1.0.0',
+    };
+  });
+
+  // ---------------------------------------------------------------------------
+  // 1. Contacts Endpoints
+  // ---------------------------------------------------------------------------
+
+  fastify.get('/contacts', async (request, reply) => {
+    const parsed = ContactsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid query parameters',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const result = service.getContacts(parsed.data);
+    return reply.status(200).send(result);
+  });
+
+  fastify.get<{ Params: { id: string } }>('/contacts/:id', async (request, reply) => {
+    const { id } = request.params;
+    const validUuid = UuidSchema.safeParse(id);
+    if (!validUuid.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: `Invalid contact ID format: '${id}' is not a valid UUID`,
+        },
+      });
+    }
+
+    const contact = service.getContactById(id);
+    if (!contact) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Contact with ID '${id}' not found`,
+        },
+      });
+    }
+
+    return reply.status(200).send(contact);
+  });
+
+  fastify.post('/contacts', async (request, reply) => {
+    const parsed = CreateContactInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for contact creation',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const contact = service.createContact(parsed.data);
+      return reply.status(201).send(contact);
+    } catch (err) {
+      if (err instanceof DomainValidationError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.patch<{ Params: { id: string } }>('/contacts/:id', async (request, reply) => {
+    const { id } = request.params;
+    const validUuid = UuidSchema.safeParse(id);
+    if (!validUuid.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: `Invalid contact ID format: '${id}' is not a valid UUID`,
+        },
+      });
+    }
+
+    const parsed = UpdateContactInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for contact update',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const contact = service.updateContact(id, parsed.data);
+      if (!contact) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: `Contact with ID '${id}' not found`,
+          },
+        });
+      }
+      return reply.status(200).send(contact);
+    } catch (err) {
+      if (err instanceof DomainValidationError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // 2. Companies Endpoints
+  // ---------------------------------------------------------------------------
+
+  fastify.get('/companies', async (request, reply) => {
+    const parsed = CompaniesQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid query parameters',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const result = service.getCompanies(parsed.data);
+    return reply.status(200).send(result);
+  });
+
+  fastify.get<{ Params: { id: string } }>('/companies/:id', async (request, reply) => {
+    const { id } = request.params;
+    const validUuid = UuidSchema.safeParse(id);
+    if (!validUuid.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: `Invalid company ID format: '${id}' is not a valid UUID`,
+        },
+      });
+    }
+
+    const company = service.getCompanyById(id);
+    if (!company) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Company with ID '${id}' not found`,
+        },
+      });
+    }
+
+    return reply.status(200).send(company);
+  });
+
+  fastify.post('/companies', async (request, reply) => {
+    const parsed = CreateCompanyInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for company creation',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const company = service.createCompany(parsed.data);
+    return reply.status(201).send(company);
+  });
+
+  fastify.patch<{ Params: { id: string } }>('/companies/:id', async (request, reply) => {
+    const { id } = request.params;
+    const validUuid = UuidSchema.safeParse(id);
+    if (!validUuid.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: `Invalid company ID format: '${id}' is not a valid UUID`,
+        },
+      });
+    }
+
+    const parsed = UpdateCompanyInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for company update',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const company = service.updateCompany(id, parsed.data);
+    if (!company) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Company with ID '${id}' not found`,
+        },
+      });
+    }
+
+    return reply.status(200).send(company);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 3. Leads Endpoints
+  // ---------------------------------------------------------------------------
+
+  fastify.get('/leads', async (request, reply) => {
+    const parsed = LeadsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid query parameters',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const result = service.getLeads(parsed.data);
+    return reply.status(200).send(result);
+  });
+
+  fastify.get<{ Params: { id: string } }>('/leads/:id', async (request, reply) => {
+    const { id } = request.params;
+    const validUuid = UuidSchema.safeParse(id);
+    if (!validUuid.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: `Invalid lead ID format: '${id}' is not a valid UUID`,
+        },
+      });
+    }
+
+    const lead = service.getLeadById(id);
+    if (!lead) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Lead with ID '${id}' not found`,
+        },
+      });
+    }
+
+    return reply.status(200).send(lead);
+  });
+
+  fastify.post('/leads', async (request, reply) => {
+    const parsed = CreateLeadInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for lead creation',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const lead = service.createLead(parsed.data);
+      return reply.status(201).send(lead);
+    } catch (err) {
+      if (err instanceof DomainValidationError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.patch<{ Params: { id: string } }>('/leads/:id', async (request, reply) => {
+    const { id } = request.params;
+    const validUuid = UuidSchema.safeParse(id);
+    if (!validUuid.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: `Invalid lead ID format: '${id}' is not a valid UUID`,
+        },
+      });
+    }
+
+    const parsed = UpdateLeadInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for lead update',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const lead = service.updateLead(id, parsed.data);
+      if (!lead) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: `Lead with ID '${id}' not found`,
+          },
+        });
+      }
+      return reply.status(200).send(lead);
+    } catch (err) {
+      if (err instanceof DomainValidationError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // 4. Imports & Rejects Endpoints
+  // ---------------------------------------------------------------------------
+
+  fastify.post('/imports', async (request, reply) => {
+    const parsed = CreateCrm1ImportInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for import run creation',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const run = service.startImportRun(parsed.data);
+    return reply.status(201).send(run);
+  });
+
+  fastify.get<{ Params: { batch: string } }>('/imports/:batch', async (request, reply) => {
+    const { batch } = request.params;
+    if (!batch || batch.trim().length === 0) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Batch identifier is required',
+        },
+      });
+    }
+
+    const run = service.getImportRun(batch);
+    if (!run) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Import run with batch ID '${batch}' not found`,
+        },
+      });
+    }
+
+    return reply.status(200).send(run);
+  });
+
+  fastify.get<{ Params: { batch: string } }>('/imports/:batch/rejects', async (request, reply) => {
+    const { batch } = request.params;
+    if (!batch || batch.trim().length === 0) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Batch identifier is required',
+        },
+      });
+    }
+
+    const queryData = {
+      ...(request.query as object),
+      batchId: batch,
+    };
+
+    const parsed = Crm1RejectsQuerySchema.safeParse(queryData);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid query parameters for rejects',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const result = service.getRejects(parsed.data);
+    return reply.status(200).send(result);
+  });
+};
