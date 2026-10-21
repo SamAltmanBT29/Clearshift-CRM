@@ -1,8 +1,8 @@
 /**
  * Controlled Migration Runner — ClearShift ERP
  *
- * Applies SQL migrations in order.  Each migration is recorded in
- * public.schema_migrations after a successful run.  Re-running the
+ * Applies SQL migrations in order. Each migration is recorded in
+ * public.schema_migrations after a successful transaction. Re-running the
  * runner will skip already-applied migrations (idempotent).
  *
  * Usage:
@@ -40,12 +40,14 @@ async function main() {
   const { Pool } = pg;
 
   const pool = new Pool({ connectionString: databaseUrl });
+  let client;
 
   try {
+    client = await pool.connect();
     console.log('🔌 Connected to database');
 
-    // Ensure schema_migrations table exists (guard)
-    await pool.query(`
+    await client.query('SELECT pg_advisory_lock(hashtext($1))', ['clearshift.schema_migrations']);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS public.schema_migrations (
         id          SERIAL PRIMARY KEY,
         migration   VARCHAR(256) NOT NULL UNIQUE,
@@ -65,7 +67,7 @@ async function main() {
       const migrationName = file.replace(/\.sql$/, '');
 
       // Check if already applied
-      const { rows } = await pool.query(
+      const { rows } = await client.query(
         'SELECT 1 FROM public.schema_migrations WHERE migration = $1',
         [migrationName]
       );
@@ -80,12 +82,18 @@ async function main() {
       const sql = readFileSync(join(migrationsDir, file), 'utf-8');
 
       try {
-        await pool.query(sql);
+        await client.query('BEGIN');
+        await client.query(sql);
+        await client.query(
+          'INSERT INTO public.schema_migrations (migration) VALUES ($1)',
+          [migrationName]
+        );
+        await client.query('COMMIT');
         console.log(`✅ ${migrationName} applied successfully`);
         applied++;
       } catch (err) {
-        console.error(`❌ Failed to apply ${migrationName}:`, err);
-        process.exit(1);
+        await client.query('ROLLBACK');
+        throw new Error(`Failed to apply migration ${migrationName}`, { cause: err });
       }
     }
 
@@ -94,11 +102,12 @@ async function main() {
     console.log(`   Skipped : ${skipped}`);
     console.log(`   Total   : ${migrationFiles.length}`);
   } finally {
+    client?.release();
     await pool.end();
   }
 }
 
 main().catch((err) => {
   console.error('❌ Migration runner failed:', err);
-  process.exit(1);
+  process.exitCode = 1;
 });

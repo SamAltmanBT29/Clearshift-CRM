@@ -6,6 +6,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./crm-1": "./src/crm-1.ts",
     "./openapi": "./openapi"
   },
   "dependencies": {
