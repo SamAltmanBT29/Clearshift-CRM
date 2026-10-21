@@ -24,18 +24,20 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@clearshift/database': resolve(__dirname, './packages/database/src/index.ts'),
-      '@clearshift/contracts': resolve(__dirname, './packages/contracts/src/index.ts'),
-      '@clearshift/ui': resolve(__dirname, './packages/ui/src/index.ts'),
-      '@cs/kernel': resolve(__dirname, './packages/kernel/src/index.ts'),
-      '@cs/core': resolve(__dirname, './packages/core/src/index.ts'),
-      '@cs/kit': resolve(__dirname, './packages/kit/src/index.ts'),
-      '@cs/identity': resolve(__dirname, './packages/identity/src/index.ts'),
-      '@cs/rbac': resolve(__dirname, './packages/rbac/src/index.ts'),
-      '@cs/db': resolve(__dirname, './packages/database/src/index.ts'),
-      '@cs/ui': resolve(__dirname, './packages/ui/src/index.ts'),
-      '@cs/mod-crm5': resolve(__dirname, './apps/crm/modules/crm-5/src/index.ts'),
-    },
+    alias: [
+      { find: /^@clearshift\/contracts\/crm-1$/, replacement: resolve(__dirname, './packages/contracts/src/crm-1.ts') },
+      { find: /^@clearshift\/database$/, replacement: resolve(__dirname, './packages/database/src/index.ts') },
+      { find: /^@clearshift\/contracts$/, replacement: resolve(__dirname, './packages/contracts/src/index.ts') },
+      { find: /^@clearshift\/ui$/, replacement: resolve(__dirname, './packages/ui/src/index.ts') },
+      { find: /^@cs\/kernel$/, replacement: resolve(__dirname, './packages/kernel/src/index.ts') },
+      { find: /^@cs\/core$/, replacement: resolve(__dirname, './packages/core/src/index.ts') },
+      { find: /^@cs\/kit$/, replacement: resolve(__dirname, './packages/kit/src/index.ts') },
+      { find: /^@cs\/identity$/, replacement: resolve(__dirname, './packages/identity/src/index.ts') },
+      { find: /^@cs\/rbac$/, replacement: resolve(__dirname, './packages/rbac/src/index.ts') },
+      { find: /^@cs\/db$/, replacement: resolve(__dirname, './packages/database/src/index.ts') },
+      { find: /^@cs\/ui$/, replacement: resolve(__dirname, './packages/ui/src/index.ts') },
+      { find: /^@cs\/mod-crm1$/, replacement: resolve(__dirname, './apps/crm/modules/crm-1/src/index.ts') },
+      { find: /^@cs\/mod-crm5$/, replacement: resolve(__dirname, './apps/crm/modules/crm-5/src/index.ts') }
+    ]
   },
 });

@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import crm1 from "@cs/mod-crm1";
 import crm2 from "@cs/mod-crm2";
 import crm3 from "@cs/mod-crm3";
@@ -11,6 +11,10 @@ export const ALL_MODULES = [
   crm4,
   crm5
 ];
+
+function hasRoutes(module: object): module is object & { routes: FastifyPluginAsync } {
+  return Object.hasOwn(module, "routes") && typeof Reflect.get(module, "routes") === "function";
+}
 
 export async function registerBusinessModules(fastify: FastifyInstance): Promise<void> {
   for (const mod of ALL_MODULES) {
@@ -27,6 +31,9 @@ export async function registerBusinessModules(fastify: FastifyInstance): Promise
           timestamp: new Date().toISOString()
         };
       });
+      if (hasRoutes(mod)) {
+        modInstance.register(mod.routes);
+      }
     }, { prefix: cleanPrefix });
   }
 }

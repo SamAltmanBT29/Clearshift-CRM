@@ -2,6 +2,7 @@
   "name": "@cs/mod-crm1",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -13,9 +14,14 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@clearshift/contracts": "*",
     "@cs/kernel": "*",
     "@cs/core": "*",
-    "@cs/kit": "*"
+    "@cs/kit": "*",
+    "@cs/db": "*",
+    "@cs/identity": "*",
+    "@cs/rbac": "*",
+    "fastify": "^5.2.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
