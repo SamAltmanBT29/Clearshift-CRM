@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { Crm1Service } from '../../src/services/crm1.service.js';
 import {
@@ -16,8 +16,9 @@ describe('CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])', () => {
   let app: ReturnType<typeof buildApp>;
   let service: Crm1Service;
 
-  beforeEach(() => {
+  beforeAll(async () => {
     service = new Crm1Service();
+    await service.seedSyntheticData();
     app = buildApp({ service });
   });
 

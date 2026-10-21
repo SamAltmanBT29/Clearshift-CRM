@@ -261,4 +261,28 @@ apiSuite("CRM-1 REST API", () => {
     expect(companyPatchResponse.statusCode).toBe(200);
     expect(companyPatchResponse.json().address).toBe("Synthetic address");
   });
+
+  it("provides read-by-ID endpoints and health check", async () => {
+    const health = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/health`
+    });
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toMatchObject({ status: "ok", module: "crm-1" });
+
+    const contactRead = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/contacts/${contactIds[0]}`,
+      headers: { authorization }
+    });
+    expect(contactRead.statusCode).toBe(200);
+    expect(contactRead.json().id).toBe(contactIds[0]);
+
+    const notFoundContact = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/contacts/${crypto.randomUUID()}`,
+      headers: { authorization }
+    });
+    expect(notFoundContact.statusCode).toBe(404);
+  });
 });

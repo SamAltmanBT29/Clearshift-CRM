@@ -274,6 +274,26 @@ function isRowRejection(error: unknown): boolean {
 
 export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPluginAsync {
   return async (fastify) => {
+    fastify.get("/health", async () => {
+      return {
+        status: "ok",
+        module: "crm-1",
+        name: "Contacts, Companies and Leads",
+        version: "1.0.0"
+      };
+    });
+
+    fastify.get("/contacts/:id", {
+      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+    }, async (request) => {
+      const { id } = parseRequest(IdParamsSchema, request.params);
+      const [row] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, id)).limit(1);
+      if (!row) {
+        throw new AppError("NOT_FOUND", `Contact with ID '${id}' not found`, 404);
+      }
+      return serializeContact(row);
+    });
+
     fastify.get("/contacts", { preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ) }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const where = contactSearch(query.search);
@@ -342,6 +362,17 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       }
     });
 
+    fastify.get("/companies/:id", {
+      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+    }, async (request) => {
+      const { id } = parseRequest(IdParamsSchema, request.params);
+      const [row] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, id)).limit(1);
+      if (!row) {
+        throw new AppError("NOT_FOUND", `Company with ID '${id}' not found`, 404);
+      }
+      return serializeCompany(row);
+    });
+
     fastify.get("/companies", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
     }, async (request) => {
@@ -394,6 +425,17 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       } catch (error) {
         throwDatabaseError(error);
       }
+    });
+
+    fastify.get("/leads/:id", {
+      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+    }, async (request) => {
+      const { id } = parseRequest(IdParamsSchema, request.params);
+      const [row] = await db.select().from(crm1Leads).where(eq(crm1Leads.id, id)).limit(1);
+      if (!row) {
+        throw new AppError("NOT_FOUND", `Lead with ID '${id}' not found`, 404);
+      }
+      return serializeLead(row);
     });
 
     fastify.get("/leads", {

@@ -27,10 +27,24 @@ export class DomainNotFoundError extends Error {
   }
 }
 
+export class ContactNotFoundError extends DomainNotFoundError {
+  constructor(contactId: string) {
+    super(`Contact with ID '${contactId}' not found`, { contactId });
+    this.name = 'ContactNotFoundError';
+  }
+}
+
 export class CompanyNotFoundError extends DomainValidationError {
   constructor(companyId: string) {
     super(`Referenced company with ID '${companyId}' does not exist. Company link must refer to an existing company.`, { companyId });
     this.name = 'CompanyNotFoundError';
+  }
+}
+
+export class LeadNotFoundError extends DomainNotFoundError {
+  constructor(leadId: string) {
+    super(`Lead with ID '${leadId}' not found`, { leadId });
+    this.name = 'LeadNotFoundError';
   }
 }
 

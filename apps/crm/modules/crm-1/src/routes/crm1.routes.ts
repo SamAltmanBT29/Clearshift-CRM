@@ -58,7 +58,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const result = service.getContacts(parsed.data);
+    const result = await service.getContacts(parsed.data);
     return reply.status(200).send(result);
   });
 
@@ -74,7 +74,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const contact = service.getContactById(id);
+    const contact = await service.getContactById(id);
     if (!contact) {
       return reply.status(404).send({
         error: {
@@ -100,7 +100,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     try {
-      const contact = service.createContact(parsed.data);
+      const contact = await service.createContact(parsed.data);
       return reply.status(201).send(contact);
     } catch (err) {
       if (err instanceof DomainValidationError) {
@@ -140,7 +140,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     try {
-      const contact = service.updateContact(id, parsed.data);
+      const contact = await service.updateContact(id, parsed.data);
       if (!contact) {
         return reply.status(404).send({
           error: {
@@ -180,7 +180,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const result = service.getCompanies(parsed.data);
+    const result = await service.getCompanies(parsed.data);
     return reply.status(200).send(result);
   });
 
@@ -196,7 +196,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const company = service.getCompanyById(id);
+    const company = await service.getCompanyById(id);
     if (!company) {
       return reply.status(404).send({
         error: {
@@ -221,7 +221,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const company = service.createCompany(parsed.data);
+    const company = await service.createCompany(parsed.data);
     return reply.status(201).send(company);
   });
 
@@ -248,7 +248,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const company = service.updateCompany(id, parsed.data);
+    const company = await service.updateCompany(id, parsed.data);
     if (!company) {
       return reply.status(404).send({
         error: {
@@ -277,7 +277,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const result = service.getLeads(parsed.data);
+    const result = await service.getLeads(parsed.data);
     return reply.status(200).send(result);
   });
 
@@ -293,7 +293,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const lead = service.getLeadById(id);
+    const lead = await service.getLeadById(id);
     if (!lead) {
       return reply.status(404).send({
         error: {
@@ -319,7 +319,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     try {
-      const lead = service.createLead(parsed.data);
+      const lead = await service.createLead(parsed.data);
       return reply.status(201).send(lead);
     } catch (err) {
       if (err instanceof DomainValidationError) {
@@ -359,7 +359,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     try {
-      const lead = service.updateLead(id, parsed.data);
+      const lead = await service.updateLead(id, parsed.data);
       if (!lead) {
         return reply.status(404).send({
           error: {
@@ -399,7 +399,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const run = service.startImportRun(parsed.data);
+    const run = await service.startImportRun(parsed.data);
     return reply.status(201).send(run);
   });
 
@@ -414,7 +414,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const run = service.getImportRun(batch);
+    const run = await service.getImportRun(batch);
     if (!run) {
       return reply.status(404).send({
         error: {
@@ -454,7 +454,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    const result = service.getRejects(parsed.data);
+    const result = await service.getRejects(parsed.data);
     return reply.status(200).send(result);
   });
 };
