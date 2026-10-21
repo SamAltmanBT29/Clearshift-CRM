@@ -360,6 +360,7 @@ export const ContactSchema = z.object({
   lastName: z.string().min(1).max(100),
   email: z.string().email().max(255),
   phone: z.string().max(50).nullable().optional(),
+  address: z.string().max(255).nullable().optional(),
   addressLine: z.string().max(255).nullable().optional(),
   city: z.string().max(100).nullable().optional(),
   country: z.string().max(100).nullable().optional(),
@@ -368,6 +369,10 @@ export const ContactSchema = z.object({
   goldenId: z.string().max(128),
   sourceSystem: z.string().max(64),
   sourceId: z.string().max(128),
+  consentStatus: CRM1ConsentStatusSchema.optional(),
+  consentUpdatedAt: z.coerce.date().nullable().optional(),
+  unsubscribed: z.boolean().optional(),
+  unsubscribedUpdatedAt: z.coerce.date().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
@@ -407,6 +412,7 @@ export const CreateContactInputSchema = z.object({
   lastName: z.string().trim().min(1, 'Last name is required').max(100),
   email: z.string().trim().email('Valid email is required').max(255),
   phone: z.string().trim().max(50).nullable().optional(),
+  address: z.string().trim().max(255).nullable().optional(),
   addressLine: z.string().trim().max(255).nullable().optional(),
   city: z.string().trim().max(100).nullable().optional(),
   country: z.string().trim().max(100).nullable().optional(),
@@ -415,6 +421,10 @@ export const CreateContactInputSchema = z.object({
   goldenId: z.string().trim().max(128).optional(),
   sourceSystem: z.string().trim().max(64).default('clearshift_api'),
   sourceId: z.string().trim().max(128).optional(),
+  consentStatus: CRM1ConsentStatusSchema.optional(),
+  consentUpdatedAt: z.coerce.date().nullable().optional(),
+  unsubscribed: z.boolean().optional(),
+  unsubscribedUpdatedAt: z.coerce.date().nullable().optional(),
 });
 export type CreateContactInput = z.infer<typeof CreateContactInputSchema>;
 
@@ -431,6 +441,7 @@ export const CompanySchema = z.object({
   taxNumber: z.string().min(1).max(64),
   email: z.string().email().max(255).nullable().optional(),
   phone: z.string().max(50).nullable().optional(),
+  address: z.string().max(255).nullable().optional(),
   addressLine: z.string().max(255).nullable().optional(),
   city: z.string().max(100).nullable().optional(),
   country: z.string().max(100).nullable().optional(),
@@ -471,6 +482,7 @@ export const CreateCompanyInputSchema = z.object({
   taxNumber: z.string().trim().min(1, 'Tax number is required').max(64),
   email: z.string().trim().email('Valid company email is required').max(255).nullable().optional(),
   phone: z.string().trim().max(50).nullable().optional(),
+  address: z.string().trim().max(255).nullable().optional(),
   addressLine: z.string().trim().max(255).nullable().optional(),
   city: z.string().trim().max(100).nullable().optional(),
   country: z.string().trim().max(100).nullable().optional(),

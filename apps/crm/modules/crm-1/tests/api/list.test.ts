@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { Roles, signAccessToken } from '@cs/identity';
 import { buildApp } from '../../src/app.js';
 import { Crm1Service } from '../../src/services/crm1.service.js';
 import {
@@ -15,11 +16,30 @@ import {
 describe('CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])', () => {
   let app: ReturnType<typeof buildApp>;
   let service: Crm1Service;
+  let authHeaders: { authorization: string };
+  let viewerHeaders: { authorization: string };
 
   beforeAll(async () => {
     service = new Crm1Service();
     await service.seedSyntheticData();
     app = buildApp({ service });
+    await app.ready();
+
+    const editorToken = await signAccessToken('synthetic-editor', [Roles.EDITOR]);
+    authHeaders = { authorization: `Bearer ${editorToken}` };
+
+    const viewerToken = await signAccessToken('synthetic-viewer', [Roles.VIEWER]);
+    viewerHeaders = { authorization: `Bearer ${viewerToken}` };
+
+    const rawInject = app.inject.bind(app);
+    app.inject = ((opts: any) => {
+      const hasExplicitHeaders = opts && 'headers' in opts;
+      const headers = hasExplicitHeaders ? opts.headers : authHeaders;
+      return rawInject({
+        ...opts,
+        headers,
+      });
+    }) as any;
   });
 
   // ---------------------------------------------------------------------------
@@ -590,6 +610,209 @@ describe('CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])', () => {
       const body = JSON.parse(response.payload);
       expect(body.total).toBe(0);
       expect(body.items).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 7. Authentication & RBAC Capability Checks (Issue #7 Acceptance Criteria)
+  // ---------------------------------------------------------------------------
+  describe('Authentication and RBAC Guards', () => {
+    it('allows unauthenticated requests to public /health probe', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-contacts/health',
+        headers: {},
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(JSON.parse(response.payload)).toMatchObject({ status: 'ok' });
+    });
+
+    it('rejects unauthenticated GET /contacts with 401 Unauthorized', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-contacts/contacts',
+        headers: {},
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects unauthenticated POST /contacts with 401 Unauthorized', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/contacts',
+        headers: {},
+        payload: {
+          firstName: 'Unauth',
+          lastName: 'User',
+          email: 'unauth@clearshift.synthetic',
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects invalid or malformed bearer token with 401 Unauthorized', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-contacts/contacts',
+        headers: { authorization: 'Bearer invalid-token-payload' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('permits VIEWER role with MODULE_READ to read contacts', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-contacts/contacts?pageSize=5',
+        headers: viewerHeaders,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.items.length).toBe(5);
+    });
+
+    it('rejects VIEWER role with 403 Forbidden when attempting POST /contacts (requires MODULE_WRITE)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/contacts',
+        headers: viewerHeaders,
+        payload: {
+          firstName: 'Viewer',
+          lastName: 'Attempt',
+          email: 'viewer.attempt@clearshift.synthetic',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects VIEWER role with 403 Forbidden when attempting POST /companies', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/companies',
+        headers: viewerHeaders,
+        payload: {
+          name: 'Forbidden Corp',
+          taxNumber: 'US-999-VIEWER',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects VIEWER role with 403 Forbidden when attempting POST /leads', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/leads',
+        headers: viewerHeaders,
+        payload: {
+          name: 'Forbidden Lead',
+          email: 'forbidden.lead@clearshift.synthetic',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+    });
+
+    it('rejects VIEWER role with 403 Forbidden when attempting POST /imports', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/imports',
+        headers: viewerHeaders,
+        payload: {
+          batchId: 'viewer-batch-denied',
+          sourceSystem: 'csv_upload',
+          filename: 'test.csv',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. Domain Invariants: Idempotency and Consent State
+  // ---------------------------------------------------------------------------
+  describe('Domain Invariants (Issue #7 Specification)', () => {
+    it('is idempotent across duplicate (sourceSystem, sourceId) contact creation', async () => {
+      const sourceId = `src-contact-${Date.now()}`;
+      const payload = {
+        firstName: 'Idempotent',
+        lastName: 'Contact',
+        email: 'idempotent@clearshift.synthetic',
+        sourceSystem: 'synthetic_crm',
+        sourceId,
+      };
+
+      const res1 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/contacts',
+        payload,
+      });
+      expect(res1.statusCode).toBe(201);
+      const body1 = JSON.parse(res1.payload);
+
+      const res2 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/contacts',
+        payload,
+      });
+      // Second call returns the existing record idempotently
+      expect([200, 201]).toContain(res2.statusCode);
+      const body2 = JSON.parse(res2.payload);
+      expect(body2.id).toBe(body1.id);
+      expect(body2.sourceId).toBe(sourceId);
+    });
+
+    it('preserves and updates consent and unsubscribe state on contact', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-contacts/contacts',
+        payload: {
+          firstName: 'Consent',
+          lastName: 'Subject',
+          email: `consent-${Date.now()}@clearshift.synthetic`,
+          consentStatus: 'unknown',
+          unsubscribed: false,
+        },
+      });
+      expect(createRes.statusCode).toBe(201);
+      const created = JSON.parse(createRes.payload);
+      expect(created.consentStatus).toBe('unknown');
+      expect(created.unsubscribed).toBe(false);
+
+      const patchRes = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/crm-contacts/contacts/${created.id}`,
+        payload: {
+          consentStatus: 'granted',
+          unsubscribed: true,
+        },
+      });
+      expect(patchRes.statusCode).toBe(200);
+      const patched = JSON.parse(patchRes.payload);
+      expect(patched.consentStatus).toBe('granted');
+      expect(patched.consentUpdatedAt).toBeDefined();
+      expect(patched.unsubscribed).toBe(true);
+      expect(patched.unsubscribedUpdatedAt).toBeDefined();
     });
   });
 });

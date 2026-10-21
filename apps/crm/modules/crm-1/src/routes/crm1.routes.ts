@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   ContactsQuerySchema,
@@ -13,6 +13,7 @@ import {
   CreateCrm1ImportInputSchema,
   Crm1RejectsQuerySchema,
 } from '@clearshift/contracts';
+import { Capabilities, requireCapability, type CapabilityType } from '@cs/rbac';
 import { Crm1Service } from '../services/crm1.service.js';
 import { DomainValidationError } from '../domain/errors.js';
 
@@ -20,6 +21,13 @@ const UuidSchema = z.string().uuid();
 
 export interface Crm1RouteOptions {
   service?: Crm1Service | undefined;
+}
+
+function modulePreHandlers(
+  fastify: FastifyInstance,
+  capability: CapabilityType
+) {
+  return [fastify.authenticate, requireCapability(capability)];
 }
 
 /**
@@ -32,7 +40,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
 ) => {
   const service = opts.service ?? new Crm1Service();
 
-  // Health check
+  // Health check (public)
   fastify.get('/health', async () => {
     return {
       status: 'ok',
@@ -46,7 +54,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // 1. Contacts Endpoints
   // ---------------------------------------------------------------------------
 
-  fastify.get('/contacts', async (request, reply) => {
+  fastify.get('/contacts', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const parsed = ContactsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -62,7 +72,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(result);
   });
 
-  fastify.get<{ Params: { id: string } }>('/contacts/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/contacts/:id', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
     if (!validUuid.success) {
@@ -87,7 +99,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(contact);
   });
 
-  fastify.post('/contacts', async (request, reply) => {
+  fastify.post('/contacts', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const parsed = CreateContactInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -116,7 +130,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
   });
 
-  fastify.patch<{ Params: { id: string } }>('/contacts/:id', async (request, reply) => {
+  fastify.patch<{ Params: { id: string } }>('/contacts/:id', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
     if (!validUuid.success) {
@@ -168,7 +184,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // 2. Companies Endpoints
   // ---------------------------------------------------------------------------
 
-  fastify.get('/companies', async (request, reply) => {
+  fastify.get('/companies', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const parsed = CompaniesQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -184,7 +202,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(result);
   });
 
-  fastify.get<{ Params: { id: string } }>('/companies/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/companies/:id', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
     if (!validUuid.success) {
@@ -209,7 +229,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(company);
   });
 
-  fastify.post('/companies', async (request, reply) => {
+  fastify.post('/companies', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const parsed = CreateCompanyInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -225,7 +247,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(201).send(company);
   });
 
-  fastify.patch<{ Params: { id: string } }>('/companies/:id', async (request, reply) => {
+  fastify.patch<{ Params: { id: string } }>('/companies/:id', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
     if (!validUuid.success) {
@@ -265,7 +289,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // 3. Leads Endpoints
   // ---------------------------------------------------------------------------
 
-  fastify.get('/leads', async (request, reply) => {
+  fastify.get('/leads', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const parsed = LeadsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -281,7 +307,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(result);
   });
 
-  fastify.get<{ Params: { id: string } }>('/leads/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/leads/:id', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
     if (!validUuid.success) {
@@ -306,7 +334,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(lead);
   });
 
-  fastify.post('/leads', async (request, reply) => {
+  fastify.post('/leads', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const parsed = CreateLeadInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -335,7 +365,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
   });
 
-  fastify.patch<{ Params: { id: string } }>('/leads/:id', async (request, reply) => {
+  fastify.patch<{ Params: { id: string } }>('/leads/:id', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
     if (!validUuid.success) {
@@ -387,7 +419,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // 4. Imports & Rejects Endpoints
   // ---------------------------------------------------------------------------
 
-  fastify.post('/imports', async (request, reply) => {
+  fastify.post('/imports', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+  }, async (request, reply) => {
     const parsed = CreateCrm1ImportInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -403,7 +437,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(201).send(run);
   });
 
-  fastify.get<{ Params: { batch: string } }>('/imports/:batch', async (request, reply) => {
+  fastify.get<{ Params: { batch: string } }>('/imports/:batch', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const { batch } = request.params;
     if (!batch || batch.trim().length === 0) {
       return reply.status(400).send({
@@ -427,7 +463,9 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     return reply.status(200).send(run);
   });
 
-  fastify.get<{ Params: { batch: string } }>('/imports/:batch/rejects', async (request, reply) => {
+  fastify.get<{ Params: { batch: string } }>('/imports/:batch/rejects', {
+    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+  }, async (request, reply) => {
     const { batch } = request.params;
     if (!batch || batch.trim().length === 0) {
       return reply.status(400).send({

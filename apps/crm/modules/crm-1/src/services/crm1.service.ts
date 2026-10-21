@@ -60,6 +60,7 @@ function toContact(row: typeof crm1Contacts.$inferSelect): Contact {
     lastName: row.lastName,
     email: row.email ?? '',
     phone: row.phone,
+    address: row.address,
     addressLine: row.address,
     city: 'Metro City',
     country: 'US',
@@ -68,6 +69,10 @@ function toContact(row: typeof crm1Contacts.$inferSelect): Contact {
     goldenId: row.goldenId,
     sourceSystem: row.sourceSystem ?? 'clearshift_api',
     sourceId: row.sourceId ?? row.id,
+    consentStatus: (row.consentStatus as 'unknown' | 'granted' | 'withdrawn') ?? 'unknown',
+    consentUpdatedAt: row.consentUpdatedAt,
+    unsubscribed: row.unsubscribed ?? false,
+    unsubscribedUpdatedAt: row.unsubscribedUpdatedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -80,6 +85,7 @@ function toCompany(row: typeof crm1Companies.$inferSelect): Company {
     taxNumber: row.taxNumber ?? '',
     email: row.email,
     phone: row.phone,
+    address: row.address,
     addressLine: row.address,
     city: 'Metropolis',
     country: 'US',
@@ -221,8 +227,42 @@ export class Crm1Service {
       throw new InvalidLeadStatusError(input.leadStatus);
     }
 
+    const sourceSystem = input.sourceSystem ?? 'clearshift_api';
+    const sourceId = input.sourceId;
+
+    if (sourceId) {
+      const [existing] = await this.db
+        .select()
+        .from(crm1Contacts)
+        .where(
+          and(
+            eq(crm1Contacts.sourceSystem, sourceSystem),
+            eq(crm1Contacts.sourceId, sourceId)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        return toContact(existing);
+      }
+    }
+
     const id = randomUUID();
     const now = new Date();
+    const address = input.address ?? input.addressLine ?? null;
+    const consentStatus = input.consentStatus ?? 'unknown';
+    const consentUpdatedAt = input.consentUpdatedAt
+      ? new Date(input.consentUpdatedAt)
+      : consentStatus === 'unknown'
+        ? null
+        : now;
+    const unsubscribed = input.unsubscribed ?? false;
+    const unsubscribedUpdatedAt = input.unsubscribedUpdatedAt
+      ? new Date(input.unsubscribedUpdatedAt)
+      : unsubscribed
+        ? now
+        : null;
+
     const [row] = await this.db
       .insert(crm1Contacts)
       .values({
@@ -231,14 +271,16 @@ export class Crm1Service {
         lastName: input.lastName,
         email: input.email ? input.email.toLowerCase() : null,
         phone: input.phone ?? null,
-        address: input.addressLine ?? null,
+        address,
         companyId: input.companyId ?? null,
         leadStatus: input.leadStatus ?? 'New',
         goldenId: input.goldenId ?? `gid-${id.substring(0, 8)}`,
-        sourceSystem: input.sourceSystem ?? 'clearshift_api',
-        sourceId: input.sourceId ?? id,
-        consentStatus: 'unknown',
-        unsubscribed: false,
+        sourceSystem,
+        sourceId: sourceId ?? id,
+        consentStatus,
+        consentUpdatedAt,
+        unsubscribed,
+        unsubscribedUpdatedAt,
         createdAt: now,
         updatedAt: now,
       })
@@ -284,9 +326,26 @@ export class Crm1Service {
     if (input.lastName !== undefined) updates['lastName'] = input.lastName;
     if (input.email !== undefined) updates['email'] = input.email ? input.email.toLowerCase() : null;
     if (input.phone !== undefined) updates['phone'] = input.phone;
+    if (input.address !== undefined) updates['address'] = input.address;
     if (input.addressLine !== undefined) updates['address'] = input.addressLine;
     if (input.companyId !== undefined) updates['companyId'] = input.companyId;
     if (input.leadStatus !== undefined) updates['leadStatus'] = input.leadStatus;
+    if (input.consentStatus !== undefined) {
+      updates['consentStatus'] = input.consentStatus;
+      updates['consentUpdatedAt'] = input.consentUpdatedAt
+        ? new Date(input.consentUpdatedAt)
+        : input.consentStatus === 'unknown'
+          ? null
+          : new Date();
+    }
+    if (input.unsubscribed !== undefined) {
+      updates['unsubscribed'] = input.unsubscribed;
+      updates['unsubscribedUpdatedAt'] = input.unsubscribedUpdatedAt
+        ? new Date(input.unsubscribedUpdatedAt)
+        : input.unsubscribed
+          ? new Date()
+          : null;
+    }
 
     const [row] = await this.db
       .update(crm1Contacts)
@@ -360,8 +419,29 @@ export class Crm1Service {
   }
 
   public async createCompany(input: CreateCompanyInput): Promise<Company> {
+    const sourceSystem = input.sourceSystem ?? 'clearshift_api';
+    const sourceId = input.sourceId;
+
+    if (sourceId) {
+      const [existing] = await this.db
+        .select()
+        .from(crm1Companies)
+        .where(
+          and(
+            eq(crm1Companies.sourceSystem, sourceSystem),
+            eq(crm1Companies.sourceId, sourceId)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        return toCompany(existing);
+      }
+    }
+
     const id = randomUUID();
     const now = new Date();
+    const address = input.address ?? input.addressLine ?? null;
     const [row] = await this.db
       .insert(crm1Companies)
       .values({
@@ -370,9 +450,9 @@ export class Crm1Service {
         taxNumber: input.taxNumber,
         email: input.email ? input.email.toLowerCase() : null,
         phone: input.phone ?? null,
-        address: input.addressLine ?? null,
-        sourceSystem: input.sourceSystem ?? 'clearshift_api',
-        sourceId: input.sourceId ?? id,
+        address,
+        sourceSystem,
+        sourceId: sourceId ?? id,
         createdAt: now,
         updatedAt: now,
       })
@@ -399,6 +479,7 @@ export class Crm1Service {
     if (input.taxNumber !== undefined) updates['taxNumber'] = input.taxNumber;
     if (input.email !== undefined) updates['email'] = input.email ? input.email.toLowerCase() : null;
     if (input.phone !== undefined) updates['phone'] = input.phone;
+    if (input.address !== undefined) updates['address'] = input.address;
     if (input.addressLine !== undefined) updates['address'] = input.addressLine;
 
     const [row] = await this.db
@@ -528,6 +609,42 @@ export class Crm1Service {
       !VALID_LEAD_STATUSES.includes(input.status as (typeof VALID_LEAD_STATUSES)[number])
     ) {
       throw new InvalidLeadStatusError(input.status);
+    }
+
+    const sourceSystem = input.sourceSystem ?? 'clearshift_api';
+    const sourceId = input.sourceId;
+
+    if (sourceId) {
+      const [existingLead] = await this.db
+        .select({
+          id: crm1Leads.id,
+          contactId: crm1Leads.contactId,
+          status: crm1Leads.status,
+          sourceSystem: crm1Leads.sourceSystem,
+          sourceId: crm1Leads.sourceId,
+          createdAt: crm1Leads.createdAt,
+          updatedAt: crm1Leads.updatedAt,
+          contactFirstName: crm1Contacts.firstName,
+          contactLastName: crm1Contacts.lastName,
+          contactEmail: crm1Contacts.email,
+        })
+        .from(crm1Leads)
+        .leftJoin(crm1Contacts, eq(crm1Leads.contactId, crm1Contacts.id))
+        .where(
+          and(
+            eq(crm1Leads.sourceSystem, sourceSystem),
+            eq(crm1Leads.sourceId, sourceId)
+          )
+        )
+        .limit(1);
+
+      if (existingLead) {
+        return toLead(existingLead, {
+          firstName: existingLead.contactFirstName ?? undefined,
+          lastName: existingLead.contactLastName ?? undefined,
+          email: existingLead.contactEmail,
+        });
+      }
     }
 
     let contactId = input.contactId;
