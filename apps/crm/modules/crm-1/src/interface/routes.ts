@@ -21,7 +21,7 @@ import {
   CRM1ImportRow,
   CRM1ImportRowSchema
 } from "@clearshift/contracts/crm-1";
-import { AppError } from "@cs/kernel";
+import * as kernel from "@cs/kernel";
 import { getDatabase } from "@cs/db";
 import {
   crm1Companies,
@@ -31,10 +31,13 @@ import {
   crm1ImportRejects,
   crm1Leads
 } from "../../db/schema.js";
-import { Capabilities, requireCapability } from "@cs/rbac";
+import * as rbac from "@cs/rbac";
 import { and, asc, count, eq, exists, ilike, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
+
+const { AppError } = kernel.default ?? kernel;
+const { Capabilities, requireCapability } = rbac.default ?? rbac;
 
 const IdParamsSchema = z.object({ id: z.string().uuid() });
 const BatchParamsSchema = z.object({ batch: z.string().uuid() });
