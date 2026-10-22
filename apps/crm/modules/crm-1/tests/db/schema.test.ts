@@ -121,6 +121,34 @@ databaseSuite("CRM-1 PostgreSQL schema", () => {
     });
   });
 
+  it("stores a unique batch idempotency key paired with its request hash", async () => {
+    const key = `${fixture}-batch-key`;
+    const digest = `${fixture}-request-hash`;
+    await pool.query(
+      `UPDATE crm1.crm1_import_batches
+       SET idempotency_key = $2, request_hash = $3
+       WHERE id = $1`,
+      [batchId, key, digest]
+    );
+    await expect(pool.query(
+      `INSERT INTO crm1.crm1_import_batches
+        (source_system, idempotency_key, request_hash)
+       VALUES ($1, $2, $3)`,
+      [fixture, key, digest]
+    )).rejects.toMatchObject({
+      code: "23505",
+      constraint: "crm1_import_batches_idempotency_key"
+    });
+    await expect(pool.query(
+      `INSERT INTO crm1.crm1_import_batches (source_system, idempotency_key)
+       VALUES ($1, $2)`,
+      [fixture, `${fixture}-unpaired-key`]
+    )).rejects.toMatchObject({
+      code: "23514",
+      constraint: "crm1_import_batches_idempotency_pair_check"
+    });
+  });
+
   it("enforces every CRM-1 check constraint in PostgreSQL", async () => {
     await expectCheckFailure(
       "crm1_companies_name_nonempty_check",

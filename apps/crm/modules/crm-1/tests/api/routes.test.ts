@@ -164,8 +164,9 @@ apiSuite("CRM-1 REST API", () => {
     const importResponse = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { authorization },
+      headers: { authorization, "Idempotency-Key": `${fixture}-import-1` },
       payload: {
+        batchId: crypto.randomUUID(),
         sourceSystem: `import-${fixture}`,
         rows: [{
           entity: "contact",
@@ -195,8 +196,9 @@ apiSuite("CRM-1 REST API", () => {
     const repeatedImportResponse = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { authorization },
+      headers: { authorization, "Idempotency-Key": `${fixture}-import-2` },
       payload: {
+        batchId: crypto.randomUUID(),
         sourceSystem: `import-${fixture}`,
         rows: [{
           entity: "contact",
@@ -222,8 +224,9 @@ apiSuite("CRM-1 REST API", () => {
     const rejectBatchResponse = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { authorization },
+      headers: { authorization, "Idempotency-Key": `${fixture}-import-reject` },
       payload: {
+        batchId: crypto.randomUUID(),
         sourceSystem: `import-${fixture}`,
         rows: [{
           entity: "contact",
@@ -248,9 +251,7 @@ apiSuite("CRM-1 REST API", () => {
       headers: { authorization }
     });
     expect(rejectsResponse.statusCode).toBe(200);
-    expect(rejectsResponse.json().items[0].reasonCode).toBe(
-      "crm1_contacts_company_id_fkey"
-    );
+    expect(rejectsResponse.json().items[0].reasonCode).toBe("INVALID_REFERENCE");
 
     const companyPatchResponse = await app.inject({
       method: "PATCH",

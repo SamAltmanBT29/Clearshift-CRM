@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import "@cs/identity";
 import type { FastifyPluginAsync, FastifyInstance } from "fastify";
 import {
@@ -12,16 +12,16 @@ import {
   CRM1ImportBatchDetailSchema,
   CRM1ImportBatchSchema,
   CRM1ImportCreateSchema,
+  CRM1_IDEMPOTENCY_HEADER,
   CRM1ImportRejectSchema,
   CRM1LeadCreateSchema,
   CRM1LeadPatchSchema,
   CRM1LeadSchema,
   CRM1ListQuerySchema,
   CRM1ListResponseSchema,
-  CRM1ImportRow,
   CRM1ImportRowSchema
 } from "@clearshift/contracts/crm-1";
-import * as kernel from "@cs/kernel";
+import { AppError } from "@cs/kernel";
 import { getDatabase } from "@cs/db";
 import {
   crm1Companies,
@@ -35,56 +35,27 @@ import * as rbac from "@cs/rbac";
 import { and, asc, count, eq, exists, ilike, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
+import { Crm1MutationService } from "../services/crm1-mutation.service.js";
 
-const { AppError } = kernel.default ?? kernel;
 const { Capabilities, requireCapability } = rbac.default ?? rbac;
 
 const IdParamsSchema = z.object({ id: z.string().uuid() });
 const BatchParamsSchema = z.object({ batch: z.string().uuid() });
 
-type DatabaseError = {
-  code: string;
-  constraint?: string;
-};
-
-function databaseError(error: unknown): DatabaseError | undefined {
-  if (typeof error !== "object" || error === null) {
-    return undefined;
-  }
-  if ("code" in error && typeof error.code === "string") {
-    return {
-      code: error.code,
-      ...("constraint" in error && typeof error.constraint === "string"
-        ? { constraint: error.constraint }
-        : {})
-    };
-  }
-  return "cause" in error ? databaseError(error.cause) : undefined;
-}
-
-function throwDatabaseError(error: unknown): never {
-  const postgresError = databaseError(error);
-  if (postgresError?.code === "23505") {
-    throw new AppError("CONFLICT", "A CRM-1 record with this identifier already exists", 409);
-  }
-  if (postgresError?.code === "23503") {
-    throw new AppError("REFERENCE_NOT_FOUND", "A referenced CRM-1 record does not exist", 404);
-  }
-  if (postgresError?.code === "23514") {
-    throw new AppError("CONFLICT", "The requested CRM-1 state change is not permitted", 409);
-  }
-  throw error;
-}
-
-function parseRequest<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
+function parseRequest<T extends z.ZodTypeAny>(
+  schema: T,
+  value: unknown,
+  statusCode = 400
+): z.infer<T> {
   const result = schema.safeParse(value);
   if (!result.success) {
     throw new AppError(
       "VALIDATION_ERROR",
       "Request validation failed",
-      400,
+      statusCode,
       result.error.issues.map((issue) => ({
-        field: issue.path.join("."),
+        field: issue.path.join(".") ||
+          (issue.code === "unrecognized_keys" ? issue.keys.join(", ") : "request"),
         message: issue.message,
         code: issue.code
       }))
@@ -93,14 +64,32 @@ function parseRequest<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infe
   return result.data;
 }
 
-type WithoutUndefined<T> = {
-  [K in keyof T]: Exclude<T[K], undefined>;
-};
+function isAppError(error: unknown): error is AppError {
+  return error instanceof Error &&
+    error.name === "AppError" &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    "details" in error &&
+    Array.isArray(error.details) &&
+    "toEnvelope" in error &&
+    typeof error.toEnvelope === "function";
+}
 
-function omitUndefined<T extends Record<string, unknown>>(value: T): WithoutUndefined<T> {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)
-  ) as WithoutUndefined<T>;
+function clientErrorStatus(error: unknown): number | undefined {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500
+  ) {
+    return error.statusCode;
+  }
+  return undefined;
 }
 
 function dateString(value: Date): string {
@@ -180,100 +169,34 @@ function modulePreHandlers(
   return [fastify.authenticate, requireCapability(capability)];
 }
 
-function digestIdempotencyKey(batchId: string, row: CRM1ImportRow): string {
-  return createHash("sha256")
-    .update(`${batchId}:${row.sourceRow}:${row.entity}:1`)
-    .digest("hex");
-}
-
-async function createOrFindImportTarget(
-  tx: Parameters<Parameters<NodePgDatabase["transaction"]>[0]>[0],
-  row: CRM1ImportRow,
-  sourceSystem: string
-): Promise<string> {
-  const sourceId = row.data.sourceId;
-  if (!sourceId) {
-    throw new AppError("VALIDATION_ERROR", "Imports require a sourceId for idempotency", 400);
-  }
-
-  switch (row.entity) {
-    case "contact": {
-      const [inserted] = await tx
-        .insert(crm1Contacts)
-        .values(omitUndefined({
-          ...row.data,
-          goldenId: row.data.goldenId ?? randomUUID(),
-          sourceSystem,
-          sourceId
-        }))
-        .onConflictDoNothing({ target: [crm1Contacts.sourceSystem, crm1Contacts.sourceId] })
-        .returning({ id: crm1Contacts.id });
-      if (inserted) {
-        return inserted.id;
-      }
-      const [existing] = await tx
-        .select({ id: crm1Contacts.id })
-        .from(crm1Contacts)
-        .where(and(eq(crm1Contacts.sourceSystem, sourceSystem), eq(crm1Contacts.sourceId, sourceId)))
-        .limit(1);
-      if (existing) {
-        return existing.id;
-      }
-      break;
-    }
-    case "company": {
-      const [inserted] = await tx
-        .insert(crm1Companies)
-        .values(omitUndefined({ ...row.data, sourceSystem, sourceId }))
-        .onConflictDoNothing({ target: [crm1Companies.sourceSystem, crm1Companies.sourceId] })
-        .returning({ id: crm1Companies.id });
-      if (inserted) {
-        return inserted.id;
-      }
-      const [existing] = await tx
-        .select({ id: crm1Companies.id })
-        .from(crm1Companies)
-        .where(and(eq(crm1Companies.sourceSystem, sourceSystem), eq(crm1Companies.sourceId, sourceId)))
-        .limit(1);
-      if (existing) {
-        return existing.id;
-      }
-      break;
-    }
-    case "lead": {
-      const [inserted] = await tx
-        .insert(crm1Leads)
-        .values(omitUndefined({ ...row.data, sourceSystem, sourceId }))
-        .onConflictDoNothing({ target: [crm1Leads.sourceSystem, crm1Leads.sourceId] })
-        .returning({ id: crm1Leads.id });
-      if (inserted) {
-        return inserted.id;
-      }
-      const [existing] = await tx
-        .select({ id: crm1Leads.id })
-        .from(crm1Leads)
-        .where(and(eq(crm1Leads.sourceSystem, sourceSystem), eq(crm1Leads.sourceId, sourceId)))
-        .limit(1);
-      if (existing) {
-        return existing.id;
-      }
-      break;
-    }
-  }
-
-  throw new AppError("INTERNAL_SERVER_ERROR", "Unable to resolve CRM-1 import target", 500);
-}
-
-function isRowRejection(error: unknown): boolean {
-  const postgresError = databaseError(error);
-  return postgresError?.code === "23503" ||
-    postgresError?.code === "23514" ||
-    (postgresError?.code === "23505" &&
-      postgresError.constraint === "crm1_contacts_golden_id_key");
-}
-
 export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPluginAsync {
   return async (fastify) => {
+    const mutations = new Crm1MutationService(db);
+
+    fastify.setErrorHandler((error, request, reply) => {
+      const correlationHeader = request.headers["x-correlation-id"];
+      const correlationId = typeof correlationHeader === "string" && correlationHeader.length <= 128
+        ? correlationHeader
+        : randomUUID();
+      if (isAppError(error) && error.statusCode >= 400 && error.statusCode < 500) {
+        reply.status(error.statusCode).send(error.toEnvelope(correlationId));
+        return;
+      }
+      const statusCode = clientErrorStatus(error);
+      if (statusCode !== undefined) {
+        reply.status(statusCode).send(
+          new AppError("BAD_REQUEST", "Request could not be processed", statusCode)
+            .toEnvelope(correlationId)
+        );
+        return;
+      }
+      request.log.error({ correlationId }, "Unexpected CRM-1 request failure");
+      reply.status(500).send(
+        new AppError("INTERNAL_SERVER_ERROR", "An unexpected error occurred", 500)
+          .toEnvelope(correlationId)
+      );
+    });
+
     fastify.get("/health", async () => {
       return {
         status: "ok",
@@ -314,52 +237,18 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/contacts", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request, reply) => {
-      const body = parseRequest(CRM1ContactCreateSchema, request.body);
-      try {
-        const [row] = await db.insert(crm1Contacts).values(omitUndefined({
-          ...body,
-          goldenId: body.goldenId ?? randomUUID()
-        })).returning();
-        if (!row) {
-          throw new AppError("INTERNAL_SERVER_ERROR", "Contact creation returned no record", 500);
-        }
-        reply.code(201);
-        return serializeContact(row);
-      } catch (error) {
-        throwDatabaseError(error);
-      }
+      const body = parseRequest(CRM1ContactCreateSchema, request.body, 422);
+      const row = await mutations.createContact(body);
+      reply.code(201);
+      return serializeContact(row);
     });
 
     fastify.patch("/contacts/:id", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
-      const body = parseRequest(CRM1ContactPatchSchema, request.body);
-      try {
-        const [row] = await db.update(crm1Contacts)
-          .set(omitUndefined({
-            ...body,
-            consentUpdatedAt: body.consentUpdatedAt === undefined
-              ? undefined
-              : body.consentUpdatedAt === null
-                ? null
-                : new Date(body.consentUpdatedAt),
-            unsubscribedUpdatedAt: body.unsubscribedUpdatedAt === undefined
-              ? undefined
-              : body.unsubscribedUpdatedAt === null
-                ? null
-                : new Date(body.unsubscribedUpdatedAt),
-            updatedAt: new Date()
-          }))
-          .where(eq(crm1Contacts.id, id))
-          .returning();
-        if (!row) {
-          throw new AppError("NOT_FOUND", "Contact not found", 404);
-        }
-        return serializeContact(row);
-      } catch (error) {
-        throwDatabaseError(error);
-      }
+      const body = parseRequest(CRM1ContactPatchSchema, request.body, 422);
+      return serializeContact(await mutations.updateContact(id, body));
     });
 
     fastify.get("/companies/:id", {
@@ -395,36 +284,18 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/companies", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request, reply) => {
-      const body = parseRequest(CRM1CompanyCreateSchema, request.body);
-      try {
-        const [row] = await db.insert(crm1Companies).values(omitUndefined(body)).returning();
-        if (!row) {
-          throw new AppError("INTERNAL_SERVER_ERROR", "Company creation returned no record", 500);
-        }
-        reply.code(201);
-        return serializeCompany(row);
-      } catch (error) {
-        throwDatabaseError(error);
-      }
+      const body = parseRequest(CRM1CompanyCreateSchema, request.body, 422);
+      const row = await mutations.createCompany(body);
+      reply.code(201);
+      return serializeCompany(row);
     });
 
     fastify.patch("/companies/:id", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
-      const body = parseRequest(CRM1CompanyPatchSchema, request.body);
-      try {
-        const [row] = await db.update(crm1Companies)
-          .set(omitUndefined({ ...body, updatedAt: new Date() }))
-          .where(eq(crm1Companies.id, id))
-          .returning();
-        if (!row) {
-          throw new AppError("NOT_FOUND", "Company not found", 404);
-        }
-        return serializeCompany(row);
-      } catch (error) {
-        throwDatabaseError(error);
-      }
+      const body = parseRequest(CRM1CompanyPatchSchema, request.body, 422);
+      return serializeCompany(await mutations.updateCompany(id, body));
     });
 
     fastify.get("/leads/:id", {
@@ -481,109 +352,40 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/leads", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request, reply) => {
-      const body = parseRequest(CRM1LeadCreateSchema, request.body);
-      try {
-        const [row] = await db.insert(crm1Leads).values(omitUndefined(body)).returning();
-        if (!row) {
-          throw new AppError("INTERNAL_SERVER_ERROR", "Lead creation returned no record", 500);
-        }
-        reply.code(201);
-        return serializeLead(row);
-      } catch (error) {
-        throwDatabaseError(error);
-      }
+      const body = parseRequest(CRM1LeadCreateSchema, request.body, 422);
+      const row = await mutations.createLead(body);
+      reply.code(201);
+      return serializeLead(row);
     });
 
     fastify.patch("/leads/:id", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
-      const body = parseRequest(CRM1LeadPatchSchema, request.body);
-      try {
-        const [row] = await db.update(crm1Leads)
-          .set(omitUndefined({ ...body, updatedAt: new Date() }))
-          .where(eq(crm1Leads.id, id))
-          .returning();
-        if (!row) {
-          throw new AppError("NOT_FOUND", "Lead not found", 404);
-        }
-        return serializeLead(row);
-      } catch (error) {
-        throwDatabaseError(error);
-      }
+      const body = parseRequest(CRM1LeadPatchSchema, request.body, 422);
+      return serializeLead(await mutations.updateLead(id, body));
     });
 
     fastify.post("/imports", {
       preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
     }, async (request, reply) => {
-      const body = parseRequest(CRM1ImportCreateSchema, request.body);
-      const [batch] = await db.insert(crm1ImportBatches).values({
-        sourceSystem: body.sourceSystem,
-        status: "processing"
-      }).returning();
-      if (!batch) {
-        throw new AppError("INTERNAL_SERVER_ERROR", "Import batch creation returned no record", 500);
-      }
-
-      let loadedCount = 0;
-      let rejectedCount = 0;
-      try {
-        for (const row of body.rows) {
-          try {
-            await db.transaction(async (tx) => {
-              const targetId = await createOrFindImportTarget(tx, row, body.sourceSystem);
-              await tx.insert(crm1ImportReceipts).values({
-                batchId: batch.id,
-                sourceRow: row.sourceRow,
-                entity: row.entity,
-                sourceSystem: body.sourceSystem,
-                sourceId: row.data.sourceId ?? "",
-                targetId,
-                idempotencyKey: digestIdempotencyKey(batch.id, row)
-              });
-            });
-            loadedCount++;
-          } catch (error) {
-            if (!isRowRejection(error)) {
-              throw error;
-            }
-            await db.insert(crm1ImportRejects).values({
-              batchId: batch.id,
-              sourceRow: row.sourceRow,
-              entity: row.entity,
-              reasonCode: databaseError(error)?.constraint ?? "REFERENCE_NOT_FOUND",
-              message: "The row conflicts with an existing identity or CRM-1 data constraint"
-            });
-            rejectedCount++;
-          }
-        }
-      } catch (error) {
-        await db.update(crm1ImportBatches)
-          .set({
-            status: "failed",
-            loadedCount,
-            rejectedCount,
-            updatedAt: new Date()
-          })
-          .where(eq(crm1ImportBatches.id, batch.id));
-        throw error;
-      }
-
-      const [completed] = await db.update(crm1ImportBatches)
-        .set({
-          status: "completed",
-          loadedCount,
-          rejectedCount,
-          updatedAt: new Date(),
-          completedAt: new Date()
-        })
-        .where(eq(crm1ImportBatches.id, batch.id))
-        .returning();
-      if (!completed) {
-        throw new AppError("INTERNAL_SERVER_ERROR", "Import batch completion returned no record", 500);
-      }
+      const body = parseRequest(CRM1ImportCreateSchema, request.body, 422);
+      const key = parseRequest(
+        z.string().trim().min(1).max(256),
+        request.headers[CRM1_IDEMPOTENCY_HEADER.toLowerCase()],
+        400
+      );
+      const result = await mutations.createImport(body, key);
       reply.code(201);
-      return serializeBatch(completed);
+      return CRM1ImportBatchDetailSchema.parse({
+        ...serializeBatch(result),
+        receipts: result.receipts.map((receipt) => ({
+          sourceRow: receipt.sourceRow,
+          entity: receipt.entity,
+          targetId: receipt.targetId,
+          createdAt: dateString(receipt.createdAt)
+        }))
+      });
     });
 
     fastify.get("/imports/:batch", {
