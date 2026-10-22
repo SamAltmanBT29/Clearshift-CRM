@@ -5,3 +5,4 @@ export * from "./governance/index.js";
 export * from "./logging/index.js";
 export * from "./audit/index.js";
 export * from "./observability/index.js";
+export * from "./auth/permissions.js";
