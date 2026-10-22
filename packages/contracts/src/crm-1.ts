@@ -616,3 +616,36 @@ export const PaginatedCrm1RejectsResponseSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 });
 export type PaginatedCrm1RejectsResponse = z.infer<typeof PaginatedCrm1RejectsResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// 6. Security & Audit Schemas (Issue #14 / [CRM1-09])
+// ---------------------------------------------------------------------------
+
+export const CRM1AuditEventSchema = z.object({
+  id: z.string().uuid(),
+  actor: z.string().min(1),
+  action: z.string().min(1),
+  entity: z.string().min(1),
+  entityId: z.string().uuid().nullable().optional(),
+  batchId: z.string().nullable().optional(),
+  result: z.enum(['success', 'failure', 'rejected', 'halted']),
+  diffRedacted: z.record(z.string(), z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  createdAt: z.coerce.date(),
+});
+export type CRM1AuditEvent = z.infer<typeof CRM1AuditEventSchema>;
+
+export const CRM1ErrorEnvelopeSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.array(z.unknown()).optional(),
+  correlation_id: z.string().optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      details: z.array(z.unknown()).optional(),
+    })
+    .optional(),
+});
+export type CRM1ErrorEnvelope = z.infer<typeof CRM1ErrorEnvelopeSchema>;

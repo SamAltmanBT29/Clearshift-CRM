@@ -13,32 +13,39 @@ import {
   CreateCrm1ImportInputSchema,
   Crm1RejectsQuerySchema,
 } from '@clearshift/contracts';
-import { Capabilities, requireCapability, type CapabilityType } from '@cs/rbac';
+import type { RoleType } from '@cs/identity';
+import { requireRoles } from '../plugins/auth.js';
+import { CRM1_ENDPOINT_ROLES } from '../policies/roles.js';
+import { redactSensitiveObject } from '../policies/masking.js';
 import { Crm1Service } from '../services/crm1.service.js';
+import { Crm1AuditService, crm1Audit } from '../services/audit.js';
 import { DomainValidationError } from '../domain/errors.js';
 
 const UuidSchema = z.string().uuid();
 
 export interface Crm1RouteOptions {
   service?: Crm1Service | undefined;
+  auditService?: Crm1AuditService | undefined;
 }
 
-function modulePreHandlers(
+function endpointPreHandlers(
   fastify: FastifyInstance,
-  capability: CapabilityType
+  allowedRoles: readonly RoleType[]
 ) {
-  return [fastify.authenticate, requireCapability(capability)];
+  return [fastify.authenticate, requireRoles(allowedRoles)];
 }
 
 /**
  * Fastify Routes for CRM-1 Contacts, Companies and Leads
  * Base Prefix: /api/v1/crm-contacts
+ * Strictly enforces SDS role permissions matrix and append-only audit trails.
  */
 export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   fastify,
   opts
 ) => {
   const service = opts.service ?? new Crm1Service();
+  const auditService = opts.auditService ?? crm1Audit;
 
   // Health check (public)
   fastify.get('/health', async () => {
@@ -55,7 +62,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.get('/contacts', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_LIST),
   }, async (request, reply) => {
     const parsed = ContactsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -69,11 +76,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     const result = await service.getContacts(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   fastify.get<{ Params: { id: string } }>('/contacts/:id', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_READ),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -96,11 +103,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    return reply.status(200).send(contact);
+    return reply.status(200).send(redactSensitiveObject(contact));
   });
 
   fastify.post('/contacts', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_CREATE),
   }, async (request, reply) => {
     const parsed = CreateContactInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -115,7 +122,23 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
 
     try {
       const contact = await service.createContact(parsed.data);
-      return reply.status(201).send(contact);
+
+      await auditService.logEvent({
+        actor: request.user?.sub ?? 'system',
+        action: 'crm1.contact.created',
+        entity: 'contact',
+        entityId: contact.id,
+        diff: {
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          leadStatus: contact.leadStatus,
+          companyId: contact.companyId,
+        },
+        result: 'success',
+      });
+
+      return reply.status(201).send(redactSensitiveObject(contact));
     } catch (err) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -131,7 +154,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.patch<{ Params: { id: string } }>('/contacts/:id', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_UPDATE),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -165,7 +188,17 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
           },
         });
       }
-      return reply.status(200).send(contact);
+
+      await auditService.logEvent({
+        actor: request.user?.sub ?? 'system',
+        action: 'crm1.contact.updated',
+        entity: 'contact',
+        entityId: id,
+        diff: parsed.data,
+        result: 'success',
+      });
+
+      return reply.status(200).send(redactSensitiveObject(contact));
     } catch (err) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -185,7 +218,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.get('/companies', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_LIST),
   }, async (request, reply) => {
     const parsed = CompaniesQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -199,11 +232,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     const result = await service.getCompanies(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   fastify.get<{ Params: { id: string } }>('/companies/:id', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_READ),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -226,11 +259,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    return reply.status(200).send(company);
+    return reply.status(200).send(redactSensitiveObject(company));
   });
 
   fastify.post('/companies', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_CREATE),
   }, async (request, reply) => {
     const parsed = CreateCompanyInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -244,11 +277,25 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     const company = await service.createCompany(parsed.data);
-    return reply.status(201).send(company);
+
+    await auditService.logEvent({
+      actor: request.user?.sub ?? 'system',
+      action: 'crm1.company.created',
+      entity: 'company',
+      entityId: company.id,
+      diff: {
+        name: company.name,
+        taxNumber: company.taxNumber,
+        email: company.email,
+      },
+      result: 'success',
+    });
+
+    return reply.status(201).send(redactSensitiveObject(company));
   });
 
   fastify.patch<{ Params: { id: string } }>('/companies/:id', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_UPDATE),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -282,7 +329,16 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    return reply.status(200).send(company);
+    await auditService.logEvent({
+      actor: request.user?.sub ?? 'system',
+      action: 'crm1.company.updated',
+      entity: 'company',
+      entityId: id,
+      diff: parsed.data,
+      result: 'success',
+    });
+
+    return reply.status(200).send(redactSensitiveObject(company));
   });
 
   // ---------------------------------------------------------------------------
@@ -290,7 +346,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.get('/leads', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_LIST),
   }, async (request, reply) => {
     const parsed = LeadsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -304,11 +360,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     const result = await service.getLeads(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   fastify.get<{ Params: { id: string } }>('/leads/:id', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_READ),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -331,11 +387,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    return reply.status(200).send(lead);
+    return reply.status(200).send(redactSensitiveObject(lead));
   });
 
   fastify.post('/leads', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_CREATE),
   }, async (request, reply) => {
     const parsed = CreateLeadInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -350,7 +406,20 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
 
     try {
       const lead = await service.createLead(parsed.data);
-      return reply.status(201).send(lead);
+
+      await auditService.logEvent({
+        actor: request.user?.sub ?? 'system',
+        action: 'crm1.lead.created',
+        entity: 'lead',
+        entityId: lead.id,
+        diff: {
+          status: lead.status,
+          contactId: lead.contactId,
+        },
+        result: 'success',
+      });
+
+      return reply.status(201).send(redactSensitiveObject(lead));
     } catch (err) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -366,7 +435,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.patch<{ Params: { id: string } }>('/leads/:id', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_UPDATE),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -400,7 +469,17 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
           },
         });
       }
-      return reply.status(200).send(lead);
+
+      await auditService.logEvent({
+        actor: request.user?.sub ?? 'system',
+        action: 'crm1.lead.updated',
+        entity: 'lead',
+        entityId: id,
+        diff: parsed.data,
+        result: 'success',
+      });
+
+      return reply.status(200).send(redactSensitiveObject(lead));
     } catch (err) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -420,7 +499,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.post('/imports', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_START),
   }, async (request, reply) => {
     const parsed = CreateCrm1ImportInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -434,11 +513,24 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     const run = await service.startImportRun(parsed.data);
-    return reply.status(201).send(run);
+
+    await auditService.logEvent({
+      actor: request.user?.sub ?? 'system',
+      action: 'crm1.import.started',
+      entity: 'import_batch',
+      batchId: parsed.data.batchId,
+      metadata: {
+        sourceSystem: parsed.data.sourceSystem,
+        filename: parsed.data.filename,
+      },
+      result: 'success',
+    });
+
+    return reply.status(201).send(redactSensitiveObject(run));
   });
 
   fastify.get<{ Params: { batch: string } }>('/imports/:batch', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_STATUS),
   }, async (request, reply) => {
     const { batch } = request.params;
     if (!batch || batch.trim().length === 0) {
@@ -460,11 +552,11 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
-    return reply.status(200).send(run);
+    return reply.status(200).send(redactSensitiveObject(run));
   });
 
   fastify.get<{ Params: { batch: string } }>('/imports/:batch/rejects', {
-    preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ),
+    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_REJECTS),
   }, async (request, reply) => {
     const { batch } = request.params;
     if (!batch || batch.trim().length === 0) {
@@ -493,6 +585,6 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     }
 
     const result = await service.getRejects(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 };
