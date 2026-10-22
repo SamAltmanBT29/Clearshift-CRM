@@ -389,12 +389,12 @@ describe('[PLT-06] Central Role & Field-Level Authorization Matrix', () => {
       const sensitiveRecord = {
         id: 'user-001',
         username: 'synthetic_user',
-        password: 'superSecretPassword123!',
-        argon2hash: '$argon2id$v=19$m=65536,t=3,p=4$fakehash...',
-        token: 'eyJhbGciOiJFZERTQSI...',
-        jwt: 'cs_tok_9999999999',
-        apiKey: 'cs_live_apikey_12345',
-        clientSecret: 'secret_client_xyz',
+        password: 'pwd',
+        argon2hash: 'hash',
+        token: 'tok',
+        jwt: 'jwt',
+        apiKey: 'key',
+        clientSecret: 'secret',
       };
 
       for (const role of allRoles) {
