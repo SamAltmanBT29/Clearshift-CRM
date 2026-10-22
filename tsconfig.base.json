@@ -22,6 +22,7 @@
     "paths": {
       "@clearshift/database": ["packages/database/src/index.ts"],
       "@clearshift/contracts": ["packages/contracts/src/index.ts"],
+      "@clearshift/contracts/*": ["packages/contracts/src/*"],
       "@clearshift/ui": ["packages/ui/src/index.ts"],
       "@cs/kernel": ["packages/kernel/src/index.ts"],
       "@cs/kernel/*": ["packages/kernel/src/*"],

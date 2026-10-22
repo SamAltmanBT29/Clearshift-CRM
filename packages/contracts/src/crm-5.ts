@@ -35,15 +35,7 @@ export type MigrationRunStatus = z.infer<typeof MigrationRunStatusSchema>;
 export const ReconciliationStatusSchema = z.enum(['OK', 'UNBALANCED']);
 export type ReconciliationStatus = z.infer<typeof ReconciliationStatusSchema>;
 
-// Standard Error Envelope Schema
-export const ErrorEnvelopeSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    details: z.unknown().optional(),
-  }),
-});
-export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
+// Standard Error Envelope is now centralized in common.ts (PLT-04)
 
 // Bounded Pagination Query (hard cap of 100, rejects > 100 with 400)
 export const BasePaginationQuerySchema = z.object({
@@ -66,15 +58,7 @@ export const BasePaginationQuerySchema = z.object({
     .optional(),
 });
 
-export const PaginationQuerySchema = BasePaginationQuerySchema.transform((data) => {
-  const size = data.pageSize ?? data.limit ?? 20;
-  return {
-    page: data.page,
-    pageSize: size,
-    limit: size,
-  };
-});
-export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
+// Standard PaginationQuery is now centralized in common.ts (PLT-04)
 
 // ---------------------------------------------------------------------------
 // 2. Migration Run Schemas
