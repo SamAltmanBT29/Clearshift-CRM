@@ -132,11 +132,39 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 
 ---
 
+### 2.5 Table: `crm5_import_receipts`
+**Description:** Stores durable import receipts committed alongside target business records in the same atomic local database transaction (KIT-08 & Decision C4). Guarantees idempotency deduplication and audit traceability.
+
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `id` | `UUID` | No | `gen_random_uuid()` | Primary Key | Unique import receipt identifier |
+| `batch_id` | `VARCHAR(128)` | No | — | Indexed | Migration Kit batch correlation ID |
+| `source_row` | `INTEGER` | No | — | `>= 1` | Source row index in batch |
+| `source_system` | `VARCHAR(64)` | Yes | `NULL` | — | Originating source system |
+| `source_id` | `VARCHAR(128)` | Yes | `NULL` | — | Source system entity record ID |
+| `entity` | `VARCHAR(64)` | No | — | Indexed | Target entity (`runs`, `scores`, `rejects`, `reconciliation`) |
+| `schema_version` | `INTEGER` | No | `1` | — | Schema version |
+| `idempotency_key` | `VARCHAR(256)` | No | — | Unique Index | Stable idempotency key |
+| `payload_hash` | `VARCHAR(64)` | No | — | Length 64 | Deterministic SHA-256 canonical hash of payload |
+| `target_id` | `UUID` | No | — | Indexed | Primary key of mutated domain record |
+| `kind` | `VARCHAR(32)` | No | `'created'` | — | Record mutation kind (`created`, `linked`) |
+| `outcome` | `VARCHAR(32)` | No | `'created'` | — | Row outcome (`created`, `linked`, `rejected`, `skipped`) |
+| `response_payload` | `JSONB` | Yes | `NULL` | — | Serialized outcome payload for replay |
+| `created_at` | `TIMESTAMPTZ` | No | `now()` | — | Receipt timestamp |
+
+**Indexes:**
+* `idx_crm5_receipts_idempotency_key` ON `crm5_import_receipts(idempotency_key)` (UNIQUE)
+* `idx_crm5_receipts_batch_row` ON `crm5_import_receipts(batch_id, source_row)`
+* `idx_crm5_receipts_target_id` ON `crm5_import_receipts(target_id)`
+
+---
+
 ## 3. Security, Privacy & Invariant Protections
 
 1. **No Raw Secrets:** No passwords, bearer tokens, or full credit card / bank accounts are ever stored in CRM-5 tables.
 2. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
 3. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
+4. **No Direct Target Writes by Caller:** The Migration Kit never writes directly to CRM-5 private tables; data enters strictly through the public API / in-process `TargetAdapter`.
 
 ---
 
@@ -149,4 +177,166 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 | `GET` | `/scores` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
 | `GET` | `/rejects` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
 | `GET` | `/reconciliation/:batch` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
+| `POST` | `/runs` | Body: `CreateRunInput` | N/A | Records migration step projection; idempotent by `idempotencyKey` |
+| `POST` | `/scores` | Body: `CreateScoreInput` | N/A | Records quality score card; computes weighted score automatically |
+| `POST` | `/reconciliation` | Body: `CreateReconciliationInput` | N/A | Records conservation balance sheet; evaluates conservation invariant |
+| `POST` | `/rejects` | Body: `CreateRejectInput` | N/A | Ingests row rejection audit record with payload SHA-256 hash |
+| `POST` | `/duplicates/detect` | Body: `DetectDuplicatesInput` | N/A | Detects exact duplicates using normalized keys; holds candidates for review |
+| `GET` | `/duplicates/held` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
+| `POST` | `/duplicates/resolve` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
+| `GET` | `/duplicates/audit` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
+| `POST` | `/batches/execute-load` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
+| `POST` | `/import/row` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Safely loads mapped row via KIT-08 Target Adapter; commits mutation and receipt in one transaction |
+| `GET` | `/import/receipts` | None | N/A | Returns durable receipts committed alongside migrated target records |
 
+---
+
+## 5. Exact Duplicate Key Policy & Human Review Policy (CRM5-12)
+
+### 5.1 Deterministic Key Normalization Rules
+To ensure consistent, deterministic duplicate detection across modules and ingest streams without fuzzy heuristics, exact keys are normalized according to strict rules:
+
+| Key Type | Normalization Rule | Example Input | Normalized Output |
+| :--- | :--- | :--- | :--- |
+| `email` | Trim whitespace, convert to lowercase | `"  Lead.Ops@Example.COM  "` | `"lead.ops@example.com"` |
+| `tax_id` | Trim whitespace, uppercase, remove hyphens/spaces/dots/slashes | `" 12-345.678/9 "` | `"123456789"` |
+| `sku` | Trim whitespace, uppercase, collapse internal whitespace | `"  item-xyz  400 "` | `"ITEM-XYZ 400"` |
+| `phone` | Trim whitespace, strip non-digits, preserve leading `+` | `" +1 (555) 019-2834 "` | `"+15550192834"` |
+| `composite` | Deterministic sorted key-value serialization | `{ batchId: "b1", step: "load" }` | `"batchId=b1;step=load"` |
+
+### 5.2 Deterministic Candidate Holding Policy
+1. Records sharing an identical normalized key are grouped and flagged deterministically as `duplicate_candidate`.
+2. **Zero Automatic Merging in V1:** Automatic fuzzy merging is strictly prohibited. Any request requesting automated merge throws an unprocessable error (`AUTO_MERGE_FORBIDDEN` / HTTP 422).
+3. All ambiguous or duplicate candidates transition to `held_for_review` until an authorized human operator provides a merge or separation decision.
+
+### 5.3 Human Merge Decision Audit Requirements
+Every human review resolution creates an immutable audit log entry recording:
+* `id`: UUID of the audit entry.
+* `candidate_id`: ID of the resolved candidate group.
+* `decision`: `MERGE` | `REJECT_DUPLICATE` | `KEEP_SEPARATE`.
+* `actor_id`: Non-empty string identifier of the authorized human reviewer.
+* `timestamp`: Precise UTC timestamp of the decision.
+* `kept_id`: ID of the surviving/canonical record.
+* `merged_id`: ID of the absorbed duplicate record (`kept_id !== merged_id` enforced for `MERGE`).
+* `reason`: Mandatory audit justification for traceability.
+
+---
+
+## 6. Chunked Batch Ingestion & Partial-Load Stop Behavior (CRM5-13)
+
+### 6.1 Chunked Processing (500 Rows)
+All load operations slice large input datasets into sequential chunks of 500 records (`DEFAULT_CHUNK_SIZE = 500`). This bounds database transaction sizes, memory allocation, and lock retention times.
+
+### 6.2 Idempotent Retry with Exponential Backoff
+Transient worker or network failures trigger bounded exponential backoff retries:
+$$\text{delay} = \text{baseBackoffMs} \times 2^{\text{attempt}}$$
+* **Maximum Retries:** Default 3 attempts (`DEFAULT_MAX_RETRIES = 3`).
+* **Idempotency Protection:** The unique `idempotencyKey` passed per source row is strictly preserved across all retry attempts and never mutated.
+
+### 6.3 10% Partial-Load Stop Policy (`STOPPED_EXCESSIVE_FAILURES`)
+To prevent cascading data corruption or runaway failure cascades:
+$$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemptedRows}}$$
+* When `cumulativeAttemptedRows >= 50` and `failureRate > 0.10` (10%):
+  1. Batch execution ceases immediately.
+  2. Batch status transitions to `STOPPED_EXCESSIVE_FAILURES` (recorded as `halted` in `crm5_runs`).
+  3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
+  4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
+
+---
+
+## 5. Exact Duplicate Key Policy & Human Review Policy (CRM5-12)
+
+### 5.1 Deterministic Key Normalization Rules
+To ensure consistent, deterministic duplicate detection across modules and ingest streams without fuzzy heuristics, exact keys are normalized according to strict rules:
+
+| Key Type | Normalization Rule | Example Input | Normalized Output |
+| :--- | :--- | :--- | :--- |
+| `email` | Trim whitespace, convert to lowercase | `"  Lead.Ops@Example.COM  "` | `"lead.ops@example.com"` |
+| `tax_id` | Trim whitespace, uppercase, remove hyphens/spaces/dots/slashes | `" 12-345.678/9 "` | `"123456789"` |
+| `sku` | Trim whitespace, uppercase, collapse internal whitespace | `"  item-xyz  400 "` | `"ITEM-XYZ 400"` |
+| `phone` | Trim whitespace, strip non-digits, preserve leading `+` | `" +1 (555) 019-2834 "` | `"+15550192834"` |
+| `composite` | Deterministic sorted key-value serialization | `{ batchId: "b1", step: "load" }` | `"batchId=b1;step=load"` |
+
+### 5.2 Deterministic Candidate Holding Policy
+1. Records sharing an identical normalized key are grouped and flagged deterministically as `duplicate_candidate`.
+2. **Zero Automatic Merging in V1:** Automatic fuzzy merging is strictly prohibited. Any request requesting automated merge throws an unprocessable error (`AUTO_MERGE_FORBIDDEN` / HTTP 422).
+3. All ambiguous or duplicate candidates transition to `held_for_review` until an authorized human operator provides a merge or separation decision.
+
+### 5.3 Human Merge Decision Audit Requirements
+Every human review resolution creates an immutable audit log entry recording:
+* `id`: UUID of the audit entry.
+* `candidate_id`: ID of the resolved candidate group.
+* `decision`: `MERGE` | `REJECT_DUPLICATE` | `KEEP_SEPARATE`.
+* `actor_id`: Non-empty string identifier of the authorized human reviewer.
+* `timestamp`: Precise UTC timestamp of the decision.
+* `kept_id`: ID of the surviving/canonical record.
+* `merged_id`: ID of the absorbed duplicate record (`kept_id !== merged_id` enforced for `MERGE`).
+* `reason`: Mandatory audit justification for traceability.
+
+---
+
+## 7. Frontend Module Routes, Navigation & Layout Shell (CRM5-16)
+
+### 7.1 Module Route Registration
+CRM-5 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-5/runs` | `crm5-runs` | Migration Run Projections | Runs | `control.read` |
+| `/crm-5/scores` | `crm5-scores` | Data Quality Scores | Quality Scores | `control.read` |
+| `/crm-5/rejects` | `crm5-rejects` | Row-Level Rejection Audit | Rejections | `control.read` |
+| `/crm-5/reconciliation` | `crm5-reconciliation` | Conservation Balance Sheet | Reconciliation | `control.read` |
+| `/crm-5/duplicates` | `crm5-duplicates` | Exact Duplicate Candidate Review | Duplicate Review | `control.read` |
+
+### 7.2 Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `control.read` capability. Users lacking this capability are redirected to `/access-denied?required=control.read`.
+
+### 7.3 Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-5 - <View Title>`.
+
+---
+
+## 8. KIT-08 Target Adapter Contract & Durable Receipts (CRM5-11)
+
+### 8.1 Target Adapter Port Adherence
+CRM-5 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
+* **Caller Privilege Boundary:** Migration Kit and external clients possess zero direct SQL insert/update permissions on CRM-5 tables. All writes enter through the public API (`POST /api/v1/crm-control/import/row`) or in-process adapter method `importRow()`.
+* **Atomic Transaction Guarantee:** The mutated business record (`crm5_runs`, `crm5_scores`, `crm5_rejects`, or `crm5_reconciliation_reports`) and the durable receipt (`crm5_import_receipts`) commit atomically in one local PostgreSQL transaction. If either operation fails, the transaction is completely rolled back.
+
+### 8.2 Strict Idempotency & Conflict Semantics
+* **Canonical Payload Hash:** Input payloads are deterministically serialized with sorted keys and hashed via SHA-256 (`payload_hash`).
+* **Identical Replay (HTTP 200):** If an incoming row presents an existing `idempotencyKey` and matching `payload_hash`, the prior execution result is returned without mutating data or duplicating receipts.
+* **Payload Conflict (HTTP 409):** If an incoming row reuses an existing `idempotencyKey` with an altered payload (`new_hash !== existing_hash`), the request is rejected with `IDEMPOTENCY_CONFLICT` (HTTP 409) and zero mutations occur.
+
+### 8.3 Error Classification Invariants
+* **Domain Validation Failures:** Business rule violations (e.g. `recordsOut + recordsRejected > recordsIn`, out-of-range quality dimensions, unparseable payloads) are classified as business rejections (`VALIDATION_ERROR` / HTTP 422) with machine-readable reason codes and safe error messages. Corrupt records are never committed.
+* **Infrastructure Failures:** Transient network, database, or worker outages (e.g. HTTP 503) are marked `retryable: true` and are **never** recorded in `crm5_rejects` as invalid data.
+
+---
+
+## 9. Main Paginated Data Table with Server-Side Sorting & Filtering (CRM5-17)
+
+### 9.1 Stable Column Configurations
+The CRM-5 primary collection table renders structured data matching the entity dictionary schemas:
+
+| Entity Collection | Primary Columns | Sortable Columns |
+| :--- | :--- | :--- |
+| `crm5_runs` | `batchId`, `module`, `step`, `status`, `recordsIn`, `recordsOut`, `recordsRejected`, `startedAt`, `completedAt` | `batchId`, `module`, `step`, `status`, `recordsIn`, `recordsOut`, `recordsRejected`, `startedAt` |
+| `crm5_scores` | `batchId`, `module`, `score`, `completeness`, `validity`, `duplicateRate`, `rejectRate`, `linkIntegrity`, `isFullyScored`, `scoredAt` | `batchId`, `module`, `score`, `completeness`, `validity`, `duplicateRate`, `rejectRate`, `linkIntegrity`, `scoredAt` |
+| `crm5_rejects` | `id`, `batchId`, `module`, `rowIndex`, `errorCode`, `errorMessage`, `rawPayloadHash`, `createdAt` | `batchId`, `module`, `rowIndex`, `errorCode`, `createdAt` |
+| `crm5_reconciliation_reports` | `batchId`, `module`, `sourceCount`, `loadedCount`, `rejectedCount`, `mergedCount`, `skippedCount`, `unaccountedCount`, `status`, `reconciledAt` | `batchId`, `module`, `sourceCount`, `loadedCount`, `rejectedCount`, `mergedCount`, `skippedCount`, `unaccountedCount`, `status`, `reconciledAt` |
+
+### 9.2 Bounded Server-Side Pagination
+* **Page Size Ceilings:** Default page size is 20 rows (`DEFAULT_PAGE_SIZE = 20`), with a strict bounded ceiling of 100 rows (`MAX_PAGE_SIZE = 100`) to prevent DOM degradation and memory bloat.
+* **Navigation Controls:** First (`« First`), Previous (`‹ Prev`), Next (`Next ›`), and Last (`Last »`) controls with automatic boundary disabling (`aria-disabled="true"`).
+* **State Resets:** Adjusting `pageSize` or active sorting resets current page back to 1.
+
+### 9.3 Column Header Sorting Protocol
+* **Deterministic Toggle Cycle:** Clicking a sortable column header cycles through `asc` ↔ `desc`.
+* **WAI-ARIA Accessibility:** Headers announce sort direction via `aria-sort="ascending" | "descending" | "none"` and keyboard-accessible buttons (`<button class="cs-th-sort-btn">`).
+* **Query Serialization:** Binds to standard API parameters `sort=<columnKey>&order=asc|desc&page=<N>&pageSize=<N>&limit=<N>`.

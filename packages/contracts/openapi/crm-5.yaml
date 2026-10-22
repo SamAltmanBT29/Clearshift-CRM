@@ -388,7 +388,262 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /duplicates/detect:
+    post:
+      summary: Detect exact duplicate candidates
+      description: Deterministically groups records by normalized exact key. Auto-merge is strictly forbidden in V1.
+      operationId: detectDuplicates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectDuplicatesInput'
+      responses:
+        '200':
+          description: Detection results with unique records and held candidate groups
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Auto-merge forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /duplicates/held:
+    get:
+      summary: List duplicate candidates held for human review
+      description: Returns duplicate groups held pending authorized human merge decision.
+      operationId: listHeldDuplicates
+      parameters:
+        - name: batchId
+          in: query
+          schema:
+            type: string
+        - name: keyType
+          in: query
+          schema:
+            $ref: '#/components/schemas/ExactKeyType'
+      responses:
+        '200':
+          description: List of held candidates
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /duplicates/resolve:
+    post:
+      summary: Record human merge decision
+      description: Records authorized merge or separation decision with immutable audit log.
+      operationId: resolveDuplicateCandidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDuplicateInput'
+      responses:
+        '200':
+          description: Candidate resolved and audit entry created
+          content:
+            application/json:
+              schema:
+                type: object
+  /batches/{batch}:
+    get:
+      summary: Get aggregated batch summary and read-model consistency
+      description: Returns aggregated batch lifecycle status, progress totals, and cross-entity consistency evaluation.
+      operationId: getBatchSummary
+      parameters:
+        - name: batch
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Aggregated batch summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchSummary'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Candidate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Invalid merge decision (e.g. self-merge)
+          description: Batch summary not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /duplicates/audit:
+    get:
+      summary: Query duplicate merge audit log
+      description: Paginated query of human duplicate resolution audit logs.
+      operationId: getDuplicateAuditLogs
+      parameters:
+        - name: candidateId
+          in: query
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /batches/execute-load:
+    post:
+      summary: Execute chunked batch load with bounded retries and stop threshold
+      description: Slices input into 500-row chunks, retries transient failures with exponential backoff while preserving idempotency keys, and stops immediately if failures exceed 10%.
+      operationId: executeBatchLoad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteBatchLoadInput'
+      responses:
+        '200':
+          description: Batch load execution report with status (COMPLETED or STOPPED_EXCESSIVE_FAILURES)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExecutionReport'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Domain Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /import/row:
+    post:
+      summary: Load row via KIT-08 Target Adapter
+      description: Safely loads a mapped V1 record and commits the domain mutation and durable import receipt atomically in one local transaction. Supports idempotent retries via Idempotency-Key.
+      operationId: importRow
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique idempotency key for this row operation
+          schema:
+            type: string
+        - name: X-Correlation-ID
+          in: header
+          required: false
+          description: Distributed tracing correlation identifier
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportRowInput'
+      responses:
+        '201':
+          description: Successfully created target record and durable receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportRowResponse'
+        '200':
+          description: Idempotent replay of previously committed key and payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportRowResponse'
+        '400':
+          description: Bad request (malformed payload or missing idempotency key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Conflict (idempotency key reused with different request payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Business validation rejection (domain invariant violation)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Service Unavailable (transient infrastructure failure, retryable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /import/receipts:
+    get:
+      summary: List durable import receipts
+      description: Returns durable receipts committed alongside migrated target records.
+      operationId: getImportReceipts
+      responses:
+        '200':
+          description: List of durable import receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImportReceiptContract'
+                  total:
+                    type: integer
+
 components:
+
   schemas:
     ErrorEnvelope:
       type: object
@@ -812,8 +1067,471 @@ components:
           type: string
         errorMessage:
           type: string
-        rawPayloadHash:
-          type: string
         idempotencyKey:
           type: string
+
+    ExactKeyType:
+      type: string
+      enum: [email, tax_id, sku, phone, composite]
+
+    DuplicateCandidate:
+      type: object
+      required:
+        - id
+        - keyType
+        - normalizedKey
+        - recordIds
+        - status
+        - detectedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+        keyType:
+          $ref: '#/components/schemas/ExactKeyType'
+        normalizedKey:
+          type: string
+        recordIds:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [unique, duplicate_candidate, held_for_review, resolved]
+        detectedAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    DetectDuplicatesInput:
+      type: object
+      required:
+        - keyType
+        - records
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        keyType:
+          $ref: '#/components/schemas/ExactKeyType'
+        autoMerge:
+          type: boolean
+          default: false
+        records:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - keyValue
+            properties:
+              id:
+                type: string
+              keyValue:
+                type: string
+              payload:
+                type: object
+
+    ResolveDuplicateInput:
+      type: object
+      required:
+        - candidateId
+        - decision
+        - actorId
+        - keptId
+        - mergedId
+        - reason
+      properties:
+        candidateId:
+          type: string
+        decision:
+          type: string
+          enum: [MERGE, REJECT_DUPLICATE, KEEP_SEPARATE]
+        actorId:
+          type: string
+        keptId:
+          type: string
+        mergedId:
+          type: string
+        reason:
+          type: string
+        metadata:
+          type: object
+
+    DuplicateAuditLogEntry:
+      type: object
+      required:
+        - id
+        - candidateId
+        - decision
+        - actorId
+        - timestamp
+        - keptId
+        - mergedId
+        - reason
+      properties:
+        id:
+          type: string
+          format: uuid
+        candidateId:
+          type: string
+        decision:
+          type: string
+          enum: [MERGE, REJECT_DUPLICATE, KEEP_SEPARATE]
+        actorId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        keptId:
+          type: string
+        mergedId:
+          type: string
+        reason:
+          type: string
+        keyType:
+          $ref: '#/components/schemas/ExactKeyType'
+        normalizedKey:
+          type: string
+        metadata:
+          type: object
+    BatchTotals:
+      type: object
+      required:
+        - totalRecordsIn
+        - totalRecordsOut
+        - totalRecordsRejected
+        - stepsCompleted
+        - stepsTotal
+        - progressPercentage
+      properties:
+        totalRecordsIn:
+          type: integer
+          minimum: 0
+        totalRecordsOut:
+          type: integer
+          minimum: 0
+        totalRecordsRejected:
+          type: integer
+          minimum: 0
+        stepsCompleted:
+          type: integer
+          minimum: 0
+        stepsTotal:
+          type: integer
+          minimum: 1
+        progressPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    BatchConsistency:
+      type: object
+      required:
+        - isConsistent
+        - warnings
+        - errors
+      properties:
+        isConsistent:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: string
+
+    BatchSummary:
+      type: object
+      required:
+        - batchId
+        - module
+        - status
+        - totals
+        - consistency
+        - updatedAt
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        status:
+          type: string
+          enum: [pending, running, completed, failed, halted]
+        totals:
+          $ref: '#/components/schemas/BatchTotals'
+        score:
+          $ref: '#/components/schemas/QualityScore'
+          nullable: true
+        reconciliation:
+          $ref: '#/components/schemas/ReconciliationReport'
+          nullable: true
+        consistency:
+          $ref: '#/components/schemas/BatchConsistency'
+        updatedAt:
+          type: string
+          format: date-time
+
+    BatchExecutionStatus:
+      type: string
+      enum: [COMPLETED, STOPPED_EXCESSIVE_FAILURES, FAILED]
+
+    BatchRecordInput:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - data
+      properties:
+        sourceRow:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+        data:
+          type: object
+
+    ExecuteBatchLoadInput:
+      type: object
+      required:
+        - batchId
+        - module
+        - records
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+          default: load
+        chunkSize:
+          type: integer
+          default: 500
+        maxRetries:
+          type: integer
+          default: 3
+        failureThreshold:
+          type: number
+          default: 0.10
+        minAttemptedRows:
+          type: integer
+          default: 50
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchRecordInput'
+
+    ImportReceipt:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - idempotencyKey
+        - targetId
+        - committedAt
+      properties:
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        targetId:
+          type: string
+        kind:
+          type: string
+          enum: [created, linked]
+          default: created
+        committedAt:
+          type: string
+          format: date-time
+
+    FailedRow:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - errorCode
+        - errorMessage
+        - retryAttempts
+      properties:
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryAttempts:
+          type: integer
+        payloadHash:
+          type: string
+
+    BatchExecutionReport:
+      type: object
+      required:
+        - batchId
+        - module
+        - step
+        - status
+        - totalRecords
+        - attemptedRecords
+        - committedRecords
+        - failedRecords
+        - chunksProcessed
+        - chunkSize
+        - failureRate
+        - committedReceipts
+        - failedRows
+        - executedAt
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+        status:
+          $ref: '#/components/schemas/BatchExecutionStatus'
+        totalRecords:
+          type: integer
+        attemptedRecords:
+          type: integer
+        committedRecords:
+          type: integer
+        failedRecords:
+          type: integer
+        chunksProcessed:
+          type: integer
+        chunkSize:
+          type: integer
+        failureRate:
+          type: number
+        haltReason:
+          type: string
+          nullable: true
+        committedReceipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportReceipt'
+        failedRows:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailedRow'
+        executedAt:
+          type: string
+          format: date-time
+
+    ImportRowInput:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - entity
+        - data
+        - idempotencyKey
+      properties:
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+          minimum: 1
+        sourceSystem:
+          type: string
+        sourceId:
+          type: string
+        entity:
+          type: string
+          enum: [runs, scores, rejects, reconciliation]
+        data:
+          type: object
+        idempotencyKey:
+          type: string
+        correlationId:
+          type: string
+        schemaVersion:
+          type: integer
+          default: 1
+
+    ImportReceiptContract:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - entity
+        - idempotencyKey
+        - payloadHash
+        - targetId
+        - kind
+        - outcome
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+        sourceSystem:
+          type: string
+          nullable: true
+        sourceId:
+          type: string
+          nullable: true
+        entity:
+          type: string
+        schemaVersion:
+          type: integer
+        idempotencyKey:
+          type: string
+        payloadHash:
+          type: string
+        targetId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [created, linked]
+        outcome:
+          type: string
+          enum: [created, linked, rejected, skipped]
+        createdAt:
+          type: string
+          format: date-time
+
+    ImportRowResponse:
+      type: object
+      required:
+        - targetId
+        - version
+        - outcome
+        - receipt
+      properties:
+        targetId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        outcome:
+          type: string
+          enum: [created, linked, rejected, skipped]
+        receipt:
+          $ref: '#/components/schemas/ImportReceiptContract'
+        isExisting:
+          type: boolean
+          default: false
+
 

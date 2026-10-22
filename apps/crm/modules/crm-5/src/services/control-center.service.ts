@@ -14,6 +14,12 @@ import type {
   CreateScoreInput,
   CreateReconciliationInput,
   CreateRejectInput,
+  DuplicateCandidate,
+  ResolveDuplicateInput,
+  DuplicateAuditLogEntry,
+  DetectDuplicatesInput,
+  ExecuteBatchLoadInput,
+  BatchExecutionReport,
 } from '@clearshift/contracts';
 import {
   calculateQualityScore,
@@ -21,6 +27,17 @@ import {
   sanitizeCsvFormula,
 } from '@clearshift/contracts';
 import { DomainValidationError, DomainConflictError } from '../domain/errors.js';
+import {
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+  type DuplicateDetectionResult,
+} from '../domain/duplicate-policy.js';
+import { assertValidTransition } from '../domain/transitions.js';
+import { buildBatchSummary, type BatchSummary } from '../domain/relationships.js';
+import {
+  executeChunkedBatchLoad,
+  type BatchLoaderOptions,
+} from '../domain/batch-loader.js';
 
 /**
  * CRM-5 Control Center Service
@@ -33,6 +50,7 @@ export class ControlCenterService {
   private scores: QualityScore[] = [];
   private rejects: MigrationReject[] = [];
   private reconciliations: Map<string, ReconciliationReport> = new Map();
+  private duplicateQueue: DuplicateReviewQueue = new DuplicateReviewQueue();
 
   constructor() {
     this.seedSyntheticData();
@@ -163,7 +181,31 @@ export class ControlCenterService {
   }
 
   // ---------------------------------------------------------------------------
-  // 5. Mutation API Methods with Domain Validation
+  // 5. Batch Relationships & Aggregated Read Model
+  // ---------------------------------------------------------------------------
+
+  public getBatchSummary(batchId: string): BatchSummary | null {
+    const runs = this.runs.filter((r) => r.batchId === batchId);
+    if (runs.length === 0) {
+      return null;
+    }
+    const module = runs[0]!.module;
+    const score = this.scores.find((s) => s.batchId === batchId) ?? null;
+    const reconciliation = this.reconciliations.get(batchId) ?? null;
+    const rejects = this.rejects.filter((r) => r.batchId === batchId);
+
+    return buildBatchSummary({
+      batchId,
+      module,
+      runs,
+      score,
+      reconciliation,
+      rejects,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. Mutation API Methods with Domain Validation
   // ---------------------------------------------------------------------------
 
   public recordRun(input: CreateRunInput): { run: MigrationRun; isDuplicate: boolean } {
@@ -206,16 +248,11 @@ export class ControlCenterService {
         return { run: existing, isDuplicate: true };
       }
 
-      // Check illegal transitions: terminal states cannot be changed to pending
-      if (
-        (existing.status === 'completed' || existing.status === 'halted') &&
-        input.status === 'pending'
-      ) {
-        throw new DomainConflictError(
-          `Cannot revert run from terminal state '${existing.status}' to 'pending'`,
-          { currentStatus: existing.status, requestedStatus: input.status }
-        );
+      // Assert valid state transition across the formal state machine
+      if (existing.status !== input.status) {
+        assertValidTransition(existing.status, input.status);
       }
+
 
       // Valid update (e.g. from pending/running to completed/failed)
       const updatedRun: MigrationRun = {
@@ -487,6 +524,7 @@ export class ControlCenterService {
     this.scores = [];
     this.rejects = [];
     this.reconciliations.clear();
+    this.duplicateQueue.clear();
   }
 
   private seedSyntheticData(): void {
@@ -565,5 +603,128 @@ export class ControlCenterService {
       reconciledAt: now,
       createdAt: now,
     });
+
+    this.duplicateQueue.addCandidate({
+      id: 'e0000000-0000-0000-0000-000000000001',
+      batchId: 'batch-contacts-01',
+      keyType: 'email',
+      normalizedKey: 'lead.ops@example.com',
+      recordIds: ['rec-001', 'rec-002'],
+      status: 'held_for_review',
+      detectedAt: now,
+      metadata: {
+        originalKeys: ['  Lead.Ops@Example.COM  ', 'lead.ops@example.com'],
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Duplicate Key Policy & Human Review Audit (CRM5-12)
+  // ---------------------------------------------------------------------------
+
+  public detectDuplicates(input: DetectDuplicatesInput): DuplicateDetectionResult {
+    const result = detectExactDuplicates(input.records, input.keyType, {
+      batchId: input.batchId,
+      autoMerge: input.autoMerge,
+    });
+
+    if (result.duplicateCandidates.length > 0) {
+      this.duplicateQueue.addCandidates(result.duplicateCandidates);
+    }
+
+    return result;
+  }
+
+  public getHeldDuplicates(query?: { batchId?: string | undefined; keyType?: string | undefined }): DuplicateCandidate[] {
+    return this.duplicateQueue.listHeld(query);
+  }
+
+  public resolveDuplicate(input: ResolveDuplicateInput): DuplicateAuditLogEntry {
+    return this.duplicateQueue.resolve(input);
+  }
+
+  public getDuplicateAuditLogs(query?: {
+    candidateId?: string | undefined;
+    actorId?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): {
+    items: DuplicateAuditLogEntry[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  } {
+    return this.duplicateQueue.getAuditLogs(query);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9. Idempotent Retry & Chunked Load Execution (CRM5-13)
+  // ---------------------------------------------------------------------------
+
+  public async executeBatchLoad(
+    input: ExecuteBatchLoadInput,
+    options?: BatchLoaderOptions
+  ): Promise<BatchExecutionReport> {
+    const report = await executeChunkedBatchLoad(input, options);
+
+    const now = new Date();
+    const runStatus =
+      report.status === 'COMPLETED'
+        ? 'completed'
+        : report.status === 'STOPPED_EXCESSIVE_FAILURES'
+          ? 'halted'
+          : 'failed';
+
+    const existingRunIndex = this.runs.findIndex(
+      (r) => r.batchId === input.batchId && r.step === input.step
+    );
+
+    const runData: MigrationRun = {
+      id: existingRunIndex >= 0 ? this.runs[existingRunIndex]!.id : randomUUID(),
+      batchId: input.batchId,
+      module: input.module,
+      step: input.step,
+      status: runStatus,
+      recordsIn: report.attemptedRecords,
+      recordsOut: report.committedRecords,
+      recordsRejected: report.failedRecords,
+      startedAt: existingRunIndex >= 0 ? this.runs[existingRunIndex]!.startedAt : now,
+      completedAt:
+        runStatus === 'completed' || runStatus === 'halted' || runStatus === 'failed'
+          ? now
+          : null,
+      metadata: {
+        status: report.status,
+        haltReason: report.haltReason,
+        failureRate: report.failureRate,
+        chunkSize: report.chunkSize,
+        chunksProcessed: report.chunksProcessed,
+      },
+      createdAt: existingRunIndex >= 0 ? this.runs[existingRunIndex]!.createdAt : now,
+      updatedAt: now,
+    };
+
+    if (existingRunIndex >= 0) {
+      this.runs[existingRunIndex] = runData;
+    } else {
+      this.runs.push(runData);
+    }
+
+    // Record failed rows as rejects
+    for (const fail of report.failedRows) {
+      this.rejects.push({
+        id: randomUUID(),
+        batchId: input.batchId,
+        module: input.module,
+        rowIndex: fail.sourceRow,
+        errorCode: fail.errorCode,
+        errorMessage: fail.errorMessage,
+        rawPayloadHash: `hash-${fail.idempotencyKey.slice(0, 16)}`,
+        createdAt: now,
+      });
+    }
+
+    return report;
   }
 }

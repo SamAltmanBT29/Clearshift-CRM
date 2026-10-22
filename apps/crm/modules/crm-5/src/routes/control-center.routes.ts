@@ -7,9 +7,17 @@ import {
   CreateScoreInputSchema,
   CreateReconciliationInputSchema,
   CreateRejectInputSchema,
+  DetectDuplicatesInputSchema,
+  ResolveDuplicateInputSchema,
+  ExecuteBatchLoadInputSchema,
 } from '@clearshift/contracts';
 import { ControlCenterService } from '../services/control-center.service.js';
-import { DomainValidationError, DomainConflictError } from '../domain/errors.js';
+import {
+  DomainValidationError,
+  DomainConflictError,
+  AutoMergeForbiddenError,
+  DuplicateCandidateNotFoundError,
+} from '../domain/errors.js';
 
 export interface ControlCenterRouteOptions {
   service?: ControlCenterService | undefined;
@@ -111,9 +119,35 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     return reply.status(200).send(report);
   });
 
+  // 5. GET /batches/:batch - Aggregated batch summary & read-model consistency
+  fastify.get<{ Params: { batch: string } }>('/batches/:batch', async (request, reply) => {
+    const batchId = request.params.batch;
+    if (!batchId || batchId.trim().length === 0) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Batch identifier is required',
+        },
+      });
+    }
+
+    const summary = service.getBatchSummary(batchId);
+    if (!summary) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Batch summary not found for batch '${batchId}'`,
+        },
+      });
+    }
+
+    return reply.status(200).send(summary);
+  });
+
   // ---------------------------------------------------------------------------
   // Mutation API Endpoints (POST /runs, /scores, /reconciliation, /rejects)
   // ---------------------------------------------------------------------------
+
 
   // 5. POST /runs - Ingest/update run projection
   fastify.post('/runs', async (request, reply) => {
@@ -263,6 +297,132 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
         });
       }
       if (err instanceof DomainConflictError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // 9. POST /duplicates/detect - Detect exact duplicate candidates
+  fastify.post('/duplicates/detect', async (request, reply) => {
+    const parsed = DetectDuplicatesInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid duplicate detection payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const result = service.detectDuplicates(parsed.data);
+      return reply.status(200).send(result);
+    } catch (err: unknown) {
+      if (err instanceof AutoMergeForbiddenError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // 10. GET /duplicates/held - List duplicate candidates held for human review
+  fastify.get<{ Querystring: { batchId?: string; keyType?: string } }>(
+    '/duplicates/held',
+    async (request, reply) => {
+      const items = service.getHeldDuplicates(request.query);
+      return reply.status(200).send({
+        items,
+        total: items.length,
+      });
+    }
+  );
+
+  // 11. POST /duplicates/resolve - Record human merge decision with audit trail
+  fastify.post('/duplicates/resolve', async (request, reply) => {
+    const parsed = ResolveDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid duplicate resolution payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const audit = service.resolveDuplicate(parsed.data);
+      return reply.status(200).send({
+        status: 'resolved',
+        audit,
+      });
+    } catch (err: unknown) {
+      if (err instanceof DuplicateCandidateNotFoundError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+          },
+        });
+      }
+      if (err instanceof DomainValidationError) {
+        return reply.status(err.statusCode).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // 12. GET /duplicates/audit - Query duplicate resolution audit logs
+  fastify.get<{
+    Querystring: {
+      candidateId?: string;
+      actorId?: string;
+      page?: number;
+      pageSize?: number;
+    };
+  }>('/duplicates/audit', async (request, reply) => {
+    const logs = service.getDuplicateAuditLogs(request.query);
+    return reply.status(200).send(logs);
+  });
+
+  // 13. POST /batches/execute-load - Execute chunked batch load with bounded retries & stop threshold
+  fastify.post('/batches/execute-load', async (request, reply) => {
+    const parsed = ExecuteBatchLoadInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid batch load execution payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const report = await service.executeBatchLoad(parsed.data);
+      return reply.status(200).send(report);
+    } catch (err: unknown) {
+      if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
           error: {
             code: err.code,
