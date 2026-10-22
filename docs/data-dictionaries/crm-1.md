@@ -140,6 +140,7 @@ DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm test -- apps/crm
 | `/leads` | `POST` | `editor`, `migration_runner`, `admin` | Create lead. |
 | `/leads/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update a lead or transition its status. |
 | `/imports` | `POST` | `migration_runner`, `admin` | Process an import batch with required `batchId`, positive per-row `sourceRow`, and `Idempotency-Key`; same-key retries return the original result. |
+
 | `/imports/:batch` | `GET` | `viewer`, `analyst`, `admin` | Check batch execution status and committed receipts. |
 | `/imports/:batch/rejects` | `GET` | `viewer`, `analyst`, `admin` | Retrieve paginated rejected rows for review. |
 
@@ -151,5 +152,5 @@ Field-level restrictions are enforced on the server before JSON serialization an
 1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
 2. **Salary Information**: Numeric values masked as `XX,XXX` or converted to `"salary hidden"`.
 3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
-4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `	`, or `` are escaped with a leading single quote (`'`).
 5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.

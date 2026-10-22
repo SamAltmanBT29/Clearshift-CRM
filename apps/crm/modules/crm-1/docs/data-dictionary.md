@@ -150,5 +150,5 @@ Field-level restrictions are enforced on the server before JSON serialization an
 1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
 2. **Salary Information**: Numeric values masked as `XX,XXX` or converted to `"salary hidden"`.
 3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
-4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `	`, or `` are escaped with a leading single quote (`'`).
 5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
