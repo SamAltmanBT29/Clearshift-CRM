@@ -1,3 +1,4 @@
+import type { CapabilityType } from '@cs/rbac';
 import type { RoleType } from '@cs/identity';
 
 export interface BreadcrumbItem {
@@ -11,7 +12,8 @@ export interface Crm1RouteDefinition {
   fullPath: string;
   title: string;
   navLabel: string;
-  allowedRoles: readonly RoleType[];
+  requiredCapability?: CapabilityType;
+  allowedRoles?: readonly RoleType[];
   breadcrumbs: BreadcrumbItem[];
 }
 

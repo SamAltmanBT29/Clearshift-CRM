@@ -1,3 +1,4 @@
+import { hasCapability, type CapabilityType } from '@cs/rbac';
 import { isRoleAllowed } from '../../src/policies/roles.js';
 import type { RoleType } from '@cs/identity';
 import type { UserSession, AuthGuardResult } from '../types.js';
@@ -6,15 +7,15 @@ export const HUB_LOGIN_PATH = '/login';
 export const ACCESS_DENIED_PATH = '/access-denied';
 
 /**
- * Route guard enforcing Hub authentication and role-based authorization for CRM-1 UI pages.
- * - Unauthenticated or expired sessions are redirected to the Hub login screen.
- * - Disabled users are redirected to login with reason=disabled.
- * - Authenticated users with insufficient roles are redirected to /access-denied.
+ * Route guard enforcing Hub authentication and capability/role-based authorization.
+ * Unauthenticated or expired users are redirected to the Hub login screen with a returnUrl.
+ * Disabled users are redirected to login with reason=disabled.
+ * Unauthorized users are redirected to access-denied.
  */
 export function checkRouteAuth(
   session: UserSession | null | undefined,
   currentPath: string,
-  allowedRoles?: readonly RoleType[] | undefined
+  requirement?: CapabilityType | readonly RoleType[] | undefined
 ): AuthGuardResult {
   if (!session || !session.userId) {
     const encodedReturn = encodeURIComponent(currentPath);
@@ -44,14 +45,25 @@ export function checkRouteAuth(
     };
   }
 
-  if (allowedRoles && allowedRoles.length > 0) {
-    const isAuthorized = isRoleAllowed(session.roles, allowedRoles);
-    if (!isAuthorized) {
-      return {
-        isAllowed: false,
-        redirectTo: `${ACCESS_DENIED_PATH}?required=${encodeURIComponent(allowedRoles.join(','))}`,
-        reason: 'INSUFFICIENT_PERMISSIONS',
-      };
+  if (requirement) {
+    if (typeof requirement === 'string') {
+      const isAuthorized = hasCapability(session.roles, requirement);
+      if (!isAuthorized) {
+        return {
+          isAllowed: false,
+          redirectTo: `${ACCESS_DENIED_PATH}?required=${encodeURIComponent(requirement)}`,
+          reason: 'INSUFFICIENT_PERMISSIONS',
+        };
+      }
+    } else if (Array.isArray(requirement) && requirement.length > 0) {
+      const isAuthorized = isRoleAllowed(session.roles, requirement);
+      if (!isAuthorized) {
+        return {
+          isAllowed: false,
+          redirectTo: `${ACCESS_DENIED_PATH}?required=${encodeURIComponent(requirement.join(','))}`,
+          reason: 'INSUFFICIENT_PERMISSIONS',
+        };
+      }
     }
   }
 
