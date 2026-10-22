@@ -60,11 +60,16 @@ describe("CRM-1 public contracts", () => {
     expect(CRM1LeadStatusSchema.safeParse("Prospect").success).toBe(false);
   });
 
-  it("requires source system and source id to be supplied as a pair", () => {
+  it("rejects protected source and Golden ID fields in user contact mutations", () => {
     expect(CRM1ContactCreateSchema.safeParse({
       firstName: "Synthetic",
       lastName: "Contact",
-      sourceSystem: "fixture"
+      sourceSystem: "fixture",
+      sourceId: "id"
+    }).success).toBe(false);
+    expect(CRM1ContactPatchSchema.safeParse({
+      leadStatus: "Qualified",
+      goldenId: "browser-controlled"
     }).success).toBe(false);
   });
 
@@ -79,6 +84,7 @@ describe("CRM-1 public contracts", () => {
 
   it("validates import rows with their entity-specific payload", () => {
     expect(CRM1ImportCreateSchema.safeParse({
+      batchId: "00000000-0000-4000-8000-000000000001",
       sourceSystem: "synthetic-fixture",
       rows: [{
         entity: "contact",
@@ -87,8 +93,34 @@ describe("CRM-1 public contracts", () => {
       }]
     }).success).toBe(true);
     expect(CRM1ImportCreateSchema.safeParse({
+      batchId: "00000000-0000-4000-8000-000000000001",
       sourceSystem: "synthetic-fixture",
       rows: [{ entity: "lead", sourceRow: 0, data: {} }]
+    }).success).toBe(false);
+    expect(CRM1ImportCreateSchema.safeParse({
+      batchId: "00000000-0000-4000-8000-000000000001",
+      sourceSystem: "synthetic-fixture",
+      rows: [{
+        entity: "contact",
+        sourceRow: 1,
+        data: {
+          firstName: "Synthetic",
+          lastName: "Contact",
+          sourceId: "synthetic-1",
+          unsubscribed: false
+        }
+      }]
+    }).success).toBe(false);
+  });
+
+  it("requires a caller-supplied batch ID", () => {
+    expect(CRM1ImportCreateSchema.safeParse({
+      sourceSystem: "synthetic-fixture",
+      rows: [{
+        entity: "contact",
+        sourceRow: 1,
+        data: { firstName: "Synthetic", lastName: "Contact", sourceId: "synthetic-1" }
+      }]
     }).success).toBe(false);
   });
 
@@ -103,6 +135,21 @@ describe("CRM-1 public contracts", () => {
     expect(operationBlock(path, method)).toContain(
       '"409":\n          $ref: "#/components/responses/ConflictError"'
     );
+  });
+
+  it.each([
+    ["/api/v1/crm-contacts/contacts", "post"],
+    ["/api/v1/crm-contacts/contacts/{id}", "patch"],
+    ["/api/v1/crm-contacts/companies", "post"],
+    ["/api/v1/crm-contacts/companies/{id}", "patch"],
+    ["/api/v1/crm-contacts/leads", "post"],
+    ["/api/v1/crm-contacts/leads/{id}", "patch"],
+    ["/api/v1/crm-contacts/imports", "post"]
+  ])("documents validation, authorization, and internal responses for %s %s", (path, method) => {
+    const operation = operationBlock(path, method);
+    for (const status of ["422", "401", "403", "500"]) {
+      expect(operation).toContain(`"${status}":`);
+    }
   });
 
   it.each([
@@ -130,5 +177,14 @@ describe("CRM-1 public contracts", () => {
   it("documents the correlation-aware API error envelope", () => {
     expect(crm1OpenApi).toContain("required: [code, message, details, correlation_id]");
     expect(crm1OpenApi).toContain("correlation_id: { type: string }");
+  });
+
+  it("documents the required import idempotency key and replay result", () => {
+    const importOperation = operationBlock("/api/v1/crm-contacts/imports", "post");
+    expect(crm1OpenApi).toContain("required: [batchId, sourceSystem, rows]");
+    expect(importOperation).toContain("name: Idempotency-Key");
+    expect(importOperation).toContain("required: true");
+    expect(importOperation).toContain("#/components/schemas/ImportBatchDetail");
+    expect(importOperation).toContain('"409":');
   });
 });

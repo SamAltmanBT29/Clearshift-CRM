@@ -64,6 +64,10 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/contacts/{id}:
     get:
       operationId: getCRM1Contact
@@ -117,6 +121,14 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/companies:
     get:
       operationId: listCRM1Companies
@@ -164,6 +176,10 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/companies/{id}:
     get:
       operationId: getCRM1Company
@@ -217,6 +233,14 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/leads:
     get:
       operationId: listCRM1Leads
@@ -266,6 +290,10 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/leads/{id}:
     get:
       operationId: getCRM1Lead
@@ -319,12 +347,29 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/imports:
     post:
       operationId: createCRM1Import
       tags: [CRM-1]
       summary: Start an import
       description: Import processed and its batch result persisted. Allowed roles - migration_runner, admin.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Stable caller-generated key. A retry returns the original batch and receipts.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 256
       requestBody:
         required: true
         content:
@@ -337,13 +382,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ImportBatch"
+                $ref: "#/components/schemas/ImportBatchDetail"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/imports/{batch}:
     get:
       operationId: getCRM1Import
@@ -436,6 +487,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    UnauthorizedError:
+      description: Authentication is required.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenError:
+      description: The authenticated user lacks the required capability.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: An unexpected failure occurred; the response includes a correlation ID.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     NotFoundError:
       description: The requested CRM-1 record or referenced record does not exist.
       content:
@@ -484,10 +553,8 @@ components:
         updatedAt: { type: string, format: date-time }
     ContactCreate:
       type: object
+      additionalProperties: false
       required: [firstName, lastName]
-      dependentRequired:
-        sourceSystem: [sourceId]
-        sourceId: [sourceSystem]
       properties:
         firstName: { type: string, minLength: 1 }
         lastName: { type: string, minLength: 1 }
@@ -496,19 +563,10 @@ components:
         address: { type: [string, "null"] }
         companyId: { type: [string, "null"], format: uuid }
         leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
-        goldenId: { type: string, minLength: 1 }
-        sourceSystem: { type: [string, "null"] }
-        sourceId: { type: [string, "null"] }
     ContactPatch:
       type: object
+      additionalProperties: false
       minProperties: 1
-      dependentRequired:
-        sourceSystem: [sourceId]
-        sourceId: [sourceSystem]
-        consentStatus: [consentUpdatedAt]
-        consentUpdatedAt: [consentStatus]
-        unsubscribed: [unsubscribedUpdatedAt]
-        unsubscribedUpdatedAt: [unsubscribed]
       properties:
         firstName: { type: string, minLength: 1 }
         lastName: { type: string, minLength: 1 }
@@ -517,13 +575,6 @@ components:
         address: { type: [string, "null"] }
         companyId: { type: [string, "null"], format: uuid }
         leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
-        goldenId: { type: string, minLength: 1 }
-        sourceSystem: { type: [string, "null"] }
-        sourceId: { type: [string, "null"] }
-        consentStatus: { $ref: "#/components/schemas/ConsentStatus" }
-        consentUpdatedAt: { type: [string, "null"], format: date-time }
-        unsubscribed: { type: boolean }
-        unsubscribedUpdatedAt: { type: [string, "null"], format: date-time }
     ContactList:
       allOf:
         - $ref: "#/components/schemas/PageResult"
@@ -547,32 +598,24 @@ components:
         updatedAt: { type: string, format: date-time }
     CompanyCreate:
       type: object
+      additionalProperties: false
       required: [name]
-      dependentRequired:
-        sourceSystem: [sourceId]
-        sourceId: [sourceSystem]
       properties:
         name: { type: string, minLength: 1 }
         taxNumber: { type: [string, "null"] }
         email: { type: [string, "null"], format: email }
         phone: { type: [string, "null"] }
         address: { type: [string, "null"] }
-        sourceSystem: { type: [string, "null"] }
-        sourceId: { type: [string, "null"] }
     CompanyPatch:
       type: object
+      additionalProperties: false
       minProperties: 1
-      dependentRequired:
-        sourceSystem: [sourceId]
-        sourceId: [sourceSystem]
       properties:
         name: { type: string, minLength: 1 }
         taxNumber: { type: [string, "null"] }
         email: { type: [string, "null"], format: email }
         phone: { type: [string, "null"] }
         address: { type: [string, "null"] }
-        sourceSystem: { type: [string, "null"] }
-        sourceId: { type: [string, "null"] }
     CompanyList:
       allOf:
         - $ref: "#/components/schemas/PageResult"
@@ -603,26 +646,18 @@ components:
         updatedAt: { type: string, format: date-time }
     LeadCreate:
       type: object
+      additionalProperties: false
       required: [contactId, status]
-      dependentRequired:
-        sourceSystem: [sourceId]
-        sourceId: [sourceSystem]
       properties:
         contactId: { type: string, format: uuid }
         status: { $ref: "#/components/schemas/LeadStatus" }
-        sourceSystem: { type: [string, "null"] }
-        sourceId: { type: [string, "null"] }
     LeadPatch:
       type: object
+      additionalProperties: false
       minProperties: 1
-      dependentRequired:
-        sourceSystem: [sourceId]
-        sourceId: [sourceSystem]
       properties:
         contactId: { type: string, format: uuid }
         status: { $ref: "#/components/schemas/LeadStatus" }
-        sourceSystem: { type: [string, "null"] }
-        sourceId: { type: [string, "null"] }
     LeadList:
       allOf:
         - $ref: "#/components/schemas/PageResult"
@@ -632,8 +667,10 @@ components:
           items: { $ref: "#/components/schemas/Lead" }
     ImportCreate:
       type: object
-      required: [sourceSystem, rows]
+      additionalProperties: false
+      required: [batchId, sourceSystem, rows]
       properties:
+        batchId: { type: string, format: uuid }
         sourceSystem: { type: string, minLength: 1 }
         rows:
           type: array
@@ -641,18 +678,21 @@ components:
           items:
             oneOf:
               - type: object
+                additionalProperties: false
                 required: [entity, sourceRow, data]
                 properties:
                   entity: { const: contact }
                   sourceRow: { type: integer, minimum: 1 }
                   data: { $ref: "#/components/schemas/ContactImportData" }
               - type: object
+                additionalProperties: false
                 required: [entity, sourceRow, data]
                 properties:
                   entity: { const: company }
                   sourceRow: { type: integer, minimum: 1 }
                   data: { $ref: "#/components/schemas/CompanyImportData" }
               - type: object
+                additionalProperties: false
                 required: [entity, sourceRow, data]
                 properties:
                   entity: { const: lead }
@@ -660,6 +700,7 @@ components:
                   data: { $ref: "#/components/schemas/LeadImportData" }
     ContactImportData:
       type: object
+      additionalProperties: false
       required: [firstName, lastName, sourceId]
       properties:
         firstName: { type: string, minLength: 1 }
@@ -669,10 +710,10 @@ components:
         address: { type: [string, "null"] }
         companyId: { type: [string, "null"], format: uuid }
         leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
-        goldenId: { type: string, minLength: 1 }
         sourceId: { type: string, minLength: 1 }
     CompanyImportData:
       type: object
+      additionalProperties: false
       required: [name, sourceId]
       properties:
         name: { type: string, minLength: 1 }
@@ -683,6 +724,7 @@ components:
         sourceId: { type: string, minLength: 1 }
     LeadImportData:
       type: object
+      additionalProperties: false
       required: [contactId, status, sourceId]
       properties:
         contactId: { type: string, format: uuid }
