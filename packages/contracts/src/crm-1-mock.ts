@@ -367,9 +367,9 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         address: body.address ?? null,
         companyId: body.companyId ?? null,
         leadStatus: body.leadStatus ?? 'New',
-        goldenId: body.goldenId ?? `GID-SYNTH-${Date.now()}`,
-        sourceSystem: body.sourceSystem ?? 'api_mock',
-        sourceId: body.sourceId ?? `src_${Date.now()}`,
+        goldenId: `GID-SYNTH-${Date.now()}`,
+        sourceSystem: 'api_mock',
+        sourceId: `src_${Date.now()}`,
         consentStatus: 'unknown',
         consentUpdatedAt: null,
         unsubscribed: false,
@@ -421,8 +421,8 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         id: existing.id,
         createdAt: existing.createdAt,
         updatedAt: new Date().toISOString(),
-        sourceSystem: patch.sourceSystem !== undefined ? patch.sourceSystem : existing.sourceSystem,
-        sourceId: patch.sourceId !== undefined ? patch.sourceId : existing.sourceId,
+        sourceSystem: existing.sourceSystem,
+        sourceId: existing.sourceId,
         email: patch.email !== undefined ? patch.email : existing.email,
         phone: patch.phone !== undefined ? patch.phone : existing.phone,
         firstName: patch.firstName !== undefined ? patch.firstName : existing.firstName,
@@ -430,11 +430,11 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         address: patch.address !== undefined ? patch.address : existing.address,
         companyId: patch.companyId !== undefined ? patch.companyId : existing.companyId,
         leadStatus: patch.leadStatus !== undefined ? patch.leadStatus : existing.leadStatus,
-        goldenId: patch.goldenId !== undefined ? patch.goldenId : existing.goldenId,
-        consentStatus: patch.consentStatus !== undefined ? patch.consentStatus : existing.consentStatus,
-        consentUpdatedAt: patch.consentUpdatedAt !== undefined ? patch.consentUpdatedAt : existing.consentUpdatedAt,
-        unsubscribed: patch.unsubscribed !== undefined ? patch.unsubscribed : existing.unsubscribed,
-        unsubscribedUpdatedAt: patch.unsubscribedUpdatedAt !== undefined ? patch.unsubscribedUpdatedAt : existing.unsubscribedUpdatedAt,
+        goldenId: existing.goldenId,
+        consentStatus: existing.consentStatus,
+        consentUpdatedAt: existing.consentUpdatedAt,
+        unsubscribed: existing.unsubscribed,
+        unsubscribedUpdatedAt: existing.unsubscribedUpdatedAt,
       };
 
       store.contacts[contactIndex] = updated;
@@ -541,8 +541,8 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         email: body.email ?? null,
         phone: body.phone ?? null,
         address: body.address ?? null,
-        sourceSystem: body.sourceSystem ?? 'api_mock',
-        sourceId: body.sourceId ?? `comp_${Date.now()}`,
+        sourceSystem: 'api_mock',
+        sourceId: `comp_${Date.now()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -586,8 +586,8 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         email: patch.email !== undefined ? patch.email : existing.email,
         phone: patch.phone !== undefined ? patch.phone : existing.phone,
         address: patch.address !== undefined ? patch.address : existing.address,
-        sourceSystem: patch.sourceSystem !== undefined ? patch.sourceSystem : existing.sourceSystem,
-        sourceId: patch.sourceId !== undefined ? patch.sourceId : existing.sourceId,
+        sourceSystem: existing.sourceSystem,
+        sourceId: existing.sourceId,
       };
 
       store.companies[idx] = updated;
@@ -663,8 +663,8 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         id: `00000000-0000-4000-7000-${String(store.leads.length + 1).padStart(12, '0')}`,
         contactId: body.contactId,
         status: body.status,
-        sourceSystem: body.sourceSystem ?? 'api_mock',
-        sourceId: body.sourceId ?? `lead_${Date.now()}`,
+        sourceSystem: 'api_mock',
+        sourceId: `lead_${Date.now()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -723,8 +723,8 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
         updatedAt: new Date().toISOString(),
         contactId: patch.contactId !== undefined ? patch.contactId : existing.contactId,
         status: patch.status !== undefined ? patch.status : existing.status,
-        sourceSystem: patch.sourceSystem !== undefined ? patch.sourceSystem : existing.sourceSystem,
-        sourceId: patch.sourceId !== undefined ? patch.sourceId : existing.sourceId,
+        sourceSystem: existing.sourceSystem,
+        sourceId: existing.sourceId,
       };
 
       store.leads[idx] = updated;
@@ -748,7 +748,7 @@ export const crm1MockServerPlugin: FastifyPluginAsync<Crm1MockServerOptions> = a
       }
 
       const body = parsed.data;
-      const batchId = `00000000-0000-4000-6000-${String(store.batches.size + 1).padStart(12, '0')}`;
+      const batchId = body.batchId;
       const batch: CRM1ImportBatch = {
         id: batchId,
         sourceSystem: body.sourceSystem,

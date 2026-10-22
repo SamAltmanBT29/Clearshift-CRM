@@ -307,6 +307,7 @@ describe('CRM-1 Deterministic Mock Server Plugin', () => {
         method: 'POST',
         url: `${CRM1_API_PREFIX}/imports`,
         payload: {
+          batchId: '00000000-0000-4000-6000-000000000099',
           sourceSystem: 'synthetic_crm_migration',
           rows: [
             {
