@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BasePaginationQuerySchema } from './common.js';
 
 /**
  * CRM-5 Migration Control Center and Reports — API Contracts & Zod Schemas
@@ -35,36 +36,7 @@ export type MigrationRunStatus = z.infer<typeof MigrationRunStatusSchema>;
 export const ReconciliationStatusSchema = z.enum(['OK', 'UNBALANCED']);
 export type ReconciliationStatus = z.infer<typeof ReconciliationStatusSchema>;
 
-// Standard Error Envelope Schema
-export const ErrorEnvelopeSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    details: z.unknown().optional(),
-  }),
-});
-export type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
-
-// Bounded Pagination Query (hard cap of 100, rejects > 100 with 400)
-export const BasePaginationQuerySchema = z.object({
-  page: z.coerce
-    .number()
-    .int({ message: 'page must be an integer' })
-    .min(1, { message: 'page must be >= 1' })
-    .default(1),
-  pageSize: z.coerce
-    .number()
-    .int({ message: 'pageSize must be an integer' })
-    .min(1, { message: 'pageSize must be >= 1' })
-    .max(100, { message: 'pageSize cannot exceed 100' })
-    .optional(),
-  limit: z.coerce
-    .number()
-    .int({ message: 'limit must be an integer' })
-    .min(1, { message: 'limit must be >= 1' })
-    .max(100, { message: 'limit cannot exceed 100' })
-    .optional(),
-});
+// BasePaginationQuerySchema and ErrorEnvelopeSchema are unified in ./common.js (PLT-04)
 
 export const PaginationQuerySchema = BasePaginationQuerySchema.transform((data) => {
   const size = data.pageSize ?? data.limit ?? 20;
