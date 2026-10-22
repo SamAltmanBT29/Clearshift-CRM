@@ -129,19 +129,20 @@ In compliance with SDS ClearShift CRM v2.0 §7.1, endpoints strictly enforce aut
 | Endpoint | HTTP Method | Allowed Roles | Description |
 |---|---|---|---|
 | `/health` | `GET` | (public) | Health check and version verification. |
-| `/contacts` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Paginated contacts list (search first/last name or email, default pageSize 25, max 100, deterministic sort: `createdAt desc, id asc`). |
+| `/contacts` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Server-paged contacts list; case-insensitive search by first name, last name, or email; `pageSize` defaults to 25. |
 | `/contacts/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve contact by UUID. |
-| `/contacts` | `POST` | `editor`, `migration_runner`, `admin` | Create contact (validates optional companyId and leadStatus). Generates audit event. |
-| `/contacts/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Partial update of contact fields; source identity, Golden ID, consent, and unsubscribe fields are server-maintained. Generates audit event. |
-| `/companies` | `GET` | `viewer`, `editor`, `admin` | Paginated companies list (search name, email, or taxNumber, default pageSize 20, max 100). |
+| `/contacts` | `POST` | `editor`, `migration_runner`, `admin` | Create contact; an optional company link and lead status are validated. |
+| `/contacts/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Partially update editable fields; source identity, Golden ID, consent, and unsubscribe fields are server-maintained. |
+| `/companies` | `GET` | `viewer`, `editor`, `admin` | Server-paged companies list; search by name, email, or tax number; `pageSize` defaults to 25. |
 | `/companies/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve company by UUID. |
-| `/companies` | `POST` | `editor`, `migration_runner`, `admin` | Create company. Generates audit event. |
-| `/companies/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update editable company fields; source identity is server-maintained. Generates audit event. |
-| `/leads` | `GET` | `viewer`, `editor`, `admin` | Paginated leads list (filter by status, search linked contact's name/email, default pageSize 20, max 100). |
+| `/companies` | `POST` | `editor`, `migration_runner`, `admin` | Create company. |
+| `/companies/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update editable company fields; source identity is server-maintained. |
+| `/leads` | `GET` | `viewer`, `editor`, `admin` | Server-paged leads list; search by linked contact name or email; `pageSize` defaults to 25. |
 | `/leads/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve lead by UUID. |
-| `/leads` | `POST` | `editor`, `migration_runner`, `admin` | Create lead. Generates audit event. |
-| `/leads/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update a lead or transition its status. Generates audit event. |
-| `/imports` | `POST` | `migration_runner`, `admin` | Initiate migration batch with required batchId, positive per-row sourceRow, and Idempotency-Key; same-key retries return the original result. Generates audit event. |
+| `/leads` | `POST` | `editor`, `migration_runner`, `admin` | Create lead. |
+| `/leads/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update a lead or transition its status. |
+| `/imports` | `POST` | `migration_runner`, `admin` | Process an import batch with required `batchId`, positive per-row `sourceRow`, and `Idempotency-Key`; same-key retries return the original result. |
+
 | `/imports/:batch` | `GET` | `viewer`, `analyst`, `admin` | Check batch execution status and committed receipts. |
 | `/imports/:batch/rejects` | `GET` | `viewer`, `analyst`, `admin` | Retrieve paginated rejected rows for review. |
 
