@@ -13,3 +13,4 @@ export * from './crm-1-duplicates.js';
 export * from './crm-1-mock.js';
 export * from './import-target.js';
 export * from './golden-id.js';
+export * from './roles.js';
