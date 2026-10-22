@@ -152,7 +152,7 @@ Field-level restrictions are enforced on the server before JSON serialization an
 1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
 2. **Salary Information**: Numeric values masked as `XX,XXX` or converted to `"salary hidden"`.
 3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
-4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `	`, or `` are escaped with a leading single quote (`'`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
 5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
 
 ---
@@ -168,3 +168,29 @@ All domain mutations, migration executions, and privileged actions produce appen
 * `correlation_id`: Request correlation ID or Migration Batch UUID.
 * `result`: Outcome status (`success` or `failure`).
 * `metadata`: Contextual payload with sensitive fields pre-redacted (no raw rows, tokens, or plaintext credentials).
+
+---
+
+## Frontend Module Routes, Navigation & Layout Shell (CRM1-16)
+
+### Module Route Registration
+CRM-1 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-1/contacts` | `crm1-contacts` | Contacts Directory | Contacts | `module.read` |
+| `/crm-1/companies` | `crm1-companies` | Companies Directory | Companies | `module.read` |
+| `/crm-1/leads` | `crm1-leads` | Leads Pipeline | Leads | `module.read` |
+| `/crm-1/duplicates` | `crm1-duplicates` | Exact Duplicate Candidate Review | Duplicate Review | `module.read` |
+| `/crm-1/imports` | `crm1-imports` | Import Batches & Receipts | Imports | `module.read` |
+
+### Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `module.read` capability. Users lacking this capability are redirected to `/access-denied?required=module.read`.
+
+### Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-1 - <View Title>`.
