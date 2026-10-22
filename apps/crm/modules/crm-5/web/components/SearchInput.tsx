@@ -32,19 +32,23 @@ export const SearchInput: React.FC<SearchInputProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState<string>(value ?? defaultValue);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFirstMount = useRef(true);
+  const isUserTyping = useRef(false);
 
-  // Synchronize internal state with external value changes
+  // Synchronize internal state with external value changes without triggering debounce
   useEffect(() => {
     if (value !== undefined) {
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      isUserTyping.current = false;
       setInputValue(value);
     }
   }, [value]);
 
-  // Debounced notification on keystrokes
+  // Debounced notification on user keystrokes only
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
+    if (!isUserTyping.current) {
       return;
     }
 
@@ -54,6 +58,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
 
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
+      isUserTyping.current = false;
       onChange?.(inputValue);
     }, debounceMs);
 
@@ -65,6 +70,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   }, [inputValue, debounceMs, onChange]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    isUserTyping.current = true;
     setInputValue(e.target.value);
   };
 
@@ -73,6 +79,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
+    isUserTyping.current = false;
     setInputValue('');
     onChange?.('');
     onClear?.();
@@ -85,6 +92,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
+      isUserTyping.current = false;
       onChange?.(inputValue);
       onSubmit?.(inputValue);
     } else if (e.key === 'Escape') {

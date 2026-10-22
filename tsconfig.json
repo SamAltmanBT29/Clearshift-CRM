@@ -25,69 +25,27 @@
     "outDir": "./dist",
     "rootDir": ".",
     "paths": {
-      "@clearshift/database": [
-        "./packages/database/src/index.ts"
-      ],
-      "@clearshift/contracts": [
-        "./packages/contracts/src/index.ts"
-      ],
-      "@clearshift/ui": [
-        "./packages/ui/src/index.ts"
-      ],
-      "@cs/kernel": [
-        "./packages/kernel/src/index.ts"
-      ],
-      "@cs/kernel/*": [
-        "./packages/kernel/src/*"
-      ],
-      "@cs/core": [
-        "./packages/core/src/index.ts"
-      ],
-      "@cs/core/*": [
-        "./packages/core/src/*"
-      ],
-      "@cs/kit": [
-        "./packages/kit/src/index.ts"
-      ],
-      "@cs/kit/*": [
-        "./packages/kit/src/*"
-      ],
-      "@cs/identity": [
-        "./packages/identity/src/index.ts"
-      ],
-      "@cs/identity/*": [
-        "./packages/identity/src/*"
-      ],
-      "@cs/rbac": [
-        "./packages/rbac/src/index.ts"
-      ],
-      "@cs/rbac/*": [
-        "./packages/rbac/src/*"
-      ],
-      "@cs/db": [
-        "./packages/database/src/index.ts"
-      ],
-      "@cs/db/*": [
-        "./packages/database/src/*"
-      ],
-      "@cs/ui": [
-        "./packages/ui/src/index.ts"
-      ],
-      "@cs/mod-crm1": [
-        "./apps/crm/modules/crm-1/src/index.ts"
-      ],
-      "@cs/mod-crm2": [
-        "./apps/crm/modules/crm-2/src/index.ts"
-      ],
-      "@cs/mod-crm3": [
-        "./apps/crm/modules/crm-3/src/index.ts"
-      ],
-      "@cs/mod-crm4": [
-        "./apps/crm/modules/crm-4/src/index.ts"
-      ],
-      "@cs/mod-crm5": [
-        "./apps/crm/modules/crm-5/src/index.ts"
-      ]
+      "@clearshift/database": ["./packages/database/src/index.ts"],
+      "@clearshift/contracts": ["./packages/contracts/src/index.ts"],
+      "@clearshift/ui": ["./packages/ui/src/index.ts"],
+      "@cs/kernel": ["./packages/kernel/src/index.ts"],
+      "@cs/kernel/*": ["./packages/kernel/src/*"],
+      "@cs/core": ["./packages/core/src/index.ts"],
+      "@cs/core/*": ["./packages/core/src/*"],
+      "@cs/kit": ["./packages/kit/src/index.ts"],
+      "@cs/kit/*": ["./packages/kit/src/*"],
+      "@cs/identity": ["./packages/identity/src/index.ts"],
+      "@cs/identity/*": ["./packages/identity/src/*"],
+      "@cs/rbac": ["./packages/rbac/src/index.ts"],
+      "@cs/rbac/*": ["./packages/rbac/src/*"],
+      "@cs/db": ["./packages/database/src/index.ts"],
+      "@cs/db/*": ["./packages/database/src/*"],
+      "@cs/ui": ["./packages/ui/src/index.ts"],
+      "@cs/mod-crm1": ["./apps/crm/modules/crm-1/src/index.ts"],
+      "@cs/mod-crm2": ["./apps/crm/modules/crm-2/src/index.ts"],
+      "@cs/mod-crm3": ["./apps/crm/modules/crm-3/src/index.ts"],
+      "@cs/mod-crm4": ["./apps/crm/modules/crm-4/src/index.ts"],
+      "@cs/mod-crm5": ["./apps/crm/modules/crm-5/src/index.ts"]
     },
     "jsx": "react"
   },
