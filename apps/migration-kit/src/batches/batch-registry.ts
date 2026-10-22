@@ -631,6 +631,13 @@ export class BatchRegistryService {
   }
 
   /**
+   * Retrieves a batch by its ID
+   */
+  async getBatch(batchId: string): Promise<KitBatch | null> {
+    return await this.batchRepo.findById(batchId);
+  }
+
+  /**
    * Lists batches with optional filtering
    */
   async listBatches(filter?: BatchListFilter): Promise<KitBatch[]> {

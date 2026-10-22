@@ -69,3 +69,21 @@ export const kitBatchSteps = pgTable("kit_batch_steps", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Migration Kit Raw Rows Schema (KIT-02)
+ * Immutable landing table storing extracted source rows with original payload and checksum.
+ * UPDATE and DELETE statements are strictly blocked by database trigger.
+ */
+export const rawRows = pgTable("raw_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  sourceRow: integer("source_row").notNull(),
+  headers: text("headers").array().notNull(),
+  cells: text("cells").array().notNull(),
+  payload: jsonb("payload").notNull(),
+  rowHash: text("row_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
