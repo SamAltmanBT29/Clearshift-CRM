@@ -340,3 +340,14 @@ The CRM-5 primary collection table renders structured data matching the entity d
 * **Deterministic Toggle Cycle:** Clicking a sortable column header cycles through `asc` ↔ `desc`.
 * **WAI-ARIA Accessibility:** Headers announce sort direction via `aria-sort="ascending" | "descending" | "none"` and keyboard-accessible buttons (`<button class="cs-th-sort-btn">`).
 * **Query Serialization:** Binds to standard API parameters `sort=<columnKey>&order=asc|desc&page=<N>&pageSize=<N>&limit=<N>`.
+
+## 10. Profiler (CRM5-26)
+
+`apps/crm/modules/crm-5/src/kit/profiler.ts` — `profileCrm5Batch(rows)`; read-only, never mutates input.
+
+| Output | Meaning |
+|---|---|
+| `columnStats[col]` | `totalValues`, `nullCount/Rate`, `distinctCount`, `invalidFormatCount/Rate` |
+| `defectsByCategory` | 11 categories, 1-based `recordIndices`, asserted against `tests/fixtures/manifest.json` |
+| `exactDuplicateCount` | repeated `id` or repeated `(batch_id, step)` |
+| `qualityMetrics` | 5 fractions + `overallScore` via `calculateQualityScore`; `null` (N/A) if unavailable |
