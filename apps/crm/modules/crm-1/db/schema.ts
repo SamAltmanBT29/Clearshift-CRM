@@ -136,6 +136,8 @@ export const crm1ImportBatches = crm1Schema.table(
     id: uuid("id").primaryKey().defaultRandom(),
     sourceSystem: text("source_system").notNull(),
     status: text("status").notNull().default("pending"),
+    idempotencyKey: text("idempotency_key"),
+    requestHash: text("request_hash"),
     loadedCount: integer("loaded_count").notNull().default(0),
     rejectedCount: integer("rejected_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -152,6 +154,12 @@ export const crm1ImportBatches = crm1Schema.table(
       sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`
     ),
     check(
+      "crm1_import_batches_idempotency_pair_check",
+      sql`(${table.idempotencyKey} IS NULL AND ${table.requestHash} IS NULL) OR
+        (${table.idempotencyKey} IS NOT NULL AND length(btrim(${table.idempotencyKey})) > 0 AND
+          ${table.requestHash} IS NOT NULL AND length(btrim(${table.requestHash})) > 0)`
+    ),
+    check(
       "crm1_import_batches_loaded_count_check",
       sql`${table.loadedCount} >= 0`
     ),
@@ -159,6 +167,7 @@ export const crm1ImportBatches = crm1Schema.table(
       "crm1_import_batches_rejected_count_check",
       sql`${table.rejectedCount} >= 0`
     ),
+    uniqueIndex("crm1_import_batches_idempotency_key").on(table.idempotencyKey),
     index("crm1_import_batches_created_at_idx").on(table.createdAt)
   ]
 );
