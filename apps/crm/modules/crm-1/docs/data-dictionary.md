@@ -117,22 +117,51 @@ DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm test -- apps/crm
 
 ---
 
-## Public API Endpoints (`/api/v1/crm-contacts`)
+## Public API Endpoints (`/api/v1/crm-contacts`) & Authorization Matrix
 
-* `GET /health`: Health check and version verification.
-* `GET /contacts`: Paginated contacts list (search name/email, default pageSize 25, max 100, deterministic sort: `createdAt desc, id asc`).
-* `GET /contacts/:id`: Retrieve contact by UUID.
-* `POST /contacts`: Create contact (validates optional companyId and leadStatus).
-* `PATCH /contacts/:id`: Partial update of contact fields.
-* `GET /companies`: Paginated companies list (search name/taxNumber, default pageSize 20, max 100).
-* `GET /companies/:id`: Retrieve company by UUID.
-* `POST /companies`: Create company.
-* `PATCH /companies/:id`: Update company.
-* `GET /leads`: Paginated leads list (filter by status, search name/email, default pageSize 20, max 100).
-* `GET /leads/:id`: Retrieve lead by UUID.
-* `POST /leads`: Create lead.
-* `PATCH /leads/:id`: Update lead.
-* `POST /imports`: Initiate migration batch.
-* `GET /imports/:batch`: Check batch execution status.
-* `GET /imports/:batch/rejects`: Retrieve paginated rejected rows for review.
+In compliance with SDS ClearShift CRM v2.0 §7.1, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
+
+| Endpoint | HTTP Method | Allowed Roles | Description |
+|---|---|---|---|
+| `/health` | `GET` | (public) | Health check and version verification. |
+| `/contacts` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Paginated contacts list (search name/email, default pageSize 25, max 100, deterministic sort: `createdAt desc, id asc`). |
+| `/contacts/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve contact by UUID. |
+| `/contacts` | `POST` | `editor`, `migration_runner`, `admin` | Create contact (validates optional companyId and leadStatus). Generates audit event. |
+| `/contacts/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Partial update of contact fields. Generates audit event. |
+| `/companies` | `GET` | `viewer`, `editor`, `admin` | Paginated companies list (search name/taxNumber, default pageSize 20, max 100). |
+| `/companies/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve company by UUID. |
+| `/companies` | `POST` | `editor`, `migration_runner`, `admin` | Create company. Generates audit event. |
+| `/companies/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update company. Generates audit event. |
+| `/leads` | `GET` | `viewer`, `editor`, `admin` | Paginated leads list (filter by status, search name/email, default pageSize 20, max 100). |
+| `/leads/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve lead by UUID. |
+| `/leads` | `POST` | `editor`, `migration_runner`, `admin` | Create lead. Generates audit event. |
+| `/leads/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update lead. Generates audit event. |
+| `/imports` | `POST` | `migration_runner`, `admin` | Initiate migration batch. Generates audit event. |
+| `/imports/:batch` | `GET` | `viewer`, `analyst`, `admin` | Check batch execution status and committed receipts. |
+| `/imports/:batch/rejects` | `GET` | `viewer`, `analyst`, `admin` | Retrieve paginated rejected rows for review. |
+
+---
+
+## Sensitive Fields & Masking Policy
+
+Field-level restrictions are enforced on the server before JSON serialization and export:
+1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
+2. **Salary Information**: Numeric values masked as `XX,XXX` or converted to `"salary hidden"`.
+3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
+5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
+
+---
+
+## Audit Trail Specification
+
+All domain mutations, migration executions, and privileged actions produce append-only audit records containing:
+* `actor`: Authenticated User UUID (`sub`) and role set.
+* `action`: Action verb (`contact_create`, `contact_update`, `company_create`, `company_update`, `lead_create`, `lead_update`, `import_start`, etc.).
+* `timestamp`: ISO-8601 UTC timestamp.
+* `entity`: Affected entity name (`contact`, `company`, `lead`, `import_batch`).
+* `entity_id`: Primary record UUID.
+* `correlation_id`: Request correlation ID or Migration Batch UUID.
+* `result`: Outcome status (`success` or `failure`).
+* `metadata`: Contextual payload with sensitive fields pre-redacted (no raw rows, tokens, or plaintext credentials).
 

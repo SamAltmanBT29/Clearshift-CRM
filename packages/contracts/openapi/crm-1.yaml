@@ -18,6 +18,7 @@ paths:
       operationId: listCRM1Contacts
       tags: [CRM-1]
       summary: Search and page contacts
+      description: Contacts matching the name or email search, with server pagination. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
@@ -31,10 +32,15 @@ paths:
                 $ref: "#/components/schemas/ContactList"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
     post:
       operationId: createCRM1Contact
       tags: [CRM-1]
       summary: Create a contact
+      description: Create a contact record. Allowed roles - editor, migration_runner, admin.
       requestBody:
         required: true
         content:
@@ -50,6 +56,10 @@ paths:
                 $ref: "#/components/schemas/Contact"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
         "409":
@@ -59,6 +69,7 @@ paths:
       operationId: getCRM1Contact
       tags: [CRM-1]
       summary: Retrieve a contact by UUID
+      description: Retrieve a contact record by UUID. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - $ref: "#/components/parameters/PathId"
       responses:
@@ -70,12 +81,17 @@ paths:
                 $ref: "#/components/schemas/Contact"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
     patch:
       operationId: updateCRM1Contact
       tags: [CRM-1]
       summary: Update a contact
+      description: Update an existing contact record. Allowed roles - editor, migration_runner, admin.
       parameters:
         - $ref: "#/components/parameters/PathId"
       requestBody:
@@ -93,6 +109,10 @@ paths:
                 $ref: "#/components/schemas/Contact"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
         "409":
@@ -102,6 +122,7 @@ paths:
       operationId: listCRM1Companies
       tags: [CRM-1]
       summary: List companies
+      description: Server-paged companies. Allowed roles - viewer, editor, admin.
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
@@ -113,10 +134,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CompanyList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
     post:
       operationId: createCRM1Company
       tags: [CRM-1]
       summary: Create a company
+      description: Create a company record. Allowed roles - editor, migration_runner, admin.
       requestBody:
         required: true
         content:
@@ -132,6 +158,10 @@ paths:
                 $ref: "#/components/schemas/Company"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "409":
           $ref: "#/components/responses/ConflictError"
   /api/v1/crm-contacts/companies/{id}:
@@ -139,6 +169,7 @@ paths:
       operationId: getCRM1Company
       tags: [CRM-1]
       summary: Retrieve a company by UUID
+      description: Retrieve a company record by UUID. Allowed roles - viewer, editor, admin.
       parameters:
         - $ref: "#/components/parameters/PathId"
       responses:
@@ -150,12 +181,17 @@ paths:
                 $ref: "#/components/schemas/Company"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
     patch:
       operationId: updateCRM1Company
       tags: [CRM-1]
       summary: Update a company
+      description: Update an existing company record. Allowed roles - editor, migration_runner, admin.
       parameters:
         - $ref: "#/components/parameters/PathId"
       requestBody:
@@ -173,6 +209,10 @@ paths:
                 $ref: "#/components/schemas/Company"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
         "409":
@@ -182,6 +222,7 @@ paths:
       operationId: listCRM1Leads
       tags: [CRM-1]
       summary: List leads
+      description: Server-paged leads. Allowed roles - viewer, editor, admin.
       parameters:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
@@ -193,10 +234,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LeadList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
     post:
       operationId: createCRM1Lead
       tags: [CRM-1]
       summary: Create a lead
+      description: Create a lead record. Allowed roles - editor, migration_runner, admin.
       requestBody:
         required: true
         content:
@@ -212,6 +258,10 @@ paths:
                 $ref: "#/components/schemas/Lead"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
         "409":
@@ -221,6 +271,7 @@ paths:
       operationId: getCRM1Lead
       tags: [CRM-1]
       summary: Retrieve a lead by UUID
+      description: Retrieve a lead record by UUID. Allowed roles - viewer, editor, admin.
       parameters:
         - $ref: "#/components/parameters/PathId"
       responses:
@@ -232,12 +283,17 @@ paths:
                 $ref: "#/components/schemas/Lead"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
     patch:
       operationId: updateCRM1Lead
       tags: [CRM-1]
       summary: Update a lead
+      description: Update an existing lead record. Allowed roles - editor, migration_runner, admin.
       parameters:
         - $ref: "#/components/parameters/PathId"
       requestBody:
@@ -255,6 +311,10 @@ paths:
                 $ref: "#/components/schemas/Lead"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
         "409":
@@ -264,6 +324,7 @@ paths:
       operationId: createCRM1Import
       tags: [CRM-1]
       summary: Start an import
+      description: Import processed and its batch result persisted. Allowed roles - migration_runner, admin.
       requestBody:
         required: true
         content:
@@ -279,11 +340,16 @@ paths:
                 $ref: "#/components/schemas/ImportBatch"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
   /api/v1/crm-contacts/imports/{batch}:
     get:
       operationId: getCRM1Import
       tags: [CRM-1]
       summary: Get import status and receipts
+      description: Import batch and committed row receipts. Allowed roles - viewer, analyst, admin.
       parameters:
         - name: batch
           in: path
@@ -298,6 +364,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportBatchDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
   /api/v1/crm-contacts/imports/{batch}/rejects:
@@ -305,6 +375,7 @@ paths:
       operationId: listCRM1ImportRejects
       tags: [CRM-1]
       summary: List import rejects
+      description: Server-paged rejects for the import. Allowed roles - viewer, analyst, admin.
       parameters:
         - name: batch
           in: path
@@ -321,6 +392,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RejectList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
 components:
@@ -369,6 +444,18 @@ components:
             $ref: "#/components/schemas/Error"
     ConflictError:
       description: The request conflicts with an existing identifier or CRM-1 state invariant.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnauthorizedError:
+      description: Authentication required or invalid/expired/disabled token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenError:
+      description: Authenticated identity does not possess the required role for this operation.
       content:
         application/json:
           schema:
