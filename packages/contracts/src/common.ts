@@ -190,3 +190,27 @@ export function createPaginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema
     meta: PaginationMetaSchema,
   });
 }
+
+/**
+ * Standard Health Check Response Schema (PLT-11)
+ */
+export const HealthStatusSchema = z.enum(['ok', 'degraded', 'down']);
+export type HealthStatus = z.infer<typeof HealthStatusSchema>;
+
+export const HealthResponseSchema = z.object({
+  status: HealthStatusSchema,
+  module: z.string().min(1),
+  version: z.string().min(1),
+  timestamp: z.string().datetime().optional(),
+  dependencies: z
+    .record(
+      z.object({
+        status: HealthStatusSchema,
+        latencyMs: z.number().optional(),
+        message: z.string().optional(),
+      })
+    )
+    .optional(),
+});
+
+export type HealthResponse = z.infer<typeof HealthResponseSchema>;
