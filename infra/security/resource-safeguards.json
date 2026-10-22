@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClearShift Platform Resource Safeguards",
+  "description": "Resource limits and parser thresholds per Project Plan v3.0 and PLT-12 baseline",
+  "version": "1.0.0",
+  "limits": {
+    "max_file_size_bytes": 52428800,
+    "max_file_size_human": "50 MB",
+    "max_row_count": 50000,
+    "max_cell_length_bytes": 32768,
+    "batch_chunk_size": 500,
+    "failure_halt_threshold_percent": 10.0,
+    "allowed_file_types": [
+      ".csv",
+      ".xlsx"
+    ],
+    "allowed_delimiters": [
+      ",",
+      ";",
+      "\t"
+    ],
+    "max_request_payload_bytes": 52428800
+  },
+  "protections": {
+    "formula_injection_neutralization": true,
+    "neutralization_prefix": "'",
+    "neutralized_trigger_characters": [
+      "=",
+      "+",
+      "-",
+      "@"
+    ],
+    "dynamic_sql_identifier_allowlist_enforced": true,
+    "html_output_escaping_enforced": true,
+    "cloud_uploaders_forbidden": true,
+    "external_storage_forbidden": true,
+    "real_customer_employee_data_forbidden": true
+  }
+}
