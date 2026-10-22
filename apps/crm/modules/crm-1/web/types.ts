@@ -12,14 +12,16 @@ export interface Crm1RouteDefinition {
   fullPath: string;
   title: string;
   navLabel: string;
-  requiredCapability: CapabilityType;
+  requiredCapability?: CapabilityType;
+  allowedRoles?: readonly RoleType[];
   breadcrumbs: BreadcrumbItem[];
 }
 
 export interface UserSession {
   userId: string;
   roles: RoleType[];
-  expiresAt: number; // unix timestamp in seconds
+  expiresAt: number; // Unix timestamp in seconds
+  disabled?: boolean | undefined;
 }
 
 export interface AuthGuardResult {

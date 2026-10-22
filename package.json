@@ -16,7 +16,11 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "validate:frontend": "node scripts/validate-frontend.js"
+    "validate:frontend": "node scripts/validate-frontend.js",
+    "security:audit": "./infra/security/dependency-audit.sh",
+    "security:secrets": "./infra/security/secret-scan.sh",
+    "security:repo": "./infra/security/repo-audit.sh",
+    "security:check": "./infra/security/dependency-audit.sh && ./infra/security/secret-scan.sh && ./infra/security/repo-audit.sh"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
