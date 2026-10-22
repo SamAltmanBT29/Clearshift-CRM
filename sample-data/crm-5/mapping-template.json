@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "checksum": "b76ed139b68d1846f671aa70d380777f7512cd8755d00dcd30eabb592b4553e9",
+  "template": {
+    "id": "crm5-runs-canonical",
+    "name": "CRM-5 Runs Canonical",
+    "version": 1,
+    "entity": "crm5_runs",
+    "fields": [
+      {
+        "source": "id",
+        "target": "id",
+        "type": "uuid"
+      },
+      {
+        "source": "batch_id",
+        "target": "batchId",
+        "type": "string",
+        "required": true
+      },
+      {
+        "source": "module",
+        "target": "module",
+        "type": "string",
+        "required": true,
+        "enumName": "module"
+      },
+      {
+        "source": "step",
+        "target": "step",
+        "type": "string",
+        "required": true,
+        "enumName": "step"
+      },
+      {
+        "source": "status",
+        "target": "status",
+        "type": "string",
+        "enumName": "status",
+        "defaultValue": "pending"
+      },
+      {
+        "source": "records_in",
+        "target": "recordsIn",
+        "type": "integer",
+        "defaultValue": 0
+      },
+      {
+        "source": "records_out",
+        "target": "recordsOut",
+        "type": "integer",
+        "defaultValue": 0
+      },
+      {
+        "source": "records_rejected",
+        "target": "recordsRejected",
+        "type": "integer",
+        "defaultValue": 0
+      },
+      {
+        "source": "started_at",
+        "target": "startedAt",
+        "type": "date",
+        "omitWhenBlank": true
+      },
+      {
+        "source": "completed_at",
+        "target": "completedAt",
+        "type": "date"
+      },
+      {
+        "source": "metadata",
+        "target": "metadata",
+        "type": "json"
+      }
+    ]
+  }
+}

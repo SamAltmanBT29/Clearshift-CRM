@@ -29,6 +29,7 @@ apiSuite("CRM-1 mutation API", () => {
   const batchIds: string[] = [];
   let editorAuthorization: string;
   let viewerAuthorization: string;
+  let migrationAuthorization: string;
 
   beforeAll(async () => {
     const { rows } = await pool.query<{ contacts: string | null; keyColumn: string | null }>(
@@ -44,7 +45,8 @@ apiSuite("CRM-1 mutation API", () => {
     await app.register(jwtPlugin);
     await app.register(createCrm1Routes(db), { prefix: CRM1_API_PREFIX });
     await app.ready();
-    editorAuthorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR, Roles.MIGRATION_RUNNER])}`;
+    editorAuthorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR])}`;
+    migrationAuthorization = `Bearer ${await signAccessToken(`${fixture}-migration`, [Roles.MIGRATION_RUNNER])}`;
     viewerAuthorization = `Bearer ${await signAccessToken(`${fixture}-viewer`, [Roles.VIEWER])}`;
   });
 
@@ -66,6 +68,7 @@ apiSuite("CRM-1 mutation API", () => {
   });
 
   const headers = () => ({ authorization: editorAuthorization });
+  const migrationHeaders = () => ({ authorization: migrationAuthorization });
 
   it("requires write authorization and validates create/edit bodies at the API boundary", async () => {
     const unauthenticated = await app.inject({
@@ -278,7 +281,7 @@ apiSuite("CRM-1 mutation API", () => {
     const first = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { ...headers(), "Idempotency-Key": idempotencyKey },
+      headers: { ...migrationHeaders(), "Idempotency-Key": idempotencyKey },
       payload: body
     });
     expect(first.statusCode).toBe(201);
@@ -290,7 +293,7 @@ apiSuite("CRM-1 mutation API", () => {
     const replay = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { ...headers(), "Idempotency-Key": idempotencyKey },
+      headers: { ...migrationHeaders(), "Idempotency-Key": idempotencyKey },
       payload: body
     });
     expect(replay.statusCode).toBe(201);
@@ -308,7 +311,7 @@ apiSuite("CRM-1 mutation API", () => {
     const laterBatch = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { ...headers(), "Idempotency-Key": `${fixture}-second-import-key` },
+      headers: { ...migrationHeaders(), "Idempotency-Key": `${fixture}-second-import-key` },
       payload: {
         batchId: crypto.randomUUID(),
         sourceSystem: body.sourceSystem,
@@ -334,7 +337,7 @@ apiSuite("CRM-1 mutation API", () => {
     const mismatchedReplay = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { ...headers(), "Idempotency-Key": idempotencyKey },
+      headers: { ...migrationHeaders(), "Idempotency-Key": idempotencyKey },
       payload: {
         ...body,
         rows: [{
@@ -354,7 +357,7 @@ apiSuite("CRM-1 mutation API", () => {
     const missingKey = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: headers(),
+      headers: migrationHeaders(),
       payload: body
     });
     expect(missingKey.statusCode).toBe(400);
@@ -362,7 +365,7 @@ apiSuite("CRM-1 mutation API", () => {
     const missingBatchId = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/imports`,
-      headers: { ...headers(), "Idempotency-Key": `${fixture}-missing-batch` },
+      headers: { ...migrationHeaders(), "Idempotency-Key": `${fixture}-missing-batch` },
       payload: {
         sourceSystem: body.sourceSystem,
         rows: body.rows
