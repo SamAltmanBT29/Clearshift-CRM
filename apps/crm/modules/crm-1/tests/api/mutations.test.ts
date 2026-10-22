@@ -44,7 +44,7 @@ apiSuite("CRM-1 mutation API", () => {
     await app.register(jwtPlugin);
     await app.register(createCrm1Routes(db), { prefix: CRM1_API_PREFIX });
     await app.ready();
-    editorAuthorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR])}`;
+    editorAuthorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR, Roles.MIGRATION_RUNNER])}`;
     viewerAuthorization = `Bearer ${await signAccessToken(`${fixture}-viewer`, [Roles.VIEWER])}`;
   });
 
