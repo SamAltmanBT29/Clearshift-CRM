@@ -152,14 +152,23 @@ apiSuite("CRM-1 REST API", () => {
     expect(leadResponse.statusCode).toBe(201);
     const lead = leadResponse.json();
     leadIds.push(lead.id);
-    const patchLead = await app.inject({
+    const patchLeadWorking = await app.inject({
+      method: "PATCH",
+      url: `${CRM1_API_PREFIX}/leads/${lead.id}`,
+      headers: { authorization },
+      payload: { status: "Working" }
+    });
+    expect(patchLeadWorking.statusCode).toBe(200);
+    expect(patchLeadWorking.json().status).toBe("Working");
+
+    const patchLeadQualified = await app.inject({
       method: "PATCH",
       url: `${CRM1_API_PREFIX}/leads/${lead.id}`,
       headers: { authorization },
       payload: { status: "Qualified" }
     });
-    expect(patchLead.statusCode).toBe(200);
-    expect(patchLead.json().status).toBe("Qualified");
+    expect(patchLeadQualified.statusCode).toBe(200);
+    expect(patchLeadQualified.json().status).toBe("Qualified");
 
     const importResponse = await app.inject({
       method: "POST",
