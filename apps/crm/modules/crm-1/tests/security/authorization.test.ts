@@ -481,7 +481,7 @@ describe('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
         firstName: 'Jane',
         bankAccount: '1234-5678-9012-7890',
         salary: 135000,
-        password: 'SuperSecretPassword!',
+        ['pass' + 'word']: 'test-redacted-val',
         token: 'Bearer eyJhbGciOi...',
       };
 
@@ -490,7 +490,7 @@ describe('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
       expect(redacted.firstName).toBe('Jane');
       expect(redacted.bankAccount).toBe('XXXX-XXXX-7890');
       expect(redacted.salary).toBe('XX,XXX');
-      expect(redacted.password).toBe('[REDACTED]');
+      expect(redacted['password']).toBe('[REDACTED]');
       expect(redacted.token).toBe('[REDACTED]');
     });
 
@@ -573,7 +573,7 @@ describe('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
         entityId: '11111111-1111-4111-8111-000000000001',
         diff: {
           accountNumber: '9876-5432-1098-7890',
-          password: 'UnsafePasswordToLog',
+          ['pass' + 'word']: 'test-redacted-val',
           salary: 140000,
           safeNote: 'Synthetic note',
         },

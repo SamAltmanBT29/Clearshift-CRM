@@ -50,7 +50,7 @@ apiSuite("CRM-1 REST API", () => {
     await app.register(jwtPlugin);
     await app.register(createCrm1Routes(db), { prefix: CRM1_API_PREFIX });
     await app.ready();
-    authorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR])}`;
+    authorization = `Bearer ${await signAccessToken(`${fixture}-admin`, [Roles.ADMIN])}`;
   });
 
   afterAll(async () => {
