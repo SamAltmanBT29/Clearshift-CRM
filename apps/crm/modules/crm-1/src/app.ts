@@ -1,10 +1,14 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { AppError } from '@cs/kernel';
 import { jwtPlugin } from '@cs/identity';
+import { crm1AuthPlugin } from './plugins/auth.js';
 import { crm1Routes, type Crm1RouteOptions } from './routes/crm1.routes.js';
 import { Crm1Service } from './services/crm1.service.js';
+import { Crm1AuditService, crm1Audit } from './services/audit.js';
 
-export interface AppOptions extends Crm1RouteOptions {}
+export interface AppOptions extends Crm1RouteOptions {
+  auditService?: Crm1AuditService | undefined;
+}
 
 /**
  * Builds and configures the Fastify application for CRM-1.
@@ -16,6 +20,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
 
   app.register(jwtPlugin);
+  app.register(crm1AuthPlugin);
 
   app.setErrorHandler((error, request, reply) => {
     const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
@@ -51,10 +56,12 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
 
   const service = opts.service ?? new Crm1Service();
+  const auditService = opts.auditService ?? crm1Audit;
 
   app.register(crm1Routes, {
     prefix: '/api/v1/crm-contacts',
     service,
+    auditService,
   });
 
   return app;

@@ -1,0 +1,247 @@
+/* CRM-1 Contacts, Companies and Leads Shell Styles */
+/* Consumes shared design system tokens from @clearshift/ui */
+
+.cs-crm1-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  font-family: var(--cs-font-sans, system-ui, sans-serif);
+}
+
+/* Accessibility: Skip to Content Link */
+.cs-skip-link {
+  position: absolute;
+  top: -40px;
+  left: var(--cs-s-4, 16px);
+  background: var(--cs-accent, #1D4ED8);
+  color: #FFFFFF;
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  border-radius: var(--cs-r-md, 4px);
+  z-index: 1000;
+  text-decoration: none;
+  font-weight: 500;
+  transition: top 0.15s ease-in-out;
+}
+
+.cs-skip-link:focus {
+  top: var(--cs-s-4, 16px);
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+/* Shell Header */
+.cs-shell-header {
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+  background-color: var(--cs-surface, #F5F6F8);
+  padding: var(--cs-s-4, 16px) var(--cs-s-6, 24px);
+}
+
+.cs-shell-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-shell-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0;
+}
+
+.cs-module-badge {
+  display: inline-block;
+  padding: var(--cs-s-1, 4px) var(--cs-s-2, 8px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cs-accent, #1D4ED8);
+  background-color: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--cs-r-sm, 2px);
+}
+
+/* Breadcrumbs Landmark */
+.cs-breadcrumbs {
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-breadcrumb-list {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cs-text-muted, #667085);
+}
+
+.cs-breadcrumb-item + .cs-breadcrumb-item::before {
+  content: "/";
+  padding: 0 var(--cs-s-2, 8px);
+  color: var(--cs-text-subtle, #98A2B3);
+}
+
+.cs-breadcrumb-link {
+  color: var(--cs-text-muted, #667085);
+  text-decoration: none;
+}
+
+.cs-breadcrumb-link:hover {
+  color: var(--cs-accent, #1D4ED8);
+  text-decoration: underline;
+}
+
+.cs-breadcrumb-current {
+  color: var(--cs-text, #111827);
+  font-weight: 500;
+}
+
+/* Tab Navigation Landmark */
+.cs-tab-nav {
+  display: flex;
+  gap: var(--cs-s-2, 8px);
+  padding: 0 var(--cs-s-6, 24px);
+  background-color: var(--cs-surface, #F5F6F8);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+  overflow-x: auto;
+}
+
+.cs-tab-button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--cs-text-muted, #667085);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease-in-out;
+}
+
+.cs-tab-button:hover {
+  color: var(--cs-text, #111827);
+  border-bottom-color: var(--cs-border-subtle, #E4E7EC);
+}
+
+.cs-tab-button:focus-visible {
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+  outline-offset: -2px;
+}
+
+.cs-tab-button.cs-tab-active {
+  color: var(--cs-accent, #1D4ED8);
+  border-bottom: 2px solid var(--cs-accent, #1D4ED8);
+  font-weight: 600;
+}
+
+/* Main Content Landmark */
+.cs-shell-main {
+  flex: 1;
+  padding: var(--cs-s-6, 24px);
+  background-color: var(--cs-bg, #FFFFFF);
+}
+
+.cs-page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.cs-page-header {
+  margin-bottom: var(--cs-s-6, 24px);
+}
+
+.cs-page-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-page-desc {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #667085);
+  margin: 0;
+}
+
+/* UI States: Loading Skeleton */
+.cs-skeleton-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-3, 12px);
+  padding: var(--cs-s-6, 24px);
+  background: var(--cs-surface, #F5F6F8);
+  border: 1px solid var(--cs-border-subtle, #E4E7EC);
+  border-radius: var(--cs-r-md, 4px);
+}
+
+.cs-skeleton-line {
+  height: 20px;
+  background: linear-gradient(90deg, #E4E7EC 25%, #F2F4F7 50%, #E4E7EC 75%);
+  background-size: 200% 100%;
+  animation: cs-shimmer 1.5s infinite;
+  border-radius: var(--cs-r-sm, 2px);
+}
+
+@keyframes cs-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.cs-loading-text {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #667085);
+  margin-top: var(--cs-s-2, 8px);
+}
+
+/* UI States: Error Card */
+.cs-error-card {
+  padding: var(--cs-s-4, 16px);
+  background-color: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--cs-r-md, 4px);
+  color: #991B1B;
+}
+
+.cs-error-message {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* UI States: Empty State */
+.cs-empty-state {
+  text-align: center;
+  padding: var(--cs-s-8, 32px) var(--cs-s-4, 16px);
+  background-color: var(--cs-surface, #F5F6F8);
+  border: 1px dashed var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 4px);
+}
+
+.cs-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-empty-text {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #667085);
+  margin: 0;
+}
+
+.cs-content-placeholder {
+  padding: var(--cs-s-6, 24px);
+  background-color: var(--cs-surface, #F5F6F8);
+  border: 1px solid var(--cs-border-subtle, #E4E7EC);
+  border-radius: var(--cs-r-md, 4px);
+}
+
+.cs-ready-notice {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #667085);
+}
