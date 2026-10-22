@@ -154,15 +154,15 @@ In compliance with SDS ClearShift CRM v2.0 §7.1, endpoints strictly enforce aut
 | Endpoint | HTTP Method | Allowed Roles | Description |
 |---|---|---|---|
 | `/health` | `GET` | (public) | Health check and version verification. |
-| `/contacts` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Paginated contacts list (search first/last name or email, default pageSize 25, max 100, sorted by last name then first name). |
+| `/contacts` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Server-paged contacts list (case-insensitive search by first/last name or email, default pageSize 25, max 100, sorted by last name then first name). |
 | `/contacts/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve contact by UUID. |
 | `/contacts` | `POST` | `editor`, `migration_runner`, `admin` | Create contact (validates optional companyId and leadStatus). Generates audit event. |
 | `/contacts/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Partial update of contact fields; source identity, Golden ID, consent, and unsubscribe fields are server-maintained. Generates audit event. |
-| `/companies` | `GET` | `viewer`, `editor`, `admin` | Paginated companies list (search name, email, or taxNumber, default pageSize 25, max 100). |
+| `/companies` | `GET` | `viewer`, `editor`, `admin` | Server-paged companies list (search by name, email, or tax number, default pageSize 25, max 100). |
 | `/companies/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve company by UUID. |
 | `/companies` | `POST` | `editor`, `migration_runner`, `admin` | Create company. Generates audit event. |
 | `/companies/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update editable company fields; source identity is server-maintained. Generates audit event. |
-| `/leads` | `GET` | `viewer`, `editor`, `admin` | Paginated leads list (search linked contact's name/email, default pageSize 25, max 100, sorted by creation time). |
+| `/leads` | `GET` | `viewer`, `editor`, `admin` | Server-paged leads list (search linked contact's name/email, default pageSize 25, max 100, sorted by creation time). |
 | `/leads/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve lead by UUID. |
 | `/leads` | `POST` | `editor`, `migration_runner`, `admin` | Create lead. Generates audit event. |
 | `/leads/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update a lead or advance its status to the next V1 state. Invalid transitions return 422 `INVALID_LEAD_STATUS_TRANSITION`. |
@@ -220,3 +220,52 @@ CRM-1 registers 5 primary sub-views under the common ClearShift layout shell:
 * **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
 * **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
 * **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-1 - <View Title>`.
+
+---
+
+## Duplicate Matching Policies (Deterministic Exact Keys)
+
+As mandated by CRM SDS v2.0 and Gate G1 constraints, duplicate evaluation is **strictly deterministic**:
+- **Contact Exact Email Key**: Normalized email (`normalizeEmail(email)`: lowercase, trimmed, whitespace stripped).
+- **Contact Exact Phone + Name Combined Key**: `${normalizePhone(phone)}#${normalizeName(firstName + ' ' + lastName)}`.
+- **Company Exact Tax Number Key**: Normalized tax number (`normalizeTaxNumber(taxNumber)`).
+- **Prohibited**: Fuzzy auto-merge and probabilistic scoring are strictly forbidden.
+- **Ambiguous Match Policy**: Any candidate matching multiple distinct records returns `AMBIGUOUS_REVIEW_REQUIRED` and requires explicit human review before any merge can proceed.
+
+---
+
+## Lead Status Workflow Transitions (SDS Allowlist)
+
+Permitted state transitions strictly enforce the directed acyclic graph:
+- `New` -> `['Working', 'Qualified', 'Closed']`
+- `Working` -> `['Qualified', 'Closed']`
+- `Qualified` -> `['Closed']`
+- `Closed` -> `[]` (Terminal state; no further transitions allowed)
+
+Disallowed transitions (e.g., `Qualified` -> `New` or transitions originating from `Closed`) are rejected with HTTP 409 Conflict.
+
+---
+
+## Domain Event Taxonomy (Redis Streams & Transactional Outbox)
+
+All events use the standard transactional outbox envelope (`EventEnvelope`):
+
+| Event Type | Aggregate | Description | Cross-Module Consumers |
+|---|---|---|---|
+| `crm.contact.created` | `Contact` | Published when a new golden contact is created. | CRM-2 Deals, CRM-4 Consent |
+| `crm.contact.updated` | `Contact` | Published on contact property modification. | CRM-2, CRM-3 |
+| `crm.contact.merged` | `Contact` | Published when contacts are merged under human review (EV-08). | CRM-2, CRM-3, CRM-4, ERP-3 |
+| `crm.company.created` | `Company` | Published when a company is registered. | CRM-2, ERP-3 |
+| `crm.company.updated` | `Company` | Published on company update. | CRM-2, ERP-3 |
+| `crm.lead.created` | `Lead` | Published on lead ingestion or capture. | CRM-2 |
+| `crm.lead.status_changed` | `Lead` | Published when lead status advances. | CRM-2 |
+| `crm.contact.consent_changed` | `Contact` | Published when consent or unsubscribe state mutates (EV-12). | CRM-4 Consent |
+| `crm.import.batch_loaded` | `ImportBatch` | Published when migration batch terminates (EV-05). | Migration Kit, Audit |
+
+---
+
+## Deterministic Mock Server (`crm1MockServerPlugin`)
+
+Available in `@clearshift/contracts` for downstream module development and contract testing:
+- **State Store**: `Crm1MockStateStore` seeds deterministic synthetic contacts, companies, leads, and import batches.
+- **Fastify Plugin**: `crm1MockServerPlugin` serves all 15 endpoints under `/api/v1/crm-contacts` with Zod validation, deterministic error envelopes, duplicate rejection, and lead transition enforcement.

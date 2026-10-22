@@ -30,6 +30,7 @@ apiSuite("CRM-1 mutation API", () => {
   const batchIds: string[] = [];
   let editorAuthorization: string;
   let viewerAuthorization: string;
+  let migrationAuthorization: string;
 
   beforeAll(async () => {
     const { rows } = await pool.query<{ contacts: string | null; keyColumn: string | null }>(
@@ -45,7 +46,8 @@ apiSuite("CRM-1 mutation API", () => {
     await app.register(jwtPlugin);
     await app.register(createCrm1Routes(db), { prefix: CRM1_API_PREFIX });
     await app.ready();
-    editorAuthorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR, Roles.MIGRATION_RUNNER])}`;
+    editorAuthorization = `Bearer ${await signAccessToken(`${fixture}-editor`, [Roles.EDITOR])}`;
+    migrationAuthorization = `Bearer ${await signAccessToken(`${fixture}-migration`, [Roles.MIGRATION_RUNNER])}`;
     viewerAuthorization = `Bearer ${await signAccessToken(`${fixture}-viewer`, [Roles.VIEWER])}`;
   });
 
@@ -67,6 +69,7 @@ apiSuite("CRM-1 mutation API", () => {
   });
 
   const headers = () => ({ authorization: editorAuthorization });
+  const migrationHeaders = () => ({ authorization: migrationAuthorization });
 
   it("requires write authorization and validates create/edit bodies at the API boundary", async () => {
     const unauthenticated = await app.inject({

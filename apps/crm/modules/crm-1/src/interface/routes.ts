@@ -33,13 +33,13 @@ import {
   crm1ImportRejects,
   crm1Leads
 } from "../../db/schema.js";
-import * as rbac from "@cs/rbac";
 import { and, asc, count, eq, exists, ilike, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import { Crm1MutationService } from "../services/crm1-mutation.service.js";
-
-const { Capabilities, requireCapability } = rbac.default ?? rbac;
+import { requireRoles } from "../plugins/auth.js";
+import { CRM1_ENDPOINT_ROLES } from "../policies/roles.js";
+import type { RoleType } from "@cs/identity";
 
 const IdParamsSchema = z.object({ id: z.string().uuid() });
 const BatchParamsSchema = z.object({ batch: z.string().uuid() });
@@ -218,19 +218,6 @@ function companySearch(search: string | undefined) {
     ilike(crm1Companies.email, pattern),
     ilike(crm1Companies.taxNumber, pattern)
   );
-}
-
-import { requireRoles } from "../plugins/auth.js";
-import { CRM1_ENDPOINT_ROLES } from "../policies/roles.js";
-import { redactSensitiveObject } from "../policies/masking.js";
-import { crm1Audit } from "../services/audit.js";
-import type { RoleType } from "@cs/identity";
-
-function modulePreHandlers(
-  fastify: FastifyInstance,
-  capability: typeof Capabilities.MODULE_READ | typeof Capabilities.MODULE_WRITE
-) {
-  return [fastify.authenticate, requireCapability(capability)];
 }
 
 function endpointPreHandlers(

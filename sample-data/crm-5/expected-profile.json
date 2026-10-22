@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "rulesetVersion": 1,
+  "fixture": {
+    "file": "dirty-data-v1.csv",
+    "sha256": "122334d76b3bb3694c873b090acab209d371d9b53095a1066405992f6762169d",
+    "bytes": 19539,
+    "rows": 100
+  },
+  "outcomes": {
+    "accept": 50,
+    "normalize": 5,
+    "merge": 5,
+    "reject": 40
+  },
+  "byRule": {
+    "CRM5-DQ-001": 3,
+    "CRM5-DQ-002": 2,
+    "CRM5-DQ-003": 2,
+    "CRM5-DQ-004": 4,
+    "CRM5-DQ-005": 0,
+    "CRM5-DQ-006": 3,
+    "CRM5-DQ-007": 0,
+    "CRM5-DQ-008": 3,
+    "CRM5-DQ-009": 2,
+    "CRM5-DQ-010": 5,
+    "CRM5-DQ-011": 4,
+    "CRM5-DQ-012": 4,
+    "CRM5-DQ-013": 2,
+    "CRM5-DQ-014": 3,
+    "CRM5-DQ-015": 3,
+    "CRM5-DQ-016": 5,
+    "CRM5-DQ-017": 4,
+    "CRM5-DQ-018": 1
+  }
+}
