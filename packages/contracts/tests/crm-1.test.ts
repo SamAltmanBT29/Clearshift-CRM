@@ -179,6 +179,24 @@ describe("CRM-1 public contracts", () => {
     expect(crm1OpenApi).toContain("correlation_id: { type: string }");
   });
 
+  it("documents all 9 CRM-1 domain event schemas in OpenAPI components", () => {
+    const eventSchemas = [
+      "DomainEventEnvelope",
+      "EventContactCreated",
+      "EventContactUpdated",
+      "EventContactMerged",
+      "EventCompanyCreated",
+      "EventCompanyUpdated",
+      "EventLeadCreated",
+      "EventLeadStatusChanged",
+      "EventContactConsentChanged",
+      "EventImportBatchLoaded",
+    ];
+    for (const schemaName of eventSchemas) {
+      expect(crm1OpenApi).toContain(`${schemaName}:`);
+    }
+  });
+
   it("documents the required import idempotency key and replay result", () => {
     const importOperation = operationBlock("/api/v1/crm-contacts/imports", "post");
     expect(crm1OpenApi).toContain("required: [batchId, sourceSystem, rows]");

@@ -798,8 +798,77 @@ components:
               field: { type: string }
               message: { type: string }
               code: { type: string }
+    DomainEventEnvelope:
+      type: object
+      required: [id, eventType, aggregateType, aggregateId, timestamp, version, producer, payload]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string }
+        aggregateType: { type: string }
+        aggregateId: { type: string }
+        timestamp: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+        producer: { type: string, default: "crm-1" }
+        correlationId: { type: string }
+        causationId: { type: string }
+        payload: { type: object }
+    EventContactCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.created" }
+        aggregateType: { type: string, const: "Contact" }
+    EventContactUpdated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.updated" }
+        aggregateType: { type: string, const: "Contact" }
+    EventContactMerged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.merged" }
+        aggregateType: { type: string, const: "Contact" }
+    EventCompanyCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.company.created" }
+        aggregateType: { type: string, const: "Company" }
+    EventCompanyUpdated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.company.updated" }
+        aggregateType: { type: string, const: "Company" }
+    EventLeadCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.lead.created" }
+        aggregateType: { type: string, const: "Lead" }
+    EventLeadStatusChanged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.lead.status_changed" }
+        aggregateType: { type: string, const: "Lead" }
+    EventContactConsentChanged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.consent_changed" }
+        aggregateType: { type: string, const: "Contact" }
+    EventImportBatchLoaded:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.import.batch_loaded" }
+        aggregateType: { type: string, const: "ImportBatch" }
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
