@@ -1,0 +1,52 @@
+name: 🛡️ Security Baseline & CI Protection Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop, staging]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-baseline:
+    name: 🛡️ Security Baseline, Secrets & Dependency Protections
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (v24 LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: 🔍 Automated Dependency Vulnerability Audit
+        run: |
+          chmod +x ./infra/security/dependency-audit.sh
+          ./infra/security/dependency-audit.sh
+
+      - name: 🔑 Secret & Credential Scan
+        run: |
+          chmod +x ./infra/security/secret-scan.sh
+          ./infra/security/secret-scan.sh
+
+      - name: ☁️ Cloud Uploader & Fixture Integrity Audit
+        run: |
+          chmod +x ./infra/security/repo-audit.sh
+          ./infra/security/repo-audit.sh
+
+      - name: 🧪 Run Formula-Safe CSV & Security Protection Tests
+        run: |
+          npx vitest run packages/core/tests/csv-safe.test.ts
+
+      - name: 📐 Monorepo TypeScript Typecheck
+        run: |
+          npm run typecheck

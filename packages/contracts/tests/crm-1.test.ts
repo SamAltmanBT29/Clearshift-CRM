@@ -152,6 +152,28 @@ describe("CRM-1 public contracts", () => {
     }
   });
 
+  it.each([
+    ["/api/v1/crm-contacts/contacts", "get"],
+    ["/api/v1/crm-contacts/contacts", "post"],
+    ["/api/v1/crm-contacts/contacts/{id}", "get"],
+    ["/api/v1/crm-contacts/contacts/{id}", "patch"],
+    ["/api/v1/crm-contacts/companies", "get"],
+    ["/api/v1/crm-contacts/companies", "post"],
+    ["/api/v1/crm-contacts/companies/{id}", "get"],
+    ["/api/v1/crm-contacts/companies/{id}", "patch"],
+    ["/api/v1/crm-contacts/leads", "get"],
+    ["/api/v1/crm-contacts/leads", "post"],
+    ["/api/v1/crm-contacts/leads/{id}", "get"],
+    ["/api/v1/crm-contacts/leads/{id}", "patch"],
+    ["/api/v1/crm-contacts/imports", "post"],
+    ["/api/v1/crm-contacts/imports/{batch}", "get"],
+    ["/api/v1/crm-contacts/imports/{batch}/rejects", "get"]
+  ])("documents 401 and 403 responses for %s %s", (path, method) => {
+    const block = operationBlock(path, method);
+    expect(block).toContain('"401":\n          $ref: "#/components/responses/UnauthorizedError"');
+    expect(block).toContain('"403":\n          $ref: "#/components/responses/ForbiddenError"');
+  });
+
   it("documents the correlation-aware API error envelope", () => {
     expect(crm1OpenApi).toContain("required: [code, message, details, correlation_id]");
     expect(crm1OpenApi).toContain("correlation_id: { type: string }");

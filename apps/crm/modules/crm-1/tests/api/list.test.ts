@@ -25,7 +25,11 @@ describe('CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])', () => {
     app = buildApp({ service });
     await app.ready();
 
-    const editorToken = await signAccessToken('synthetic-editor', [Roles.EDITOR]);
+    const editorToken = await signAccessToken('synthetic-editor', [
+      Roles.EDITOR,
+      Roles.VIEWER,
+      Roles.MIGRATION_RUNNER,
+    ]);
     authHeaders = { authorization: `Bearer ${editorToken}` };
 
     const viewerToken = await signAccessToken('synthetic-viewer', [Roles.VIEWER]);
