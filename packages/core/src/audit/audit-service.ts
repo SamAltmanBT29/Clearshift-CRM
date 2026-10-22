@@ -1,6 +1,5 @@
 import { AuditEntryInput, AuditRecord, AuditQueryFilter } from "./types.js";
 import { redactSensitiveData, redactErrorMessage } from "../logging/redact.js";
-import { auditLogs } from "@cs/db";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, gte, lte } from "drizzle-orm";
 
@@ -107,6 +106,15 @@ export class InMemoryAuditRepository implements IAuditRepository {
   }
 }
 
+let cachedAuditLogs: any = null;
+async function getAuditLogsTable(): Promise<any> {
+  if (!cachedAuditLogs) {
+    const dbModule = await import("@cs/db");
+    cachedAuditLogs = dbModule.auditLogs;
+  }
+  return cachedAuditLogs;
+}
+
 /**
  * PostgreSQL Audit Repository backed by Drizzle ORM
  */
@@ -114,8 +122,9 @@ export class PgAuditRepository implements IAuditRepository {
   constructor(private db: NodePgDatabase) {}
 
   async append(entry: AuditEntryInput): Promise<AuditRecord> {
+    const table = await getAuditLogsTable();
     const [inserted] = await (this.db as any)
-      .insert(auditLogs)
+      .insert(table)
       .values({
         actor: entry.actor,
         actorRole: entry.actorRole ?? null,
@@ -136,19 +145,20 @@ export class PgAuditRepository implements IAuditRepository {
   }
 
   async query(filter?: AuditQueryFilter | undefined): Promise<AuditRecord[]> {
+    const table = await getAuditLogsTable();
     const conditions = [];
 
-    if (filter?.actor) conditions.push(eq(auditLogs.actor as any, filter.actor));
-    if (filter?.action) conditions.push(eq(auditLogs.action as any, filter.action));
-    if (filter?.targetEntity) conditions.push(eq(auditLogs.targetEntity as any, filter.targetEntity));
-    if (filter?.targetId) conditions.push(eq(auditLogs.targetId as any, filter.targetId));
-    if (filter?.correlationId) conditions.push(eq(auditLogs.correlationId as any, filter.correlationId));
-    if (filter?.batchId) conditions.push(eq(auditLogs.batchId as any, filter.batchId));
-    if (filter?.result) conditions.push(eq(auditLogs.result as any, filter.result));
-    if (filter?.since) conditions.push(gte(auditLogs.occurredAt as any, filter.since));
-    if (filter?.until) conditions.push(lte(auditLogs.occurredAt as any, filter.until));
+    if (filter?.actor) conditions.push(eq(table.actor, filter.actor));
+    if (filter?.action) conditions.push(eq(table.action, filter.action));
+    if (filter?.targetEntity) conditions.push(eq(table.targetEntity, filter.targetEntity));
+    if (filter?.targetId) conditions.push(eq(table.targetId, filter.targetId));
+    if (filter?.correlationId) conditions.push(eq(table.correlationId, filter.correlationId));
+    if (filter?.batchId) conditions.push(eq(table.batchId, filter.batchId));
+    if (filter?.result) conditions.push(eq(table.result, filter.result));
+    if (filter?.since) conditions.push(gte(table.occurredAt, filter.since));
+    if (filter?.until) conditions.push(lte(table.occurredAt, filter.until));
 
-    const query = (this.db as any).select().from(auditLogs);
+    const query = (this.db as any).select().from(table);
     if (conditions.length > 0) {
       query.where(and(...conditions));
     }
@@ -156,7 +166,7 @@ export class PgAuditRepository implements IAuditRepository {
     const rows = await query
       .limit(filter?.limit ?? 100)
       .offset(filter?.offset ?? 0)
-      .orderBy(auditLogs.occurredAt);
+      .orderBy(table.occurredAt);
 
     return rows as AuditRecord[];
   }
@@ -170,12 +180,14 @@ export class PgAuditRepository implements IAuditRepository {
   }
 
   async count(): Promise<number> {
-    const rows = await (this.db as any).select().from(auditLogs);
+    const table = await getAuditLogsTable();
+    const rows = await (this.db as any).select().from(table);
     return rows.length;
   }
 
   async clear(): Promise<void> {
-    await (this.db as any).delete(auditLogs);
+    const table = await getAuditLogsTable();
+    await (this.db as any).delete(table);
   }
 }
 

@@ -185,7 +185,7 @@ describe("[PLT-10] Append-Only Audit Trail and Sensitive-Data-Safe Logs", () => 
     const SENTINEL_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZXMiOlsiYWRtaW4iXX0.dGhpcyBpcyBhIHNlY3JldA";
     const SENTINEL_BEARER = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.topsecretpayload";
     const SENTINEL_BANK_ACCOUNT = "98765432109876";
-    const SENTINEL_SSN = "999-12-3456";
+    const SENTINEL_SSN = "000-00-0000";
     const SENTINEL_SALARY = 185000;
 
     it("redacts sensitive keys and values from deeply nested objects", () => {
