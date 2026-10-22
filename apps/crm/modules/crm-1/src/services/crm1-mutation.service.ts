@@ -142,6 +142,12 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
+function omitUndefined<T extends Record<string, unknown>>(value: T): any {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)
+  );
+}
+
 function requestDigest(input: CRM1ImportCreate): string {
   return createHash("sha256").update(JSON.stringify(canonicalize(input))).digest("hex");
 }
@@ -160,12 +166,12 @@ async function findOrCreateImportTarget(
   switch (row.entity) {
     case "contact": {
       await assertCompanyExists(tx, row.data.companyId);
-      const [inserted] = await tx.insert(crm1Contacts).values({
+      const [inserted] = await tx.insert(crm1Contacts).values(omitUndefined({
         ...row.data,
         goldenId: randomUUID(),
         sourceSystem,
         sourceId: row.data.sourceId
-      }).onConflictDoNothing({
+      })).onConflictDoNothing({
         target: [crm1Contacts.sourceSystem, crm1Contacts.sourceId]
       }).returning({ id: crm1Contacts.id });
       if (inserted) {
@@ -180,11 +186,11 @@ async function findOrCreateImportTarget(
       break;
     }
     case "company": {
-      const [inserted] = await tx.insert(crm1Companies).values({
+      const [inserted] = await tx.insert(crm1Companies).values(omitUndefined({
         ...row.data,
         sourceSystem,
         sourceId: row.data.sourceId
-      }).onConflictDoNothing({
+      })).onConflictDoNothing({
         target: [crm1Companies.sourceSystem, crm1Companies.sourceId]
       }).returning({ id: crm1Companies.id });
       if (inserted) {
@@ -200,11 +206,11 @@ async function findOrCreateImportTarget(
     }
     case "lead": {
       await assertContactExists(tx, row.data.contactId);
-      const [inserted] = await tx.insert(crm1Leads).values({
+      const [inserted] = await tx.insert(crm1Leads).values(omitUndefined({
         ...row.data,
         sourceSystem,
         sourceId: row.data.sourceId
-      }).onConflictDoNothing({
+      })).onConflictDoNothing({
         target: [crm1Leads.sourceSystem, crm1Leads.sourceId]
       }).returning({ id: crm1Leads.id });
       if (inserted) {
@@ -230,10 +236,10 @@ export class Crm1MutationService {
     try {
       return await this.db.transaction(async (tx) => {
         await assertCompanyExists(tx, input.companyId);
-        const [row] = await tx.insert(crm1Contacts).values({
+        const [row] = await tx.insert(crm1Contacts).values(omitUndefined({
           ...input,
           goldenId: randomUUID()
-        }).returning();
+        })).returning();
         if (!row) {
           throw new AppError("INTERNAL_SERVER_ERROR", "Contact creation returned no record", 500);
         }
@@ -250,7 +256,7 @@ export class Crm1MutationService {
       return await this.db.transaction(async (tx) => {
         await assertCompanyExists(tx, input.companyId);
         const [row] = await tx.update(crm1Contacts)
-          .set({ ...input, updatedAt: new Date() })
+          .set(omitUndefined({ ...input, updatedAt: new Date() }))
           .where(eq(crm1Contacts.id, id))
           .returning();
         if (!row) {
@@ -266,7 +272,7 @@ export class Crm1MutationService {
   async createCompany(input: CRM1CompanyCreate) {
     try {
       return await this.db.transaction(async (tx) => {
-        const [row] = await tx.insert(crm1Companies).values(input).returning();
+        const [row] = await tx.insert(crm1Companies).values(omitUndefined(input)).returning();
         if (!row) {
           throw new AppError("INTERNAL_SERVER_ERROR", "Company creation returned no record", 500);
         }
@@ -281,7 +287,7 @@ export class Crm1MutationService {
     try {
       return await this.db.transaction(async (tx) => {
         const [row] = await tx.update(crm1Companies)
-          .set({ ...input, updatedAt: new Date() })
+          .set(omitUndefined({ ...input, updatedAt: new Date() }))
           .where(eq(crm1Companies.id, id))
           .returning();
         if (!row) {
@@ -299,7 +305,7 @@ export class Crm1MutationService {
     try {
       return await this.db.transaction(async (tx) => {
         await assertContactExists(tx, input.contactId);
-        const [row] = await tx.insert(crm1Leads).values(input).returning();
+        const [row] = await tx.insert(crm1Leads).values(omitUndefined(input)).returning();
         if (!row) {
           throw new AppError("INTERNAL_SERVER_ERROR", "Lead creation returned no record", 500);
         }
@@ -316,7 +322,7 @@ export class Crm1MutationService {
       return await this.db.transaction(async (tx) => {
         await assertContactExists(tx, input.contactId);
         const [row] = await tx.update(crm1Leads)
-          .set({ ...input, updatedAt: new Date() })
+          .set(omitUndefined({ ...input, updatedAt: new Date() }))
           .where(eq(crm1Leads.id, id))
           .returning();
         if (!row) {

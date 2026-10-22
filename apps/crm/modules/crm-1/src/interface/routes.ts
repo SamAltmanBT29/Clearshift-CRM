@@ -162,6 +162,12 @@ function companySearch(search: string | undefined) {
   );
 }
 
+import { requireRoles } from "../plugins/auth.js";
+import { CRM1_ENDPOINT_ROLES } from "../policies/roles.js";
+import { redactSensitiveObject } from "../policies/masking.js";
+import { crm1Audit } from "../services/audit.js";
+import type { RoleType } from "@cs/identity";
+
 function modulePreHandlers(
   fastify: FastifyInstance,
   capability: typeof Capabilities.MODULE_READ | typeof Capabilities.MODULE_WRITE
@@ -169,6 +175,12 @@ function modulePreHandlers(
   return [fastify.authenticate, requireCapability(capability)];
 }
 
+function endpointPreHandlers(
+  fastify: FastifyInstance,
+  allowedRoles: readonly RoleType[]
+) {
+  return [fastify.authenticate, requireRoles(allowedRoles)];
+}
 export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPluginAsync {
   return async (fastify) => {
     const mutations = new Crm1MutationService(db);
@@ -207,7 +219,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/contacts/:id", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_READ)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const [row] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, id)).limit(1);
@@ -217,7 +229,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       return serializeContact(row);
     });
 
-    fastify.get("/contacts", { preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ) }, async (request) => {
+    fastify.get("/contacts", { preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_LIST) }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const where = contactSearch(query.search);
       const [items, totals] = await Promise.all([
@@ -235,7 +247,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/contacts", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_CREATE)
     }, async (request, reply) => {
       const body = parseRequest(CRM1ContactCreateSchema, request.body, 422);
       const row = await mutations.createContact(body);
@@ -244,7 +256,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.patch("/contacts/:id", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_UPDATE)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const body = parseRequest(CRM1ContactPatchSchema, request.body, 422);
@@ -252,7 +264,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/companies/:id", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_READ)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const [row] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, id)).limit(1);
@@ -263,7 +275,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/companies", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_LIST)
     }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const where = companySearch(query.search);
@@ -282,7 +294,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/companies", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_CREATE)
     }, async (request, reply) => {
       const body = parseRequest(CRM1CompanyCreateSchema, request.body, 422);
       const row = await mutations.createCompany(body);
@@ -291,7 +303,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.patch("/companies/:id", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_UPDATE)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const body = parseRequest(CRM1CompanyPatchSchema, request.body, 422);
@@ -299,7 +311,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/leads/:id", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_READ)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const [row] = await db.select().from(crm1Leads).where(eq(crm1Leads.id, id)).limit(1);
@@ -310,7 +322,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/leads", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_LIST)
     }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const pattern = query.search ? `%${escapeLike(query.search)}%` : undefined;
@@ -350,7 +362,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/leads", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_CREATE)
     }, async (request, reply) => {
       const body = parseRequest(CRM1LeadCreateSchema, request.body, 422);
       const row = await mutations.createLead(body);
@@ -359,7 +371,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.patch("/leads/:id", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_UPDATE)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const body = parseRequest(CRM1LeadPatchSchema, request.body, 422);
@@ -367,7 +379,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/imports", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_WRITE)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_START)
     }, async (request, reply) => {
       const body = parseRequest(CRM1ImportCreateSchema, request.body, 422);
       const key = parseRequest(
@@ -389,7 +401,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/imports/:batch", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_STATUS)
     }, async (request) => {
       const { batch: batchId } = parseRequest(BatchParamsSchema, request.params);
       const [batch] = await db.select().from(crm1ImportBatches)
@@ -415,7 +427,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/imports/:batch/rejects", {
-      preHandler: modulePreHandlers(fastify, Capabilities.MODULE_READ)
+      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_REJECTS)
     }, async (request) => {
       const { batch: batchId } = parseRequest(BatchParamsSchema, request.params);
       const query = parseRequest(CRM1ListQuerySchema, request.query);
