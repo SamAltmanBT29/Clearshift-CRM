@@ -123,6 +123,8 @@ DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm test -- apps/crm
 
 ## Public API Endpoints (`/api/v1/crm-contacts`) & Authorization Matrix
 
+In compliance with SDS ClearShift CRM v2.0 §7.1, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
+
 | Endpoint | HTTP Method | Allowed Roles | Description |
 |---|---|---|---|
 | `/health` | `GET` | (public) | Health check and version verification. |
@@ -154,6 +156,18 @@ Field-level restrictions are enforced on the server before JSON serialization an
 5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
 
 ---
+
+## Audit Trail Specification
+
+All domain mutations, migration executions, and privileged actions produce append-only audit records containing:
+* `actor`: Authenticated User UUID (`sub`) and role set.
+* `action`: Action verb (`contact_create`, `contact_update`, `company_create`, `company_update`, `lead_create`, `lead_update`, `import_start`, etc.).
+* `timestamp`: ISO-8601 UTC timestamp.
+* `entity`: Affected entity name (`contact`, `company`, `lead`, `import_batch`).
+* `entity_id`: Primary record UUID.
+* `correlation_id`: Request correlation ID or Migration Batch UUID.
+* `result`: Outcome status (`success` or `failure`).
+* `metadata`: Contextual payload with sensitive fields pre-redacted (no raw rows, tokens, or plaintext credentials).
 
 ---
 
