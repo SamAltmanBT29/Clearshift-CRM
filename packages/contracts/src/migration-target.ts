@@ -492,3 +492,144 @@ export function verifyReconciliationCounts(counts: {
     unaccounted,
   };
 }
+
+/**
+ * ---------------------------------------------------------------------------
+ * KIT-02: Streamed Source Upload, Parser Limits & Raw Immutability Contracts
+ * ---------------------------------------------------------------------------
+ */
+
+/**
+ * Ingestion and Parser Resource Limits (KIT-02)
+ */
+export const INGESTION_LIMITS = {
+  MAX_FILE_SIZE_BYTES: 50 * 1024 * 1024, // 50 MiB = 52,428,800 bytes
+  MAX_EXPANDED_ARCHIVE_SIZE_BYTES: 250 * 1024 * 1024, // 250 MiB = 262,144,000 bytes
+  MAX_COLUMNS: 100,
+  MAX_DATA_ROWS: 100_000,
+  MAX_CELL_SIZE_BYTES: 64 * 1024, // 64 KiB = 65,536 bytes
+} as const;
+
+export const FileFormatSchema = z.enum(['csv', 'xlsx']);
+export type FileFormat = z.infer<typeof FileFormatSchema>;
+
+export const CsvDelimiterSchema = z.enum([',', ';']);
+export type CsvDelimiter = z.infer<typeof CsvDelimiterSchema>;
+
+/**
+ * Parser Diagnostics Schema (Tracks blank physical rows, BOM, column counts)
+ */
+export const ParserDiagnosticsSchema = z.object({
+  totalPhysicalLines: z.number().int().nonnegative(),
+  blankRowsCount: z.number().int().nonnegative(),
+  headerRowIndex: z.number().int().nonnegative(),
+  dataRowsCount: z.number().int().nonnegative(),
+  columnsCount: z.number().int().nonnegative(),
+  detectedDelimiter: z.string(),
+  hasBom: z.boolean(),
+  warnings: z.array(z.string()).default([]),
+});
+export type ParserDiagnostics = z.infer<typeof ParserDiagnosticsSchema>;
+
+/**
+ * Raw Row Schema (Stored in raw_rows with ordered headers, cells, and checksum)
+ */
+export const RawRowSchema = z.object({
+  id: z.string().uuid().optional(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().min(1),
+  headers: z.array(z.string()),
+  cells: z.array(z.string()),
+  payload: z.record(z.string(), z.string()),
+  rowHash: z.string().length(64),
+  createdAt: z.coerce.date().optional(),
+});
+export type RawRow = z.infer<typeof RawRowSchema>;
+
+/**
+ * Options when uploading/streaming a source file
+ */
+export const UploadSourceOptionsSchema = z.object({
+  module: z.string().min(1).max(64),
+  sourceSystem: z.string().max(64).optional(),
+  format: FileFormatSchema.default('csv'),
+  delimiter: CsvDelimiterSchema.default(','),
+  dateFormat: z.string().max(32).optional(),
+  phoneCountry: z.string().max(16).optional(),
+  correlationId: z.string().max(128).optional(),
+  actor: z.string().max(128).default('system'),
+});
+export type UploadSourceOptions = z.infer<typeof UploadSourceOptionsSchema>;
+
+/**
+ * Ingestion Result Contract
+ */
+export const IngestResultSchema = z.object({
+  batchId: z.string().uuid(),
+  batchNumber: z.string(),
+  fileName: z.string(),
+  fileSizeBytes: z.number().int().nonnegative(),
+  checksum: z.string().length(64),
+  storagePath: z.string(),
+  headers: z.array(z.string()),
+  totalDataRows: z.number().int().nonnegative(),
+  diagnostics: ParserDiagnosticsSchema,
+});
+export type IngestResult = z.infer<typeof IngestResultSchema>;
+
+/**
+ * Custom Errors for Ingestion and Parser Limit Violations
+ */
+export type IngestionLimitType =
+  | 'MAX_FILE_SIZE'
+  | 'MAX_COLUMNS'
+  | 'MAX_DATA_ROWS'
+  | 'MAX_CELL_SIZE'
+  | 'MAX_EXPANDED_ARCHIVE';
+
+export class IngestionLimitError extends Error {
+  public readonly statusCode: number;
+  public readonly code = 'LIMIT_EXCEEDED';
+
+  constructor(
+    public readonly limitName: IngestionLimitType,
+    public readonly limitValue: number,
+    public readonly actualValue: number,
+    customMessage?: string
+  ) {
+    const defaultMsg = `Ingestion limit exceeded: ${limitName} limit is ${limitValue}, received ${actualValue}`;
+    super(customMessage || defaultMsg);
+    this.name = 'IngestionLimitError';
+    this.statusCode = limitName === 'MAX_FILE_SIZE' ? 413 : 400;
+  }
+}
+
+export class InvalidEncodingError extends Error {
+  public readonly statusCode = 400;
+  public readonly code = 'INVALID_ENCODING';
+
+  constructor(message: string = 'Input file contains invalid non-UTF-8 byte sequences') {
+    super(message);
+    this.name = 'InvalidEncodingError';
+  }
+}
+
+export class SecurityRejectedError extends Error {
+  public readonly statusCode = 400;
+  public readonly code = 'SECURITY_REJECTED';
+
+  constructor(public readonly securityReason: string) {
+    super(`Security policy rejected file: ${securityReason}`);
+    this.name = 'SecurityRejectedError';
+  }
+}
+
+export class MalformedFileError extends Error {
+  public readonly statusCode = 400;
+  public readonly code = 'MALFORMED_FILE';
+
+  constructor(message: string) {
+    super(`Malformed file: ${message}`);
+    this.name = 'MalformedFileError';
+  }
+}
