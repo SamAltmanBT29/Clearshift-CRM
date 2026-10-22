@@ -8,6 +8,7 @@ import {
   CRM1CompanySchema,
   CRM1ContactCreateSchema,
   CRM1ContactPatchSchema,
+  CRM1ContactReadSchema,
   CRM1ContactSchema,
   CRM1ImportBatchDetailSchema,
   CRM1ImportBatchSchema,
@@ -16,6 +17,7 @@ import {
   CRM1ImportRejectSchema,
   CRM1LeadCreateSchema,
   CRM1LeadPatchSchema,
+  CRM1LeadReadSchema,
   CRM1LeadSchema,
   CRM1ListQuerySchema,
   CRM1ListResponseSchema,
@@ -108,6 +110,32 @@ function serializeContact(row: typeof crm1Contacts.$inferSelect) {
   });
 }
 
+function serializeContactRead(
+  row: typeof crm1Contacts.$inferSelect,
+  companyName: string | null
+) {
+  if (row.companyId !== null && companyName === null) {
+    throw new AppError("INTERNAL_SERVER_ERROR", "The persisted company link could not be resolved", 500);
+  }
+  return CRM1ContactReadSchema.parse({
+    ...serializeContact(row),
+    companyName
+  });
+}
+
+async function readContactProjection(db: NodePgDatabase, id: string) {
+  const [row] = await db.select({
+    contact: crm1Contacts,
+    companyName: crm1Companies.name
+  }).from(crm1Contacts)
+    .leftJoin(crm1Companies, eq(crm1Contacts.companyId, crm1Companies.id))
+    .where(eq(crm1Contacts.id, id)).limit(1);
+  if (!row) {
+    throw new AppError("NOT_FOUND", `Contact with ID '${id}' not found`, 404);
+  }
+  return serializeContactRead(row.contact, row.companyName);
+}
+
 function serializeCompany(row: typeof crm1Companies.$inferSelect) {
   return CRM1CompanySchema.parse({
     ...row,
@@ -122,6 +150,36 @@ function serializeLead(row: typeof crm1Leads.$inferSelect) {
     createdAt: dateString(row.createdAt),
     updatedAt: dateString(row.updatedAt)
   });
+}
+
+function serializeLeadRead(
+  row: typeof crm1Leads.$inferSelect,
+  contact: {
+    firstName: string;
+    lastName: string;
+    email: string | null;
+  }
+) {
+  return CRM1LeadReadSchema.parse({
+    ...serializeLead(row),
+    contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+    contactEmail: contact.email
+  });
+}
+
+async function readLeadProjection(db: NodePgDatabase, id: string) {
+  const [row] = await db.select({
+    lead: crm1Leads,
+    firstName: crm1Contacts.firstName,
+    lastName: crm1Contacts.lastName,
+    email: crm1Contacts.email
+  }).from(crm1Leads)
+    .innerJoin(crm1Contacts, eq(crm1Leads.contactId, crm1Contacts.id))
+    .where(eq(crm1Leads.id, id)).limit(1);
+  if (!row) {
+    throw new AppError("NOT_FOUND", `Lead with ID '${id}' not found`, 404);
+  }
+  return serializeLeadRead(row.lead, row);
 }
 
 function serializeBatch(row: typeof crm1ImportBatches.$inferSelect) {
@@ -222,24 +280,25 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_READ)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
-      const [row] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, id)).limit(1);
-      if (!row) {
-        throw new AppError("NOT_FOUND", `Contact with ID '${id}' not found`, 404);
-      }
-      return serializeContact(row);
+      return readContactProjection(db, id);
     });
 
     fastify.get("/contacts", { preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_LIST) }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const where = contactSearch(query.search);
       const [items, totals] = await Promise.all([
-        db.select().from(crm1Contacts).where(where)
+        db.select({
+          contact: crm1Contacts,
+          companyName: crm1Companies.name
+        }).from(crm1Contacts)
+          .leftJoin(crm1Companies, eq(crm1Contacts.companyId, crm1Companies.id))
+          .where(where)
           .orderBy(asc(crm1Contacts.lastName), asc(crm1Contacts.firstName))
           .limit(query.pageSize).offset((query.page - 1) * query.pageSize),
         db.select({ total: count() }).from(crm1Contacts).where(where)
       ]);
-      return CRM1ListResponseSchema(CRM1ContactSchema).parse({
-        items: items.map(serializeContact),
+      return CRM1ListResponseSchema(CRM1ContactReadSchema).parse({
+        items: items.map((item) => serializeContactRead(item.contact, item.companyName)),
         page: query.page,
         pageSize: query.pageSize,
         total: totals[0]?.total ?? 0
@@ -252,7 +311,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       const body = parseRequest(CRM1ContactCreateSchema, request.body, 422);
       const row = await mutations.createContact(body);
       reply.code(201);
-      return serializeContact(row);
+      return readContactProjection(db, row.id);
     });
 
     fastify.patch("/contacts/:id", {
@@ -260,7 +319,8 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const body = parseRequest(CRM1ContactPatchSchema, request.body, 422);
-      return serializeContact(await mutations.updateContact(id, body));
+      await mutations.updateContact(id, body);
+      return readContactProjection(db, id);
     });
 
     fastify.get("/companies/:id", {
@@ -314,11 +374,22 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_READ)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
-      const [row] = await db.select().from(crm1Leads).where(eq(crm1Leads.id, id)).limit(1);
+      const [row] = await db.select({
+        lead: crm1Leads,
+        firstName: crm1Contacts.firstName,
+        lastName: crm1Contacts.lastName,
+        email: crm1Contacts.email
+      }).from(crm1Leads)
+        .innerJoin(crm1Contacts, eq(crm1Leads.contactId, crm1Contacts.id))
+        .where(eq(crm1Leads.id, id)).limit(1);
       if (!row) {
         throw new AppError("NOT_FOUND", `Lead with ID '${id}' not found`, 404);
       }
-      return serializeLead(row);
+      return serializeLeadRead(row.lead, {
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email
+      });
     });
 
     fastify.get("/leads", {
@@ -341,20 +412,23 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       const where = matchingContact ? exists(matchingContact) : undefined;
       const [items, totals] = await Promise.all([
         db.select({
-          id: crm1Leads.id,
-          contactId: crm1Leads.contactId,
-          status: crm1Leads.status,
-          sourceSystem: crm1Leads.sourceSystem,
-          sourceId: crm1Leads.sourceId,
-          createdAt: crm1Leads.createdAt,
-          updatedAt: crm1Leads.updatedAt
-        }).from(crm1Leads).where(where)
+          lead: crm1Leads,
+          firstName: crm1Contacts.firstName,
+          lastName: crm1Contacts.lastName,
+          email: crm1Contacts.email
+        }).from(crm1Leads)
+          .innerJoin(crm1Contacts, eq(crm1Leads.contactId, crm1Contacts.id))
+          .where(where)
           .orderBy(asc(crm1Leads.createdAt))
           .limit(query.pageSize).offset((query.page - 1) * query.pageSize),
         db.select({ total: count() }).from(crm1Leads).where(where)
       ]);
-      return CRM1ListResponseSchema(CRM1LeadSchema).parse({
-        items: items.map(serializeLead),
+      return CRM1ListResponseSchema(CRM1LeadReadSchema).parse({
+        items: items.map((item) => serializeLeadRead(item.lead, {
+          firstName: item.firstName,
+          lastName: item.lastName,
+          email: item.email
+        })),
         page: query.page,
         pageSize: query.pageSize,
         total: totals[0]?.total ?? 0
@@ -367,7 +441,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
       const body = parseRequest(CRM1LeadCreateSchema, request.body, 422);
       const row = await mutations.createLead(body);
       reply.code(201);
-      return serializeLead(row);
+      return readLeadProjection(db, row.id);
     });
 
     fastify.patch("/leads/:id", {
@@ -375,7 +449,8 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const body = parseRequest(CRM1LeadPatchSchema, request.body, 422);
-      return serializeLead(await mutations.updateLead(id, body));
+      await mutations.updateLead(id, body);
+      return readLeadProjection(db, id);
     });
 
     fastify.post("/imports", {
