@@ -11,6 +11,7 @@ import {
   crm1Contacts,
   crm1ImportBatches,
   crm1ImportReceipts,
+  crm1Leads,
   crm1Leads
 } from "../../db/schema.js";
 
@@ -150,6 +151,7 @@ apiSuite("CRM-1 mutation API", () => {
     contactIds.push(contact.id);
     expect(contact.goldenId).toBeTruthy();
     expect(contact.sourceSystem).toBeNull();
+    expect(contact.companyName).toBe(company.name);
 
     const patchedContact = await app.inject({
       method: "PATCH",
@@ -159,6 +161,19 @@ apiSuite("CRM-1 mutation API", () => {
     });
     expect(patchedContact.statusCode).toBe(200);
     expect(patchedContact.json().leadStatus).toBe("Qualified");
+    expect(patchedContact.json().companyName).toBe(company.name);
+    const contactReadAfterWrite = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/contacts/${contact.id}`,
+      headers: headers()
+    });
+    expect(contactReadAfterWrite.statusCode).toBe(200);
+    expect(contactReadAfterWrite.json()).toMatchObject({
+      id: contact.id,
+      companyId: company.id,
+      companyName: company.name,
+      leadStatus: "Qualified"
+    });
 
     const protectedMutation = await app.inject({
       method: "PATCH",
@@ -213,6 +228,8 @@ apiSuite("CRM-1 mutation API", () => {
     expect(createdLead.statusCode).toBe(201);
     const lead = createdLead.json();
     leadIds.push(lead.id);
+    expect(lead.contactName).toBe(`${contact.firstName} ${contact.lastName}`);
+    expect(lead.contactEmail).toBe(contact.email);
 
     const patchedLead = await app.inject({
       method: "PATCH",
@@ -222,6 +239,49 @@ apiSuite("CRM-1 mutation API", () => {
     });
     expect(patchedLead.statusCode).toBe(200);
     expect(patchedLead.json().status).toBe("Working");
+    expect(patchedLead.json().contactName).toBe(`${contact.firstName} ${contact.lastName}`);
+    expect(patchedLead.json().contactEmail).toBe(contact.email);
+    const leadReadAfterWrite = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/leads/${lead.id}`,
+      headers: headers()
+    });
+    expect(leadReadAfterWrite.statusCode).toBe(200);
+    expect(leadReadAfterWrite.json()).toMatchObject({
+      id: lead.id,
+      contactId: contact.id,
+      contactName: `${contact.firstName} ${contact.lastName}`,
+      contactEmail: contact.email,
+      status: "Working"
+    });
+
+    const forbiddenTransition = await app.inject({
+      method: "PATCH",
+      url: `${CRM1_API_PREFIX}/leads/${lead.id}`,
+      headers: headers(),
+      payload: { status: "Closed" }
+    });
+    expect(forbiddenTransition.statusCode).toBe(422);
+    expect(forbiddenTransition.json()).toMatchObject({
+      code: "INVALID_LEAD_STATUS_TRANSITION",
+      details: expect.arrayContaining([
+        expect.objectContaining({ field: "status", code: "invalid_transition" })
+      ])
+    });
+    const unchangedLead = await db.select().from(crm1Leads)
+      .where(inArray(crm1Leads.id, [lead.id]));
+    expect(unchangedLead[0]?.status).toBe("Working");
+
+    for (const status of ["Qualified", "Closed"]) {
+      const transitioned = await app.inject({
+        method: "PATCH",
+        url: `${CRM1_API_PREFIX}/leads/${lead.id}`,
+        headers: headers(),
+        payload: { status }
+      });
+      expect(transitioned.statusCode).toBe(200);
+      expect(transitioned.json().status).toBe(status);
+    }
 
     const invalidLead = await app.inject({
       method: "POST",
@@ -267,15 +327,27 @@ apiSuite("CRM-1 mutation API", () => {
     const body = {
       batchId: crypto.randomUUID(),
       sourceSystem: `fixture-${fixture}`,
-      rows: [{
-        entity: "contact",
-        sourceRow: 1,
-        data: {
-          firstName: "Imported",
-          lastName: fixture,
-          sourceId: `${fixture}-source-contact`
+      rows: [
+        {
+          entity: "contact",
+          sourceRow: 1,
+          data: {
+            firstName: "Imported",
+            lastName: fixture,
+            sourceId: `${fixture}-source-contact`
+          }
+        },
+        {
+          entity: "contact",
+          sourceRow: 2,
+          data: {
+            firstName: "Rejected",
+            lastName: fixture,
+            sourceId: `${fixture}-rejected-contact`,
+            companyId: crypto.randomUUID()
+          }
         }
-      }]
+      ]
     };
     const idempotencyKey = `${fixture}-import-key`;
     const first = await app.inject({
@@ -286,6 +358,8 @@ apiSuite("CRM-1 mutation API", () => {
     });
     expect(first.statusCode).toBe(201);
     const original = first.json();
+    expect(original).toMatchObject({ loadedCount: 1, rejectedCount: 1 });
+    expect(original.receipts).toHaveLength(1);
     batchIds.push(original.id);
     const targetId = original.receipts[0].targetId as string;
     contactIds.push(targetId);
@@ -298,6 +372,31 @@ apiSuite("CRM-1 mutation API", () => {
     });
     expect(replay.statusCode).toBe(201);
     expect(replay.json()).toEqual(original);
+
+    const persistedBatch = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/imports/${original.id}`,
+      headers: { authorization: viewerAuthorization }
+    });
+    expect(persistedBatch.statusCode).toBe(200);
+    expect(persistedBatch.json()).toMatchObject({
+      loadedCount: 1,
+      rejectedCount: 1,
+      receipts: original.receipts
+    });
+    const persistedRejects = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/imports/${original.id}/rejects`,
+      headers: { authorization: viewerAuthorization }
+    });
+    expect(persistedRejects.statusCode).toBe(200);
+    expect(persistedRejects.json()).toMatchObject({
+      total: 1,
+      items: [expect.objectContaining({
+        sourceRow: 2,
+        reasonCode: "INVALID_REFERENCE"
+      })]
+    });
 
     const targetRows = await db.select().from(crm1Contacts)
       .where(inArray(crm1Contacts.id, [targetId]));

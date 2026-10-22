@@ -53,7 +53,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Contact"
+                $ref: "#/components/schemas/ContactRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "422":
@@ -80,7 +80,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Contact"
+                $ref: "#/components/schemas/ContactRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -108,7 +108,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Contact"
+                $ref: "#/components/schemas/ContactRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -277,7 +277,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "422":
@@ -308,7 +308,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -336,7 +336,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -348,7 +348,13 @@ paths:
         "409":
           $ref: "#/components/responses/ConflictError"
         "422":
-          $ref: "#/components/responses/ValidationError"
+          description: >
+            Invalid input or forbidden lead status transition. A forbidden
+            transition returns code INVALID_LEAD_STATUS_TRANSITION.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
@@ -479,6 +485,7 @@ components:
       schema:
         type: integer
         minimum: 1
+        maximum: 100
         default: 25
   responses:
     ValidationError:
@@ -551,6 +558,13 @@ components:
         unsubscribedUpdatedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ContactRead:
+      allOf:
+        - $ref: "#/components/schemas/Contact"
+        - type: object
+          required: [companyName]
+          properties:
+            companyName: { type: [string, "null"] }
     ContactCreate:
       type: object
       additionalProperties: false
@@ -581,7 +595,7 @@ components:
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/Contact" }
+          items: { $ref: "#/components/schemas/ContactRead" }
     Company:
       type: object
       required: [id, name, taxNumber, email, phone, address, sourceSystem, sourceId, createdAt, updatedAt]
@@ -644,6 +658,14 @@ components:
         sourceId: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    LeadRead:
+      allOf:
+        - $ref: "#/components/schemas/Lead"
+        - type: object
+          required: [contactName, contactEmail]
+          properties:
+            contactName: { type: string, minLength: 1 }
+            contactEmail: { type: [string, "null"], format: email }
     LeadCreate:
       type: object
       additionalProperties: false
@@ -655,6 +677,9 @@ components:
       type: object
       additionalProperties: false
       minProperties: 1
+      description: >
+        Lead status changes may only advance New to Working, Working to Qualified,
+        and Qualified to Closed. Unchanged status is an idempotent update.
       properties:
         contactId: { type: string, format: uuid }
         status: { $ref: "#/components/schemas/LeadStatus" }
@@ -664,7 +689,7 @@ components:
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/Lead" }
+          items: { $ref: "#/components/schemas/LeadRead" }
     ImportCreate:
       type: object
       additionalProperties: false

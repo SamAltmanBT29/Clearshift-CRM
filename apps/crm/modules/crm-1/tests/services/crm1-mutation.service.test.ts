@@ -12,6 +12,7 @@ import {
   crm1Leads
 } from "../../db/schema.js";
 import { Crm1MutationService } from "../../src/services/crm1-mutation.service.js";
+import { Crm1ReferenceResolver } from "../../src/public.js";
 
 const databaseUrl = process.env["DATABASE_URL_TEST"];
 const serviceSuite = databaseUrl ? describe : describe.skip;
@@ -21,6 +22,7 @@ serviceSuite("CRM-1 mutation service", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle(pool);
   const service = new Crm1MutationService(db);
+  const references = new Crm1ReferenceResolver(db);
   const fixture = crypto.randomUUID();
   const companyIds: string[] = [];
   const contactIds: string[] = [];
@@ -67,6 +69,16 @@ serviceSuite("CRM-1 mutation service", () => {
     });
     contactIds.push(contact.id);
     expect(contact.goldenId).toBeTruthy();
+    expect(await references.exists("company", company.id)).toBe(true);
+    expect(await references.exists("contact", contact.id)).toBe(true);
+    expect(await references.exists("company", crypto.randomUUID())).toBe(false);
+    expect(await references.get("contact", contact.id)).toEqual({
+      id: contact.id,
+      email: null,
+      firstName: "Service",
+      lastName: fixture,
+      goldenId: contact.goldenId
+    });
 
     await expect(service.updateContact(contact.id, {
       companyId: crypto.randomUUID()
@@ -89,8 +101,33 @@ serviceSuite("CRM-1 mutation service", () => {
 
     const lead = await service.createLead({ contactId: contact.id, status: "New" });
     leadIds.push(lead.id);
-    const updatedLead = await service.updateLead(lead.id, { status: "Qualified" });
-    expect(updatedLead.status).toBe("Qualified");
+    const concurrentUpdates = await Promise.all([
+      service.updateLead(lead.id, { status: "Working" }),
+      service.updateLead(lead.id, { status: "Working" })
+    ]);
+    expect(concurrentUpdates.map((updated) => updated.status)).toEqual(["Working", "Working"]);
+    const workingLead = await db.select().from(crm1Leads)
+      .where(inArray(crm1Leads.id, [lead.id]));
+    const updatedAtAfterTransition = workingLead[0]!.updatedAt;
+    await service.updateLead(lead.id, { status: "Working" });
+    const unchangedLeadStatus = await db.select().from(crm1Leads)
+      .where(inArray(crm1Leads.id, [lead.id]));
+    expect(unchangedLeadStatus[0]?.updatedAt).toEqual(updatedAtAfterTransition);
+    await expect(service.updateLead(lead.id, { status: "Closed" })).rejects.toMatchObject({
+      code: "INVALID_LEAD_STATUS_TRANSITION",
+      statusCode: 422
+    });
+    const unchangedLead = await db.select().from(crm1Leads)
+      .where(inArray(crm1Leads.id, [lead.id]));
+    expect(unchangedLead[0]?.status).toBe("Working");
+    const qualifiedLead = await service.updateLead(lead.id, { status: "Qualified" });
+    expect(qualifiedLead.status).toBe("Qualified");
+    const closedLead = await service.updateLead(lead.id, { status: "Closed" });
+    expect(closedLead.status).toBe("Closed");
+    await expect(service.updateLead(lead.id, { status: "Working" })).rejects.toMatchObject({
+      code: "INVALID_LEAD_STATUS_TRANSITION",
+      statusCode: 422
+    });
     await expect(service.createLead({
       contactId: crypto.randomUUID(),
       status: "New"
