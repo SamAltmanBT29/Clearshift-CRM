@@ -1,7 +1,15 @@
 import React from 'react';
 import { DataTable } from '../components/DataTable.js';
+import { FilterToolbar } from '../components/FilterToolbar.js';
 import { RUNS_COLUMNS } from '../table/columns.js';
-import type { TableSortState, TablePaginationState } from '../table/types.js';
+import { CRM5_RUNS_FACETS } from '../table/facets.js';
+import type {
+  TableSortState,
+  TablePaginationState,
+  TableFilterState,
+  ActiveFilterPill,
+  FilterFacet,
+} from '../table/types.js';
 
 export interface RunsOverviewPageProps {
   data?: Record<string, unknown>[];
@@ -12,11 +20,21 @@ export interface RunsOverviewPageProps {
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
   onPageChange?: ((newPage: number) => void) | undefined;
+  search?: string;
+  onSearchChange?: ((term: string) => void) | undefined;
+  filters?: TableFilterState;
+  onFilterChange?: ((key: string, value: string) => void) | undefined;
+  onRemoveFilter?: ((key: string) => void) | undefined;
+  onClearAllFilters?: (() => void) | undefined;
+  activePills?: ActiveFilterPill[];
+  facets?: FilterFacet[];
+  hasActiveFilters?: boolean;
 }
 
 /**
  * Migration Runs Overview Page Shell
- * Integrates with /api/v1/crm-control/runs and paginated DataTable
+ * Integrates with /api/v1/crm-control/runs, FilterToolbar, and paginated DataTable.
+ * Conforms to ClearShift V1 Issue #191 (CRM5-18).
  */
 export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
   data = [],
@@ -27,8 +45,22 @@ export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
   onSortChange,
   pagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 },
   onPageChange,
+  search = '',
+  onSearchChange,
+  filters = {},
+  onFilterChange,
+  onRemoveFilter,
+  onClearAllFilters,
+  activePills = [],
+  facets = CRM5_RUNS_FACETS,
+  hasActiveFilters = false,
 }) => {
   const displayData = isEmpty ? [] : data;
+  const isFiltersActive =
+    hasActiveFilters ||
+    Boolean(search.trim().length > 0) ||
+    Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
+    activePills.length > 0;
 
   return (
     <div className="cs-page-container">
@@ -38,6 +70,20 @@ export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
           Inspect batch execution events and progression through migration lifecycle steps.
         </p>
       </div>
+
+      {onSearchChange && onFilterChange && (
+        <FilterToolbar
+          search={search}
+          onSearchChange={onSearchChange}
+          facets={facets}
+          filters={filters}
+          onFilterChange={onFilterChange}
+          activePills={activePills}
+          onRemoveFilter={onRemoveFilter ?? (() => {})}
+          onClearAll={onClearAllFilters ?? (() => {})}
+          searchPlaceholder="Search runs by batch ID..."
+        />
+      )}
 
       {isLoading && (
         <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading run projections">
@@ -59,8 +105,14 @@ export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
           columns={RUNS_COLUMNS}
           data={displayData}
           loading={false}
-          emptyTitle="No records found"
-          emptyDescription="No migration run projections currently recorded. Run events will project here automatically."
+          emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
+          emptyDescription={
+            isFiltersActive
+              ? 'No migration run projections match your search and filter criteria. Try adjusting your query or resetting filters.'
+              : 'No migration run projections currently recorded. Run events will project here automatically.'
+          }
+          hasActiveFilters={isFiltersActive}
+          onClearFilters={onClearAllFilters}
           sort={sort}
           onSortChange={onSortChange}
           pagination={pagination}
@@ -70,4 +122,5 @@ export const RunsOverviewPage: React.FC<RunsOverviewPageProps> = ({
     </div>
   );
 };
+
 
