@@ -267,6 +267,13 @@ export type CRM1LeadCreate = z.infer<typeof CRM1LeadCreateSchema>;
 export type CRM1LeadPatch = z.infer<typeof CRM1LeadPatchSchema>;
 export type CRM1ImportCreate = z.infer<typeof CRM1ImportCreateSchema>;
 export type CRM1ImportRow = z.infer<typeof CRM1ImportRowSchema>;
+export type CRM1LeadStatus = z.infer<typeof CRM1LeadStatusSchema>;
+export type CRM1ConsentStatus = z.infer<typeof CRM1ConsentStatusSchema>;
+export type CRM1EntityType = z.infer<typeof CRM1EntityTypeSchema>;
+export type CRM1ImportStatus = z.infer<typeof CRM1ImportStatusSchema>;
+export type CRM1ImportBatch = z.infer<typeof CRM1ImportBatchSchema>;
+export type CRM1ImportReject = z.infer<typeof CRM1ImportRejectSchema>;
+export type CRM1ImportBatchDetail = z.infer<typeof CRM1ImportBatchDetailSchema>;
 
 /**
  * CRM-1 Contacts, Companies and Leads — API Contracts & Zod Schemas
@@ -616,3 +623,5 @@ export const PaginatedCrm1RejectsResponseSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 });
 export type PaginatedCrm1RejectsResponse = z.infer<typeof PaginatedCrm1RejectsResponseSchema>;
+
+
