@@ -1,0 +1,874 @@
+openapi: 3.1.0
+info:
+  title: ClearShift CRM-1 Contacts, Companies and Leads API
+  version: 1.0.0
+  description: >
+    Public CRM-1 contract. Contact search matches names and email and is
+    server-paged. Exact duplicate candidates require review; imports never
+    fuzzy auto-merge and older imports cannot replace consent or unsubscribe state.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: CRM-1
+paths:
+  /api/v1/crm-contacts/contacts:
+    get:
+      operationId: listCRM1Contacts
+      tags: [CRM-1]
+      summary: Search and page contacts
+      description: Contacts matching the name or email search, with server pagination. Allowed roles - viewer, editor, analyst, admin.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Contacts matching the name or email search, with server pagination.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactList"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      operationId: createCRM1Contact
+      tags: [CRM-1]
+      summary: Create a contact
+      description: Create a contact record. Allowed roles - editor, migration_runner, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactCreate"
+      responses:
+        "201":
+          description: Contact created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/contacts/{id}:
+    get:
+      operationId: getCRM1Contact
+      tags: [CRM-1]
+      summary: Retrieve a contact by UUID
+      description: Retrieve a contact record by UUID. Allowed roles - viewer, editor, analyst, admin.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Contact record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+    patch:
+      operationId: updateCRM1Contact
+      tags: [CRM-1]
+      summary: Update a contact
+      description: Update an existing contact record. Allowed roles - editor, migration_runner, admin.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactPatch"
+      responses:
+        "200":
+          description: Contact updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/companies:
+    get:
+      operationId: listCRM1Companies
+      tags: [CRM-1]
+      summary: List companies
+      description: Server-paged companies. Allowed roles - viewer, editor, admin.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Server-paged companies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      operationId: createCRM1Company
+      tags: [CRM-1]
+      summary: Create a company
+      description: Create a company record. Allowed roles - editor, migration_runner, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyCreate"
+      responses:
+        "201":
+          description: Company created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/companies/{id}:
+    get:
+      operationId: getCRM1Company
+      tags: [CRM-1]
+      summary: Retrieve a company by UUID
+      description: Retrieve a company record by UUID. Allowed roles - viewer, editor, admin.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Company record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+    patch:
+      operationId: updateCRM1Company
+      tags: [CRM-1]
+      summary: Update a company
+      description: Update an existing company record. Allowed roles - editor, migration_runner, admin.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyPatch"
+      responses:
+        "200":
+          description: Company updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/leads:
+    get:
+      operationId: listCRM1Leads
+      tags: [CRM-1]
+      summary: List leads
+      description: Server-paged leads. Allowed roles - viewer, editor, admin.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Server-paged leads.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      operationId: createCRM1Lead
+      tags: [CRM-1]
+      summary: Create a lead
+      description: Create a lead record. Allowed roles - editor, migration_runner, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadCreate"
+      responses:
+        "201":
+          description: Lead created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/leads/{id}:
+    get:
+      operationId: getCRM1Lead
+      tags: [CRM-1]
+      summary: Retrieve a lead by UUID
+      description: Retrieve a lead record by UUID. Allowed roles - viewer, editor, admin.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Lead record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+    patch:
+      operationId: updateCRM1Lead
+      tags: [CRM-1]
+      summary: Update a lead
+      description: Update an existing lead record. Allowed roles - editor, migration_runner, admin.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadPatch"
+      responses:
+        "200":
+          description: Lead updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/imports:
+    post:
+      operationId: createCRM1Import
+      tags: [CRM-1]
+      summary: Start an import
+      description: Import processed and its batch result persisted. Allowed roles - migration_runner, admin.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Stable caller-generated key. A retry returns the original batch and receipts.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 256
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportCreate"
+      responses:
+        "201":
+          description: Import processed and its batch result persisted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBatchDetail"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/imports/{batch}:
+    get:
+      operationId: getCRM1Import
+      tags: [CRM-1]
+      summary: Get import status and receipts
+      description: Import batch and committed row receipts. Allowed roles - viewer, analyst, admin.
+      parameters:
+        - name: batch
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Import batch and committed row receipts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBatchDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /api/v1/crm-contacts/imports/{batch}/rejects:
+    get:
+      operationId: listCRM1ImportRejects
+      tags: [CRM-1]
+      summary: List import rejects
+      description: Server-paged rejects for the import. Allowed roles - viewer, analyst, admin.
+      parameters:
+        - name: batch
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Server-paged rejects for the import.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RejectList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+components:
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Search:
+      name: search
+      in: query
+      required: false
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 25
+  responses:
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnauthorizedError:
+      description: Authentication is required.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenError:
+      description: The authenticated user lacks the required capability.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: An unexpected failure occurred; the response includes a correlation ID.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFoundError:
+      description: The requested CRM-1 record or referenced record does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ConflictError:
+      description: The request conflicts with an existing identifier or CRM-1 state invariant.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnauthorizedError:
+      description: Authentication required or invalid/expired/disabled token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenError:
+      description: Authenticated identity does not possess the required role for this operation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Contact:
+      type: object
+      required: [id, firstName, lastName, email, phone, address, companyId, leadStatus, goldenId, sourceSystem, sourceId, consentStatus, consentUpdatedAt, unsubscribed, unsubscribedUpdatedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        companyId: { type: [string, "null"], format: uuid }
+        leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
+        goldenId: { type: string }
+        sourceSystem: { type: [string, "null"] }
+        sourceId: { type: [string, "null"] }
+        consentStatus: { $ref: "#/components/schemas/ConsentStatus" }
+        consentUpdatedAt: { type: [string, "null"], format: date-time }
+        unsubscribed: { type: boolean }
+        unsubscribedUpdatedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ContactCreate:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        companyId: { type: [string, "null"], format: uuid }
+        leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
+    ContactPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        companyId: { type: [string, "null"], format: uuid }
+        leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
+    ContactList:
+      allOf:
+        - $ref: "#/components/schemas/PageResult"
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Contact" }
+    Company:
+      type: object
+      required: [id, name, taxNumber, email, phone, address, sourceSystem, sourceId, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1 }
+        taxNumber: { type: [string, "null"] }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        sourceSystem: { type: [string, "null"] }
+        sourceId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CompanyCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        taxNumber: { type: [string, "null"] }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+    CompanyPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        taxNumber: { type: [string, "null"] }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+    CompanyList:
+      allOf:
+        - $ref: "#/components/schemas/PageResult"
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Company" }
+    LeadStatus:
+      type: string
+      enum: [New, Working, Qualified, Closed]
+    LeadStatusOrNull:
+      oneOf:
+        - $ref: "#/components/schemas/LeadStatus"
+        - type: "null"
+    ConsentStatus:
+      type: string
+      enum: [unknown, granted, withdrawn]
+    Lead:
+      type: object
+      required: [id, contactId, status, sourceSystem, sourceId, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        contactId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        sourceSystem: { type: [string, "null"] }
+        sourceId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LeadCreate:
+      type: object
+      additionalProperties: false
+      required: [contactId, status]
+      properties:
+        contactId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+    LeadPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        contactId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+    LeadList:
+      allOf:
+        - $ref: "#/components/schemas/PageResult"
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Lead" }
+    ImportCreate:
+      type: object
+      additionalProperties: false
+      required: [batchId, sourceSystem, rows]
+      properties:
+        batchId: { type: string, format: uuid }
+        sourceSystem: { type: string, minLength: 1 }
+        rows:
+          type: array
+          minItems: 1
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: false
+                required: [entity, sourceRow, data]
+                properties:
+                  entity: { const: contact }
+                  sourceRow: { type: integer, minimum: 1 }
+                  data: { $ref: "#/components/schemas/ContactImportData" }
+              - type: object
+                additionalProperties: false
+                required: [entity, sourceRow, data]
+                properties:
+                  entity: { const: company }
+                  sourceRow: { type: integer, minimum: 1 }
+                  data: { $ref: "#/components/schemas/CompanyImportData" }
+              - type: object
+                additionalProperties: false
+                required: [entity, sourceRow, data]
+                properties:
+                  entity: { const: lead }
+                  sourceRow: { type: integer, minimum: 1 }
+                  data: { $ref: "#/components/schemas/LeadImportData" }
+    ContactImportData:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName, sourceId]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        companyId: { type: [string, "null"], format: uuid }
+        leadStatus: { $ref: "#/components/schemas/LeadStatusOrNull" }
+        sourceId: { type: string, minLength: 1 }
+    CompanyImportData:
+      type: object
+      additionalProperties: false
+      required: [name, sourceId]
+      properties:
+        name: { type: string, minLength: 1 }
+        taxNumber: { type: [string, "null"] }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        sourceId: { type: string, minLength: 1 }
+    LeadImportData:
+      type: object
+      additionalProperties: false
+      required: [contactId, status, sourceId]
+      properties:
+        contactId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        sourceId: { type: string, minLength: 1 }
+    ImportBatch:
+      type: object
+      required: [id, sourceSystem, status, loadedCount, rejectedCount, createdAt, updatedAt, completedAt]
+      properties:
+        id: { type: string, format: uuid }
+        sourceSystem: { type: string }
+        status: { type: string, enum: [pending, processing, completed, failed] }
+        loadedCount: { type: integer, minimum: 0 }
+        rejectedCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+    ImportBatchDetail:
+      allOf:
+        - $ref: "#/components/schemas/ImportBatch"
+      properties:
+        receipts:
+          type: array
+          items:
+            type: object
+            required: [sourceRow, entity, targetId, createdAt]
+            properties:
+              sourceRow: { type: integer, minimum: 1 }
+              entity: { type: string, enum: [contact, company, lead] }
+              targetId: { type: string, format: uuid }
+              createdAt: { type: string, format: date-time }
+    Reject:
+      type: object
+      required: [id, batchId, sourceRow, entity, reasonCode, message, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        batchId: { type: string, format: uuid }
+        sourceRow: { type: integer, minimum: 1 }
+        entity: { type: string, enum: [contact, company, lead] }
+        reasonCode: { type: string, minLength: 1 }
+        message: { type: string, minLength: 1 }
+        createdAt: { type: string, format: date-time }
+    RejectList:
+      allOf:
+        - $ref: "#/components/schemas/PageResult"
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Reject" }
+    PageResult:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, default: 25 }
+        total: { type: integer, minimum: 0 }
+    Error:
+      type: object
+      required: [code, message, details, correlation_id]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlation_id: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            required: [message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+              code: { type: string }
+    DomainEventEnvelope:
+      type: object
+      required: [id, eventType, aggregateType, aggregateId, timestamp, version, producer, payload]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string }
+        aggregateType: { type: string }
+        aggregateId: { type: string }
+        timestamp: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+        producer: { type: string, default: "crm-1" }
+        correlationId: { type: string }
+        causationId: { type: string }
+        payload: { type: object }
+    EventContactCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.created" }
+        aggregateType: { type: string, const: "Contact" }
+    EventContactUpdated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.updated" }
+        aggregateType: { type: string, const: "Contact" }
+    EventContactMerged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.merged" }
+        aggregateType: { type: string, const: "Contact" }
+    EventCompanyCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.company.created" }
+        aggregateType: { type: string, const: "Company" }
+    EventCompanyUpdated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.company.updated" }
+        aggregateType: { type: string, const: "Company" }
+    EventLeadCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.lead.created" }
+        aggregateType: { type: string, const: "Lead" }
+    EventLeadStatusChanged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.lead.status_changed" }
+        aggregateType: { type: string, const: "Lead" }
+    EventContactConsentChanged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.consent_changed" }
+        aggregateType: { type: string, const: "Contact" }
+    EventImportBatchLoaded:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.import.batch_loaded" }
+        aggregateType: { type: string, const: "ImportBatch" }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+

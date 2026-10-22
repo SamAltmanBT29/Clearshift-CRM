@@ -374,3 +374,13 @@ CRM-5 primary views register structured facets mapped bi-directionally to API qu
   2. **Filtered Empty State (`.cs-empty-filter-state`):** Rendered when data exists in the system but the current search and filter combination returns zero records (e.g. *"No records matched your search and filter criteria. Try adjusting your search term or clearing filters."*).
 * **Reset Recovery Button:** Filtered empty states prominently render a **"Reset All Filters"** action button (`.cs-empty-reset-btn`) that directly triggers `clearAll()`, providing immediate one-click recovery back to the unfiltered collection view.
 
+## 10. Profiler (CRM5-26)
+
+`apps/crm/modules/crm-5/src/kit/profiler.ts` — `profileCrm5Batch(rows)`; read-only, never mutates input.
+
+| Output | Meaning |
+|---|---|
+| `columnStats[col]` | `totalValues`, `nullCount/Rate`, `distinctCount`, `invalidFormatCount/Rate` |
+| `defectsByCategory` | 11 categories, 1-based `recordIndices`, asserted against `tests/fixtures/manifest.json` |
+| `exactDuplicateCount` | repeated `id` or repeated `(batch_id, step)` |
+| `qualityMetrics` | 5 fractions + `overallScore` via `calculateQualityScore`; `null` (N/A) if unavailable |

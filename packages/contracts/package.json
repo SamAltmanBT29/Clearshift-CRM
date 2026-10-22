@@ -2,17 +2,20 @@
   "name": "@clearshift/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "Shared Zod/TypeScript API contracts and OpenAPI specs for ClearShift CRM",
-  "type": "module",
+  "description": "Shared Zod/TypeScript API contracts and OpenAPI specs for ClearShift",
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./common": "./src/common.ts",
+    "./events": "./src/events.ts",
+    "./crm-1": "./src/crm-1.ts",
+    "./crm-5": "./src/crm-5.ts",
     "./openapi": "./openapi"
   },
   "dependencies": {
-    "zod": "^3.24.0"
+    "zod": "3.24.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.0"
+    "typescript": "5.7.3"
   }
 }

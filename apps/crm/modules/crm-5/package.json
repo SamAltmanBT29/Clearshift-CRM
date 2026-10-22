@@ -19,9 +19,9 @@
     "@cs/core": "*",
     "@cs/kit": "*",
     "@cs/db": "*",
-    "fastify": "^5.12.7"
+    "fastify": "5.12.7"
   },
   "devDependencies": {
-    "typescript": "^5.7.0"
+    "typescript": "5.7.3"
   }
 }

@@ -22,41 +22,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Automated dependency vulnerability audit
+        run: |
+          chmod +x ./infra/security/dependency-audit.sh
+          ./infra/security/dependency-audit.sh
+
       - name: Scan for hardcoded credentials & secrets
         run: |
-          echo "🔍 Scanning repository for potential hardcoded secrets..."
-          PATTERNS=(
-            "(?i)(api_key|apikey|secret_key|private_key|auth_token|access_token|aws_secret_access_key)\s*[:=]\s*['\"][A-Za-z0-9\/+=_-]{16,}['\"]"
-            "-----BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY-----"
-            "(?i)password\s*[:=]\s*['\"][^'\"]{8,}['\"]"
-          )
-          
-          FOUND_LEAKS=0
-          for PATTERN in "${PATTERNS[@]}"; do
-            MATCHES=$(grep -rnIP "$PATTERN" . \
-              --exclude-dir=".git" \
-              --exclude-dir="node_modules" \
-              --exclude-dir=".github" \
-              --exclude-dir="dist" \
-              --exclude-dir="build" \
-              --exclude="*.md" \
-              --exclude="*.example" \
-              --exclude="*.sample" 2>/dev/null || true)
-            
-            if [ -n "$MATCHES" ]; then
-              echo "❌ Detected potential secret match:"
-              echo "$MATCHES" | head -n 5
-              FOUND_LEAKS=1
-            fi
-          done
+          chmod +x ./infra/security/secret-scan.sh
+          ./infra/security/secret-scan.sh
 
-          if [ "$FOUND_LEAKS" -eq 1 ]; then
-            echo ""
-            echo "❌ Hardcoded secrets detected! Please use environment variables or GitHub Secrets."
-            exit 1
-          fi
+      - name: Scan for forbidden cloud uploaders & verify fixtures
+        run: |
+          chmod +x ./infra/security/repo-audit.sh
+          ./infra/security/repo-audit.sh
 
-          echo "✅ Security scan passed. No secrets found."
+      - name: Test formula-safe CSV export & protections
+        run: |
+          npx vitest run packages/core/tests/csv-safe.test.ts
+
+      - name: Summary
+        run: echo "✅ Security baseline passed. Zero vulnerabilities, secrets, or cloud uploaders."
 
   # ─────────────────────────────────────────────────────────────
   # JOB 2: Frontend Pipeline (Lint, Typecheck, Test, Build)
@@ -64,6 +59,22 @@ jobs:
   frontend:
     name: 🎨 Frontend Checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: clearshift
+          POSTGRES_DB: clearshift_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clearshift -d clearshift_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL_TEST: postgresql://clearshift@localhost:5432/clearshift_test
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,7 +82,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Detect frontend environment
         id: detect-fe
@@ -126,6 +137,11 @@ jobs:
           else
             npm install
           fi
+
+      - name: Apply PostgreSQL migrations for integration tests
+        if: steps.detect-fe.outputs.found == 'true' && steps.detect-fe.outputs.dir == '.'
+        working-directory: ${{ steps.detect-fe.outputs.dir }}
+        run: npm run db:migrate:test
 
       - name: 🎨 Validate Frontend Design & Architecture Guidelines
         if: steps.detect-fe.outputs.found == 'true'
@@ -242,7 +258,7 @@ jobs:
         if: steps.detect-be.outputs.found == 'true' && steps.detect-be.outputs.type == 'node'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Cache Node backend dependencies
         if: steps.detect-be.outputs.found == 'true' && steps.detect-be.outputs.type == 'node'
