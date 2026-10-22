@@ -55,6 +55,23 @@ paths:
         "409":
           $ref: "#/components/responses/ConflictError"
   /api/v1/crm-contacts/contacts/{id}:
+    get:
+      operationId: getCRM1Contact
+      tags: [CRM-1]
+      summary: Retrieve a contact by UUID
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Contact record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
     patch:
       operationId: updateCRM1Contact
       tags: [CRM-1]
@@ -118,6 +135,23 @@ paths:
         "409":
           $ref: "#/components/responses/ConflictError"
   /api/v1/crm-contacts/companies/{id}:
+    get:
+      operationId: getCRM1Company
+      tags: [CRM-1]
+      summary: Retrieve a company by UUID
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Company record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
     patch:
       operationId: updateCRM1Company
       tags: [CRM-1]
@@ -183,6 +217,23 @@ paths:
         "409":
           $ref: "#/components/responses/ConflictError"
   /api/v1/crm-contacts/leads/{id}:
+    get:
+      operationId: getCRM1Lead
+      tags: [CRM-1]
+      summary: Retrieve a lead by UUID
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Lead record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
     patch:
       operationId: updateCRM1Lead
       tags: [CRM-1]

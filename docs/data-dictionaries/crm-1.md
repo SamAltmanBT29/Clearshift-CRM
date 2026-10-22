@@ -90,9 +90,7 @@ Indexes: unique source pair, contact foreign key, and lead status.
 | `crm1_import_rejects.message` | `text` | NOT NULL | Safe, non-raw rejection message. | CRM-1 | Non-whitespace; do not include raw PII. |
 | `crm1_import_rejects.created_at` | `timestamptz` | NOT NULL | Reject creation time. | CRM-1 | Defaults to `now()`. |
 
-### Import view fields
-
-`crm1.crm1_import_summary` projects `id (uuid, NOT NULL)`, `source_system (text, NOT NULL)`, `status (text, NOT NULL)`, `loaded_count (integer, NOT NULL)`, `rejected_count (integer, NOT NULL)`, `created_at (timestamptz, NOT NULL)`, `updated_at (timestamptz, NOT NULL)`, and `completed_at (timestamptz, NULL)` from the batch table. `crm1.crm1_reject_view` projects `id (uuid, NOT NULL)`, `batch_id (uuid, NOT NULL)`, `source_row (integer, NOT NULL)`, `entity (text, NOT NULL)`, `reason_code (text, NOT NULL)`, `message (text, NOT NULL)`, and `created_at (timestamptz, NOT NULL)` from the reject table. Both are owned by CRM-1 and contain no raw input rows.
+Both import views are SQL views over CRM-1-owned tables. The rejects view intentionally excludes the imported row payload.
 
 ## Index and API behavior
 
@@ -116,3 +114,24 @@ The first run applies `crm1_v1`; the second reports it skipped from `public.sche
 DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm run db:migrate:test
 DATABASE_URL_TEST=postgres://localhost:5432/clearshift_test npm test -- apps/crm/modules/crm-1/tests/db/schema.test.ts
 ```
+
+---
+
+## Public API Endpoints (`/api/v1/crm-contacts`)
+
+* `GET /health`: Health check and version verification.
+* `GET /contacts`: Paginated contacts list (search name/email, default pageSize 25, max 100, deterministic sort: `createdAt desc, id asc`).
+* `GET /contacts/:id`: Retrieve contact by UUID.
+* `POST /contacts`: Create contact (validates optional companyId and leadStatus).
+* `PATCH /contacts/:id`: Partial update of contact fields.
+* `GET /companies`: Paginated companies list (search name/taxNumber, default pageSize 20, max 100).
+* `GET /companies/:id`: Retrieve company by UUID.
+* `POST /companies`: Create company.
+* `PATCH /companies/:id`: Update company.
+* `GET /leads`: Paginated leads list (filter by status, search name/email, default pageSize 20, max 100).
+* `GET /leads/:id`: Retrieve lead by UUID.
+* `POST /leads`: Create lead.
+* `PATCH /leads/:id`: Update lead.
+* `POST /imports`: Initiate migration batch.
+* `GET /imports/:batch`: Check batch execution status.
+* `GET /imports/:batch/rejects`: Retrieve paginated rejected rows for review.
