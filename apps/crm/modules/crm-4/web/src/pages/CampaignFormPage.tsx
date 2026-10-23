@@ -7,7 +7,7 @@
  * Links back to: Marketing Lists (onBackToList)
  */
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Spinner } from '@clearshift/ui';
+import { Card, Button, Spinner } from '@cs/ui';
 import type {
   CRM4Campaign,
   CRM4List,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@clearshift/ui';
+import { Button } from '@cs/ui';
 
 export interface ConfirmModalProps {
   isOpen: boolean;

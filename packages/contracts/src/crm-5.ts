@@ -644,5 +644,12 @@ export const CRM5ErrorEnvelopeSchema = z.object({
 export type CRM5ErrorEnvelope = z.infer<typeof CRM5ErrorEnvelopeSchema>;
 
 export * from './import-target.js';
+export {
+  CRM5_RUNS_TARGET_FIELDS,
+  CRM5_SCORES_TARGET_FIELDS,
+  CRM5_REJECTS_TARGET_FIELDS,
+  CRM5_RECONCILIATION_TARGET_FIELDS,
+  CRM5_TARGET_ENTITIES,
+} from './migration-target.js';
 
 

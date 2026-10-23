@@ -18,9 +18,13 @@ import {
 import {
   TicketNotFoundError,
   NoteNotFoundError,
-  ContactReferenceError,
   DomainValidationError,
 } from '../domain/errors.js';
+import {
+  assertTicketStatusTransition,
+  assertValidContactReference,
+  assertTicketExists,
+} from '../domain/relationships.js';
 
 export interface Crm3ServiceOptions {
   contactResolver?: ReferenceResolver;
@@ -81,6 +85,7 @@ export class Crm3Service {
   private tickets: CRM3Ticket[] = [];
   private notes: CRM3Note[] = [];
   private contactResolver: ReferenceResolver;
+  private ticketLocks = new Map<string, Promise<void>>();
 
   constructor(options: Crm3ServiceOptions = {}) {
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
@@ -239,11 +244,7 @@ export class Crm3Service {
     assertValidTicketStatus(input.status);
     assertValidTicketPriority(input.priority);
 
-    // Verify contact exists
-    const contactExists = await this.contactResolver.exists('contact', input.contactId);
-    if (!contactExists) {
-      throw new ContactReferenceError(input.contactId);
-    }
+    await assertValidContactReference(input.contactId, this.contactResolver);
 
     const now = new Date().toISOString();
     const id = randomUUID();
@@ -279,8 +280,14 @@ export class Crm3Service {
 
   /**
    * Update mutable ticket fields.
+   * Edits to the same ticket are serialized, and every rule (enumerations, status transition,
+   * contact reference) is checked against the latest stored state before anything is written.
    */
   public async updateTicket(id: string, patch: CRM3TicketPatch): Promise<CRM3TicketRead> {
+    return this.withTicketLock(id, () => this.applyTicketPatch(id, patch));
+  }
+
+  private async applyTicketPatch(id: string, patch: CRM3TicketPatch): Promise<CRM3TicketRead> {
     const index = this.tickets.findIndex((t) => t.id === id);
     if (index === -1) {
       throw new TicketNotFoundError(id);
@@ -292,6 +299,7 @@ export class Crm3Service {
 
     if (patch.status !== undefined) {
       assertValidTicketStatus(patch.status);
+      assertTicketStatusTransition(current.status, patch.status);
     }
 
     if (patch.priority !== undefined) {
@@ -299,10 +307,7 @@ export class Crm3Service {
     }
 
     if (patch.contactId !== undefined) {
-      const contactExists = await this.contactResolver.exists('contact', patch.contactId);
-      if (!contactExists) {
-        throw new ContactReferenceError(patch.contactId);
-      }
+      await assertValidContactReference(patch.contactId, this.contactResolver);
     }
 
     const updated: CRM3Ticket = {
@@ -370,10 +375,7 @@ export class Crm3Service {
     noteText: string,
     authorId: string
   ): Promise<CRM3Note> {
-    const ticket = this.tickets.find((t) => t.id === ticketId);
-    if (!ticket) {
-      throw new TicketNotFoundError(ticketId);
-    }
+    await assertTicketExists(ticketId, (id) => this.ticketExists(id));
 
     if (!noteText || noteText.trim().length === 0) {
       throw new DomainValidationError('Note text cannot be empty', [
@@ -391,6 +393,55 @@ export class Crm3Service {
 
     this.notes.push(note);
     return note;
+  }
+
+  public ticketExists(id: string): boolean {
+    return this.tickets.some((t) => t.id === id);
+  }
+
+  public noteExists(id: string): boolean {
+    return this.notes.some((n) => n.id === id);
+  }
+
+  /**
+   * Read-only ticket projection for other modules (via the public ReferenceResolver).
+   * Exposes no note text or contact PII.
+   */
+  public getTicketSummary(
+    id: string
+  ): Pick<CRM3Ticket, 'id' | 'subject' | 'status' | 'priority' | 'contactId'> | null {
+    const ticket = this.tickets.find((t) => t.id === id);
+    if (!ticket) return null;
+    return {
+      id: ticket.id,
+      subject: ticket.subject,
+      status: ticket.status,
+      priority: ticket.priority,
+      contactId: ticket.contactId,
+    };
+  }
+
+  /**
+   * Runs fn after any earlier operation on the same ticket has finished, so two concurrent
+   * edits cannot both validate against the same stale state.
+   */
+  private async withTicketLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.ticketLocks.get(id) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.then(() => current);
+    this.ticketLocks.set(id, tail);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.ticketLocks.get(id) === tail) {
+        this.ticketLocks.delete(id);
+      }
+    }
   }
 
   private async enrichTicketWithContact(ticket: CRM3Ticket): Promise<CRM3TicketRead> {
