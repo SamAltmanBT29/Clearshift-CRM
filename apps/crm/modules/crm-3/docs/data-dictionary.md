@@ -77,3 +77,29 @@ Indexes:
 | `target_id` | `uuid` | NOT NULL | Target entity primary key created. | CRM-3 | UUID; no cross-module FK. |
 | `idempotency_key` | `text` | NOT NULL | Stable idempotency key: `batch ID + source row + target entity`. | CRM-3 | Non-whitespace and globally unique. |
 | `created_at` | `timestamptz` | NOT NULL | Receipt creation timestamp. | CRM-3 | Defaults to `now()`. |
+
+---
+
+## 4. Frontend Module Routes, Navigation & Layout Shell (CRM3-16)
+
+### Module Route Registration
+CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-3/tickets` | `crm3-tickets` | Support Tickets Queue | Tickets | `module.read` |
+| `/crm-3/activities` | `crm3-activities` | Customer Activity Timeline | Activities | `module.read` |
+| `/crm-3/notes` | `crm3-notes` | Internal Ticket Notes | Notes | `module.read` |
+| `/crm-3/sla` | `crm3-sla` | SLA Tracking & Priority Escalations | SLA Tracking | `module.read` |
+| `/crm-3/imports` | `crm3-imports` | Import Batches & Receipts | Imports | `module.read` |
+
+### Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `module.read` capability. Users lacking this capability are redirected to `/access-denied?required=module.read`.
+
+### Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.

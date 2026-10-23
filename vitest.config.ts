@@ -44,6 +44,7 @@ export default defineConfig({
       { find: /^@cs\/ui$/, replacement: resolve(__dirname, './packages/ui/src/index.ts') },
       { find: /^@cs\/mod-crm1$/, replacement: resolve(__dirname, './apps/crm/modules/crm-1/src/index.ts') },
       { find: /^@cs\/mod-crm2$/, replacement: resolve(__dirname, './apps/crm/modules/crm-2/src/index.ts') },
+      { find: /^@cs\/mod-crm3$/, replacement: resolve(__dirname, './apps/crm/modules/crm-3/src/index.ts') },
       { find: /^@cs\/mod-crm5$/, replacement: resolve(__dirname, './apps/crm/modules/crm-5/src/index.ts') }
     ]
   },
