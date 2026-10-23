@@ -107,6 +107,161 @@ export const CreateRunFormSchema = z
 
 export type CreateRunFormData = z.infer<typeof CreateRunFormSchema>;
 
+export interface CreateRunInputValues {
+  batchId?: string;
+  module?: string;
+  step?: string;
+  status?: string;
+  recordsIn?: string | number;
+  recordsOut?: string | number;
+  recordsRejected?: string | number;
+  operatorEmail?: string;
+  operatorPhone?: string;
+  samplingRate?: string | number;
+}
+
+/**
+ * Validates form input fields according to ClearShift V1 CRM5-20 field validation rules.
+ */
+export function validateCreateRunFields(
+  values: CreateRunInputValues,
+  requireContactInfo = false
+): FormFieldErrors {
+  const errors: FormFieldErrors = {};
+
+  const batchId = (values.batchId ?? '').trim();
+  if (!batchId) {
+    errors.batchId = 'batchId is required';
+  } else if (batchId.length > 128) {
+    errors.batchId = 'batchId cannot exceed 128 characters';
+  }
+
+  if (!values.module) {
+    errors.module = 'Module is required';
+  }
+
+  if (!values.step) {
+    errors.step = 'Step is required';
+  }
+
+  if (!values.status) {
+    errors.status = 'Status is required';
+  }
+
+  const rawIn = values.recordsIn !== undefined ? String(values.recordsIn).trim() : '';
+  const inVal = Number(rawIn);
+  if (rawIn === '' || isNaN(inVal) || !Number.isInteger(inVal)) {
+    errors.recordsIn = 'Records In must be an integer';
+  } else if (inVal < 0) {
+    errors.recordsIn = 'Records In cannot be negative';
+  }
+
+  const rawOut = values.recordsOut !== undefined ? String(values.recordsOut).trim() : '';
+  const outVal = Number(rawOut);
+  if (rawOut === '' || isNaN(outVal) || !Number.isInteger(outVal)) {
+    errors.recordsOut = 'Records Out must be an integer';
+  } else if (outVal < 0) {
+    errors.recordsOut = 'Records Out cannot be negative';
+  }
+
+  const rawRej = values.recordsRejected !== undefined ? String(values.recordsRejected).trim() : '';
+  const rejVal = Number(rawRej);
+  if (rawRej === '' || isNaN(rejVal) || !Number.isInteger(rejVal)) {
+    errors.recordsRejected = 'Records Rejected must be an integer';
+  } else if (rejVal < 0) {
+    errors.recordsRejected = 'Records Rejected cannot be negative';
+  }
+
+  // Conservation Invariant: sum of recordsOut and recordsRejected cannot exceed recordsIn
+  if (!errors.recordsIn && !errors.recordsOut && !errors.recordsRejected) {
+    if (outVal + rejVal > inVal) {
+      errors.recordsOut =
+        'Invariant violation: sum of recordsOut and recordsRejected cannot exceed recordsIn';
+    }
+  }
+
+  // Email Format Validation
+  const rawEmail = (values.operatorEmail ?? '').trim();
+  if (requireContactInfo && !rawEmail) {
+    errors.operatorEmail = 'Operator email is required';
+  } else if (rawEmail.length > 0 && !EMAIL_REGEX.test(rawEmail)) {
+    errors.operatorEmail = 'Invalid email address format';
+  }
+
+  // Phone Number Validation
+  const rawPhone = (values.operatorPhone ?? '').trim();
+  if (requireContactInfo && !rawPhone) {
+    errors.operatorPhone = 'Operator phone is required';
+  } else if (rawPhone.length > 0) {
+    const digits = (rawPhone.match(/\d/g) || []).length;
+    if (!PHONE_REGEX.test(rawPhone) || digits < 7) {
+      errors.operatorPhone = 'Invalid phone number format';
+    }
+  }
+
+  // Decimal Range Validation (0.00 to 1.00)
+  const rawSampling = values.samplingRate !== undefined ? String(values.samplingRate).trim() : '';
+  if (rawSampling.length > 0) {
+    const rateVal = Number(rawSampling);
+    if (isNaN(rateVal) || rateVal < 0 || rateVal > 1) {
+      errors.samplingRate = 'Value must be a decimal between 0.00 and 1.00';
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Parses HTTP 400 server validation errors or ClearShift error envelope into field errors.
+ */
+export function parseServerErrorToFieldErrors(err: unknown): {
+  topMessage: string;
+  fieldErrors: FormFieldErrors;
+} {
+  if (typeof err === 'object' && err !== null) {
+    const errorObj = err as {
+      message?: string;
+      status?: number;
+      statusCode?: number;
+      code?: string;
+      details?: unknown;
+      fieldErrors?: Record<string, string>;
+      error?: { message?: string; details?: unknown };
+    };
+
+    const topMessage =
+      errorObj.error?.message ??
+      errorObj.message ??
+      'Server validation errors prevented creation.';
+
+    const newFieldErrors: FormFieldErrors = {};
+
+    const details = errorObj.error?.details ?? errorObj.details;
+    if (Array.isArray(details)) {
+      for (const item of details) {
+        if (typeof item === 'object' && item !== null) {
+          const detailItem = item as { path?: string[]; message?: string; field?: string };
+          const fieldKey = detailItem.path?.[0] || detailItem.field;
+          if (fieldKey && detailItem.message) {
+            newFieldErrors[fieldKey] = detailItem.message;
+          }
+        }
+      }
+    } else if (typeof details === 'object' && details !== null) {
+      Object.assign(newFieldErrors, details);
+    } else if (errorObj.fieldErrors) {
+      Object.assign(newFieldErrors, errorObj.fieldErrors);
+    }
+
+    return { topMessage, fieldErrors: newFieldErrors };
+  }
+
+  return {
+    topMessage: err instanceof Error ? err.message : String(err),
+    fieldErrors: {},
+  };
+}
+
 export interface FormFieldErrors {
   batchId?: string;
   module?: string;
@@ -191,87 +346,21 @@ export const CreateRunForm: React.FC<CreateRunFormProps> = ({
 
   // Client-Side Field Validation
   const validate = (): boolean => {
-    const errors: FormFieldErrors = {};
-
-    // 1. Required Batch Correlation ID
-    if (!batchId || !batchId.trim()) {
-      errors.batchId = 'batchId is required';
-    } else if (batchId.trim().length > 128) {
-      errors.batchId = 'batchId cannot exceed 128 characters';
-    }
-
-    // 2. Required Module
-    if (!module) {
-      errors.module = 'Module is required';
-    }
-
-    // 3. Required Step
-    if (!step) {
-      errors.step = 'Step is required';
-    }
-
-    // 4. Required Status
-    if (!status) {
-      errors.status = 'Status is required';
-    }
-
-    // 5. Records In
-    const inVal = Number(recordsIn);
-    if (recordsIn.trim() === '' || isNaN(inVal) || !Number.isInteger(inVal)) {
-      errors.recordsIn = 'Records In must be an integer';
-    } else if (inVal < 0) {
-      errors.recordsIn = 'Records In cannot be negative';
-    }
-
-    // 6. Records Out
-    const outVal = Number(recordsOut);
-    if (recordsOut.trim() === '' || isNaN(outVal) || !Number.isInteger(outVal)) {
-      errors.recordsOut = 'Records Out must be an integer';
-    } else if (outVal < 0) {
-      errors.recordsOut = 'Records Out cannot be negative';
-    }
-
-    // 7. Records Rejected
-    const rejVal = Number(recordsRejected);
-    if (recordsRejected.trim() === '' || isNaN(rejVal) || !Number.isInteger(rejVal)) {
-      errors.recordsRejected = 'Records Rejected must be an integer';
-    } else if (rejVal < 0) {
-      errors.recordsRejected = 'Records Rejected cannot be negative';
-    }
-
-    // 8. Conservation Invariant: sum of recordsOut and recordsRejected cannot exceed recordsIn
-    if (!errors.recordsIn && !errors.recordsOut && !errors.recordsRejected) {
-      if (outVal + rejVal > inVal) {
-        errors.recordsOut =
-          'Invariant violation: sum of recordsOut and recordsRejected cannot exceed recordsIn';
-      }
-    }
-
-    // 9. Email Format Validation
-    if (requireContactInfo && (!operatorEmail || !operatorEmail.trim())) {
-      errors.operatorEmail = 'Operator email is required';
-    } else if (operatorEmail.trim().length > 0 && !EMAIL_REGEX.test(operatorEmail.trim())) {
-      errors.operatorEmail = 'Invalid email address format';
-    }
-
-    // 10. Phone Number Validation
-    if (requireContactInfo && (!operatorPhone || !operatorPhone.trim())) {
-      errors.operatorPhone = 'Operator phone is required';
-    } else if (operatorPhone.trim().length > 0) {
-      const digits = (operatorPhone.match(/\d/g) || []).length;
-      if (!PHONE_REGEX.test(operatorPhone.trim()) || digits < 7) {
-        errors.operatorPhone = 'Invalid phone number format';
-      }
-    }
-
-    // 11. Decimal Range Validation (0.00 to 1.00)
-    if (samplingRate.trim().length > 0) {
-      const rateVal = Number(samplingRate);
-      if (isNaN(rateVal) || rateVal < 0 || rateVal > 1) {
-        errors.samplingRate = 'Value must be a decimal between 0.00 and 1.00';
-      }
-    }
-
+    const errors = validateCreateRunFields(
+      {
+        batchId,
+        module,
+        step,
+        status,
+        recordsIn,
+        recordsOut,
+        recordsRejected,
+        operatorEmail,
+        operatorPhone,
+        samplingRate,
+      },
+      requireContactInfo
+    );
     setClientErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -315,49 +404,10 @@ export const CreateRunForm: React.FC<CreateRunFormProps> = ({
         onSuccess(result);
       }
     } catch (err: unknown) {
-      // Map HTTP 400 server validation errors directly to fields
-      if (typeof err === 'object' && err !== null) {
-        const errorObj = err as {
-          message?: string;
-          status?: number;
-          statusCode?: number;
-          code?: string;
-          details?: unknown;
-          fieldErrors?: Record<string, string>;
-          error?: { message?: string; details?: unknown };
-        };
-
-        const topMessage =
-          errorObj.error?.message ??
-          errorObj.message ??
-          'Server validation errors prevented creation.';
-        setLocalServerError(topMessage);
-
-        const newFieldErrors: FormFieldErrors = {};
-
-        // Parse details array if formatted as standard error envelope [{ path: ['field'], message }]
-        const details = errorObj.error?.details ?? errorObj.details;
-        if (Array.isArray(details)) {
-          for (const item of details) {
-            if (typeof item === 'object' && item !== null) {
-              const detailItem = item as { path?: string[]; message?: string; field?: string };
-              const fieldKey = detailItem.path?.[0] || detailItem.field;
-              if (fieldKey && detailItem.message) {
-                newFieldErrors[fieldKey] = detailItem.message;
-              }
-            }
-          }
-        } else if (typeof details === 'object' && details !== null) {
-          Object.assign(newFieldErrors, details);
-        } else if (errorObj.fieldErrors) {
-          Object.assign(newFieldErrors, errorObj.fieldErrors);
-        }
-
-        if (Object.keys(newFieldErrors).length > 0) {
-          setLocalServerFieldErrors(newFieldErrors);
-        }
-      } else {
-        setLocalServerError(err instanceof Error ? err.message : String(err));
+      const { topMessage, fieldErrors } = parseServerErrorToFieldErrors(err);
+      setLocalServerError(topMessage);
+      if (Object.keys(fieldErrors).length > 0) {
+        setLocalServerFieldErrors(fieldErrors);
       }
     } finally {
       setLocalIsSubmitting(false);
