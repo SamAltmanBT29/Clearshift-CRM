@@ -10,7 +10,7 @@ import {
   Input,
   Button,
   Alert,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type { CRM4List, CRM4ListCreate, CRM4ListPatch } from '@clearshift/contracts';
 import { ConfirmModal } from './ConfirmModal.js';
 
