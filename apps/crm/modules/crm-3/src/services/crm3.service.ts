@@ -583,7 +583,14 @@ export class Crm3Service {
     }
   }
 
-  private ensureImportBatch(batchId: string, sourceSystem: string, now: string): void {
+  /**
+   * Creates the import batch record (status `processing`) if it does not exist yet.
+   */
+  public ensureImportBatch(
+    batchId: string,
+    sourceSystem: string,
+    now: string = new Date().toISOString()
+  ): void {
     if (this.getImportBatch(batchId)) return;
     this.importBatches.push({
       id: batchId,
@@ -597,6 +604,25 @@ export class Crm3Service {
       updatedAt: now,
       completedAt: null,
     });
+  }
+
+  /**
+   * Records a batch's state and counts (called by the CRM-3 batch loader).
+   */
+  public updateImportBatch(
+    batchId: string,
+    patch: Partial<Pick<CRM3ImportBatch, 'status' | 'loadedCount' | 'rejectedCount' | 'completedAt'>>
+  ): CRM3ImportBatch {
+    const index = this.importBatches.findIndex((b) => b.id === batchId);
+    const current = this.importBatches[index];
+    if (index === -1 || !current) {
+      throw new DomainValidationError(`Import batch '${batchId}' not found`, [
+        { field: 'batchId', message: `Import batch '${batchId}' not found`, code: 'batch_not_found' },
+      ], 404);
+    }
+    const updated: CRM3ImportBatch = { ...current, ...patch, updatedAt: new Date().toISOString() };
+    this.importBatches[index] = updated;
+    return updated;
   }
 
   public ticketExists(id: string): boolean {

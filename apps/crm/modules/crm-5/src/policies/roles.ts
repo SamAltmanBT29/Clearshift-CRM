@@ -22,6 +22,8 @@ import { Capabilities, type CapabilityType, hasCapability } from '@cs/rbac';
  */
 export const CRM5_ENDPOINT_ROLES = {
   RUNS_LIST: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  RUNS_READ: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  RUNS_UPDATE: [Roles.MIGRATION_RUNNER, Roles.EDITOR, Roles.ADMIN] as RoleType[],
   SCORES_LIST: [Roles.ANALYST, Roles.ADMIN] as RoleType[],
   REJECTS_LIST: [Roles.ANALYST, Roles.ADMIN] as RoleType[],
   RECONCILIATION_READ: [Roles.ANALYST, Roles.ADMIN] as RoleType[],
@@ -49,6 +51,8 @@ export type Crm5EndpointKey = keyof typeof CRM5_ENDPOINT_ROLES;
  */
 export const CRM5_ENDPOINT_CAPABILITIES: Record<Crm5EndpointKey, CapabilityType[]> = {
   RUNS_LIST: [Capabilities.CONTROL_READ, Capabilities.MODULE_READ],
+  RUNS_READ: [Capabilities.CONTROL_READ, Capabilities.MODULE_READ],
+  RUNS_UPDATE: [Capabilities.KIT_RUN, Capabilities.HUB_ADMIN, Capabilities.KIT_ADMIN],
   SCORES_LIST: [Capabilities.CONTROL_READ],
   REJECTS_LIST: [Capabilities.CONTROL_READ],
   RECONCILIATION_READ: [Capabilities.CONTROL_READ],

@@ -20,6 +20,7 @@ import type {
   DetectDuplicatesInput,
   ExecuteBatchLoadInput,
   BatchExecutionReport,
+  UpdateRunInput,
 } from '@clearshift/contracts';
 import {
   calculateQualityScore,
@@ -96,6 +97,52 @@ export class ControlCenterService {
       limit: pageSize,
       totalPages,
     };
+  }
+
+  public getRunById(id: string): MigrationRun | null {
+    const run = this.runs.find((r) => r.id === id);
+    return run ? { ...run } : null;
+  }
+
+  public updateRun(id: string, input: UpdateRunInput): MigrationRun {
+    const existingIndex = this.runs.findIndex((r) => r.id === id);
+    if (existingIndex === -1) {
+      throw new DomainValidationError(`Run projection with ID '${id}' not found`);
+    }
+
+    const current = this.runs[existingIndex]!;
+
+    // Optimistic Concurrency Control (AC 4 / 409 Conflict)
+    if (input.expectedUpdatedAt) {
+      const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+      const actualTime = current.updatedAt.getTime();
+      if (actualTime > expectedTime) {
+        throw new DomainConflictError(
+          'Concurrent modification detected: this run record was updated concurrently by another operator. Please refresh and re-apply changes.',
+          { currentUpdatedAt: current.updatedAt.toISOString(), submittedExpectedUpdatedAt: new Date(input.expectedUpdatedAt).toISOString() }
+        );
+      }
+    }
+
+    // Validate state transition if status is being updated
+    if (input.status && input.status !== current.status) {
+      assertValidTransition(current.status, input.status);
+    }
+
+    // Merge allowlisted fields
+    const updatedRun: MigrationRun = {
+      ...current,
+      status: input.status ?? current.status,
+      recordsIn: input.recordsIn !== undefined ? input.recordsIn : current.recordsIn,
+      recordsOut: input.recordsOut !== undefined ? input.recordsOut : current.recordsOut,
+      recordsRejected: input.recordsRejected !== undefined ? input.recordsRejected : current.recordsRejected,
+      completedAt: input.completedAt !== undefined ? input.completedAt : current.completedAt,
+      metadata: input.metadata !== undefined ? { ...(current.metadata ?? {}), ...input.metadata } : current.metadata,
+      updatedAt: new Date(),
+    };
+
+    this.runs[existingIndex] = updatedRun;
+    return { ...updatedRun };
   }
 
   // ---------------------------------------------------------------------------
