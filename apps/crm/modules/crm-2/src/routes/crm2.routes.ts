@@ -9,6 +9,11 @@ import {
   UpdateQuoteInputSchema,
   Crm2ImportRowSchema,
   type Crm2ImportRow,
+  Crm2ExecuteBatchLoadInputSchema,
+  Crm2DetectDuplicatesInputSchema,
+  Crm2ResolveDuplicateInputSchema,
+  Crm2EvaluateDealDuplicateInputSchema,
+  Crm2EvaluateQuoteDuplicateInputSchema,
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
 import type { RoleType } from '@cs/identity';
@@ -21,6 +26,8 @@ import {
   IdempotencyConflictError,
   DuplicateRecordError,
   ReferenceNotFoundError,
+  AutoMergeForbiddenError,
+  DuplicateCandidateNotFoundError,
 } from '../domain/errors.js';
 
 export interface Crm2RoutesOptions {
@@ -446,6 +453,69 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
   });
 
   // ---------------------------------------------------------------------------
+  // 11b. POST /batches/execute-load and POST /import/batch (CRM2-13 Batch Loading)
+  // ---------------------------------------------------------------------------
+  const handleExecuteBatchLoad = async (request: FastifyRequest, reply: any) => {
+    const correlation_id = getCorrelationId(request);
+    const body = (request.body && typeof request.body === 'object') ? (request.body as Record<string, unknown>) : {};
+
+    const parsed = Crm2ExecuteBatchLoadInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid batch load input',
+        details: parsed.error.issues,
+        correlation_id,
+      });
+    }
+
+    try {
+      const report = await service.executeBatchLoad(parsed.data);
+      return reply.status(200).send({
+        ...report,
+        correlation_id,
+      });
+    } catch (err: any) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({
+          code: err.code,
+          message: err.message,
+          details: err.details,
+          correlation_id,
+        });
+      }
+      throw err;
+    }
+  };
+
+  fastify.post('/batches/execute-load', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.IMPORT_WRITE, authEnabled),
+  }, handleExecuteBatchLoad);
+
+  fastify.post('/import/batch', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.IMPORT_WRITE, authEnabled),
+  }, handleExecuteBatchLoad);
+
+  fastify.get<{ Params: { batchId: string } }>('/batches/:batchId/report', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.IMPORT_RECEIPTS, authEnabled),
+  }, async (request, reply) => {
+    const report = service.getBatchReport(request.params.batchId);
+    if (!report) {
+      return reply.status(404).send({
+        code: 'NOT_FOUND',
+        message: `Batch report for batch '${request.params.batchId}' not found`,
+        details: [],
+        correlation_id: getCorrelationId(request),
+      });
+    }
+
+    return reply.status(200).send({
+      ...report,
+      correlation_id: getCorrelationId(request),
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // 12. Projections & Reports
   // ---------------------------------------------------------------------------
   fastify.get<{ Params: { id: string } }>('/deals/:id/summary', {
@@ -472,5 +542,166 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
   }, async (_request, reply) => {
     const summary = await service.getPipelineSummary();
     return reply.status(200).send(summary);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 13. Exact Duplicate Key Policy & Human Review Endpoints (CRM2-12 / KIT-10)
+  // ---------------------------------------------------------------------------
+
+  // 13.1 POST /duplicates/detect - Detect exact duplicate candidates
+  fastify.post('/duplicates/detect', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.DUPLICATES_DETECT, authEnabled),
+  }, async (request, reply) => {
+    const parsed = Crm2DetectDuplicatesInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid duplicate detection payload',
+        details: parsed.error.issues,
+        correlation_id: getCorrelationId(request),
+      });
+    }
+
+    try {
+      const result = service.detectDuplicates(parsed.data);
+      return reply.status(200).send({
+        ...result,
+        correlation_id: getCorrelationId(request),
+      });
+    } catch (err: unknown) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({
+          code: err.code,
+          message: err.message,
+          details: err.details,
+          correlation_id: getCorrelationId(request),
+        });
+      }
+      throw err;
+    }
+  });
+
+  // 13.2 GET /duplicates/held - List duplicate candidates held for human review
+  fastify.get<{
+    Querystring: { batchId?: string; keyType?: string; entity?: string };
+  }>('/duplicates/held', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.DUPLICATES_HELD, authEnabled),
+  }, async (request, reply) => {
+    const items = service.getHeldDuplicates(request.query);
+    return reply.status(200).send({
+      items,
+      total: items.length,
+      correlation_id: getCorrelationId(request),
+    });
+  });
+
+  // 13.3 POST /duplicates/resolve - Record human merge decision with audit trail
+  fastify.post('/duplicates/resolve', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.DUPLICATES_RESOLVE, authEnabled),
+  }, async (request, reply) => {
+    const parsed = Crm2ResolveDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid duplicate resolution payload',
+        details: parsed.error.issues,
+        correlation_id: getCorrelationId(request),
+      });
+    }
+
+    try {
+      const audit = service.resolveDuplicate(parsed.data);
+      return reply.status(200).send({
+        status: 'resolved',
+        audit,
+        correlation_id: getCorrelationId(request),
+      });
+    } catch (err: unknown) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({
+          code: err.code,
+          message: err.message,
+          details: err.details,
+          correlation_id: getCorrelationId(request),
+        });
+      }
+      throw err;
+    }
+  });
+
+  // 13.4 GET /duplicates/audit - Query duplicate resolution audit logs
+  fastify.get<{
+    Querystring: {
+      candidateId?: string;
+      actorId?: string;
+      entity?: string;
+      page?: number;
+      pageSize?: number;
+    };
+  }>('/duplicates/audit', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.DUPLICATES_AUDIT, authEnabled),
+  }, async (request, reply) => {
+    const logs = service.getDuplicateAuditLogs(request.query);
+    return reply.status(200).send({
+      ...logs,
+      correlation_id: getCorrelationId(request),
+    });
+  });
+
+  // 13.5 POST /deals/evaluate-duplicate - Evaluate single deal candidate against pool
+  fastify.post('/deals/evaluate-duplicate', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.DEALS_EVALUATE, authEnabled),
+  }, async (request, reply) => {
+    const parsed = Crm2EvaluateDealDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid deal candidate payload',
+        details: parsed.error.issues,
+        correlation_id: getCorrelationId(request),
+      });
+    }
+
+    const evaluation = service.evaluateDealDuplicate({
+      id: parsed.data.id,
+      name: parsed.data.name,
+      stageId: parsed.data.stageId,
+      contactId: parsed.data.contactId,
+      value: parsed.data.value,
+      currency: parsed.data.currency,
+    });
+
+    return reply.status(200).send({
+      ...evaluation,
+      correlation_id: getCorrelationId(request),
+    });
+  });
+
+  // 13.6 POST /quotes/evaluate-duplicate - Evaluate single quote candidate against pool
+  fastify.post('/quotes/evaluate-duplicate', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.QUOTES_EVALUATE, authEnabled),
+  }, async (request, reply) => {
+    const parsed = Crm2EvaluateQuoteDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid quote candidate payload',
+        details: parsed.error.issues,
+        correlation_id: getCorrelationId(request),
+      });
+    }
+
+    const evaluation = service.evaluateQuoteDuplicate({
+      id: parsed.data.id,
+      quoteNumber: parsed.data.quoteNumber,
+      dealId: parsed.data.dealId,
+      amount: parsed.data.amount,
+      currency: parsed.data.currency,
+    });
+
+    return reply.status(200).send({
+      ...evaluation,
+      correlation_id: getCorrelationId(request),
+    });
   });
 };

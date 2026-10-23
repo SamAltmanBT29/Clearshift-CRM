@@ -29,6 +29,14 @@ export const CRM2_ENDPOINT_ROLES = {
 
   IMPORT_WRITE: [Roles.MIGRATION_RUNNER, Roles.ADMIN] as RoleType[],
   IMPORT_RECEIPTS: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+
+  // Exact duplicate candidate review and audited merge decisions (CRM2-12 / KIT-10)
+  DUPLICATES_DETECT: [Roles.ANALYST, Roles.MIGRATION_RUNNER, Roles.ADMIN] as RoleType[],
+  DUPLICATES_HELD: [Roles.VIEWER, Roles.ANALYST, Roles.EDITOR, Roles.ADMIN] as RoleType[],
+  DUPLICATES_RESOLVE: [Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  DUPLICATES_AUDIT: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  DEALS_EVALUATE: [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  QUOTES_EVALUATE: [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
 } as const;
 
 export type Crm2EndpointKey = keyof typeof CRM2_ENDPOINT_ROLES;
