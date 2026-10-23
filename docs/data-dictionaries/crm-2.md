@@ -58,10 +58,59 @@ Indexes support deal and quote-date lookups.
 - Source-system/source-id pairs are both null or both non-blank. Duplicate source pairs are rejected.
 - Monetary values use `NUMERIC(14,2)` to avoid floating-point rounding errors.
 
-## API & Data Model Alignment (CRM2-04)
+## API & Data Model Alignment (CRM2-04 & CRM2-06)
 
 All endpoint request payloads, query filters, and response representations strictly reflect these tables and invariants:
-- `GET /api/v1/crm-deals/deals`: Returns paginated list of deals with `is_orphan` flag and `stage_name`.
+- `GET /api/v1/crm-deals/deals`: Returns paginated list of deals with `is_orphan` flag, `contact_name`, and `stage_name`.
+- `GET /api/v1/crm-deals/deals/{id}`: Returns authoritative deal details.
+- `POST /api/v1/crm-deals/deals`: Creates new deal; validates contact reference via CRM-1 reference resolver if provided.
+- `PATCH /api/v1/crm-deals/deals/{id}`: Updates deal attributes; validates state transitions across the pipeline state machine.
 - `GET /api/v1/crm-deals/stages`: Returns seeded stages ordered by `position ASC`.
-- `GET /api/v1/crm-deals/quotes`: Returns quotes linked to deals.
+- `GET /api/v1/crm-deals/quotes`: Returns quotes linked to deals with bounded pagination.
+- `GET /api/v1/crm-deals/quotes/{id}`: Returns quote by ID.
+- `POST /api/v1/crm-deals/quotes`: Creates quote linked to deal; enforces unique quote numbers and valid deal reference.
+- `PATCH /api/v1/crm-deals/quotes/{id}`: Updates quote attributes; validates uniqueness on quote number rename.
+
+## Deal Stage Transitions & Pipeline State Machine (CRM2-06)
+
+The sales pipeline follows a strict directed transition graph:
+- **Forward Progression**: `New` -> `Qualified` -> `Proposal` -> `Negotiation` -> `Won`
+- **Loss Progression**: Any active stage (`New`, `Qualified`, `Proposal`, `Negotiation`) can transition directly to `Lost`.
+- **Idempotency**: Same-stage updates (`current === next`) are permitted.
+- **Terminal Stages**:
+  - `Won` (`is_won = true`): Closed-Won terminal state. Outgoing transitions: `[]`
+  - `Lost` (`is_won = false`): Closed-Lost terminal state. Outgoing transitions: `[]`
+- **Forbidden Transitions**: Backward transitions (e.g. `Qualified` -> `New`), skip transitions (e.g. `New` -> `Won`), or transitions originating from terminal stages (`Won` or `Lost`) are strictly rejected before commit with HTTP 422 Unprocessable Entity (`INVALID_DEAL_STAGE_TRANSITION`).
+
+### Transition Matrix
+
+| Current Stage | Allowed Next Stages | Terminal? | Rejection Code on Illegal Transition |
+|---|---|---|---|
+| `New` | `Qualified`, `Lost` | No | `INVALID_DEAL_STAGE_TRANSITION` (422) |
+| `Qualified` | `Proposal`, `Lost` | No | `INVALID_DEAL_STAGE_TRANSITION` (422) |
+| `Proposal` | `Negotiation`, `Lost` | No | `INVALID_DEAL_STAGE_TRANSITION` (422) |
+| `Negotiation` | `Won`, `Lost` | No | `INVALID_DEAL_STAGE_TRANSITION` (422) |
+| `Won` | `[]` | Yes | `INVALID_DEAL_STAGE_TRANSITION` (422) |
+| `Lost` | `[]` | Yes | `INVALID_DEAL_STAGE_TRANSITION` (422) |
+
+## Referential Integrity & Validation Rules
+
+1. **CRM-1 Contact Link (`contact_id`)**:
+   - Optional / nullable.
+   - When null or undefined: Represents an orphan deal. The read API returns `is_orphan: true`, and the UI renders a visible warning badge. An orphan deal is never silently dropped or hidden.
+   - When provided (UUID): Resolved via CRM-1's public `ReferenceResolver` or API (`/api/v1/crm-contacts/contacts/{id}`). If the contact ID does not exist, the write operation is aborted before mutation with HTTP 422 Unprocessable Entity (`REFERENCE_NOT_FOUND`, field: `contact_id`).
+   - No direct SQL foreign keys or cross-schema writes to `crm1` tables are permitted.
+2. **Deal Reference on Quotes (`deal_id`)**:
+   - Mandatory foreign key to `crm2.crm2_deals.id`.
+   - Verified before commit. Non-existent deal references fail with HTTP 422 Unprocessable Entity (`REFERENCE_NOT_FOUND`, field: `deal_id`).
+3. **Quote Number Uniqueness (`quote_number`)**:
+   - Unique human-readable quote identifier.
+   - Duplicate quote numbers are rejected with HTTP 409 Conflict (`DUPLICATE_RECORD`, field: `quote_number`).
+
+## Read-Model Consistency
+
+- All read operations (`GET /deals`, `GET /deals/{id}`, `GET /quotes`, `GET /quotes/{id}`) read from authoritative state.
+- Derived values (`is_orphan`, `stage_name`, `quotesCount`, `totalQuotesAmount`) are computed deterministically.
+- Mutations return updated projections immediately with zero stale cache lags.
+
 

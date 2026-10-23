@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   CRM2_STAGES,
+  CRM2_DEAL_STAGE_TRANSITIONS,
+  CRM2_STAGE_SEEDS,
+  isDealStageTransitionAllowed,
+  assertDealStageTransition,
   assertValidStageName,
   Crm2StageNameSchema,
   DealSchema,
@@ -24,6 +28,9 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
       expect(crm2OpenApi).toContain('/stages:');
       expect(crm2OpenApi).toContain('/quotes:');
       expect(crm2OpenApi).toContain('/quotes/{id}:');
+      expect(crm2OpenApi).toContain('getQuoteById');
+      expect(crm2OpenApi).toContain('422');
+      expect(crm2OpenApi).toContain('409');
     });
 
     it('documents fixed stages in OpenAPI schema', () => {
@@ -36,7 +43,7 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
     });
   });
 
-  describe('Domain Invariants', () => {
+  describe('Domain Invariants & State Transitions', () => {
     it('Stage set is exactly New, Qualified, Proposal, Negotiation, Won, Lost', () => {
       expect(CRM2_STAGES).toEqual(['New', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']);
       expect(CRM2_STAGES.length).toBe(6);
@@ -48,6 +55,47 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
 
       expect(() => assertValidStageName('ClosedWon')).toThrow();
       expect(() => assertValidStageName('Draft')).toThrow();
+    });
+
+    it('enforces deal stage transition rules across the matrix', () => {
+      // Allowed forward transitions
+      expect(isDealStageTransitionAllowed('New', 'Qualified')).toBe(true);
+      expect(isDealStageTransitionAllowed('Qualified', 'Proposal')).toBe(true);
+      expect(isDealStageTransitionAllowed('Proposal', 'Negotiation')).toBe(true);
+      expect(isDealStageTransitionAllowed('Negotiation', 'Won')).toBe(true);
+
+      // Allowed immediate transitions to Lost
+      expect(isDealStageTransitionAllowed('New', 'Lost')).toBe(true);
+      expect(isDealStageTransitionAllowed('Qualified', 'Lost')).toBe(true);
+      expect(isDealStageTransitionAllowed('Proposal', 'Lost')).toBe(true);
+      expect(isDealStageTransitionAllowed('Negotiation', 'Lost')).toBe(true);
+
+      // Idempotent same-stage updates
+      for (const stage of CRM2_STAGES) {
+        expect(isDealStageTransitionAllowed(stage, stage)).toBe(true);
+      }
+
+      // Forbidden backward and skip transitions
+      expect(isDealStageTransitionAllowed('Proposal', 'New')).toBe(false);
+      expect(isDealStageTransitionAllowed('New', 'Won')).toBe(false);
+      expect(isDealStageTransitionAllowed('Won', 'New')).toBe(false);
+      expect(isDealStageTransitionAllowed('Lost', 'Qualified')).toBe(false);
+
+      expect(() => assertDealStageTransition('Proposal', 'New')).toThrow();
+    });
+
+    it('defines canonical stage seeds with matching flags and positions', () => {
+      expect(CRM2_STAGE_SEEDS).toHaveLength(6);
+      expect(CRM2_STAGE_SEEDS.map((s) => s.name)).toEqual(CRM2_STAGES);
+      expect(CRM2_STAGE_SEEDS.map((s) => s.order)).toEqual([1, 2, 3, 4, 5, 6]);
+
+      const won = CRM2_STAGE_SEEDS.find((s) => s.name === 'Won');
+      expect(won?.is_closed_won).toBe(true);
+      expect(won?.is_closed_lost).toBe(false);
+
+      const lost = CRM2_STAGE_SEEDS.find((s) => s.name === 'Lost');
+      expect(lost?.is_closed_lost).toBe(true);
+      expect(lost?.is_closed_won).toBe(false);
     });
 
     it('validates deal financial precision, explicit currency, and orphan flag', () => {
