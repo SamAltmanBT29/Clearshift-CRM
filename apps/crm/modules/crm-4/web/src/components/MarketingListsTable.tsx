@@ -10,6 +10,7 @@ import {
   Button,
 } from '@cs/ui';
 import type { CRM4List } from '@clearshift/contracts';
+import type { TableSortState, TablePaginationState } from '../../table/types.js';
 
 export interface MarketingListsTableProps {
   lists: CRM4List[];
@@ -18,6 +19,11 @@ export interface MarketingListsTableProps {
   emptyDescription?: string | undefined;
   onSelectList?: ((list: CRM4List) => void) | undefined;
   onViewCampaigns?: ((list: CRM4List) => void) | undefined;
+  sort?: TableSortState | undefined;
+  onSortChange?: ((columnKey: string) => void) | undefined;
+  pagination?: TablePaginationState | undefined;
+  onPageChange?: ((newPage: number) => void) | undefined;
+  onPageSizeChange?: ((newPageSize: number) => void) | undefined;
 }
 
 export function formatDateValue(dateStr: string): string {
@@ -41,6 +47,11 @@ export function MarketingListsTable({
   emptyDescription = 'No marketing lists or segmentation criteria have been created yet.',
   onSelectList,
   onViewCampaigns,
+  sort,
+  onSortChange,
+  pagination,
+  onPageChange,
+  onPageSizeChange,
 }: MarketingListsTableProps) {
   if (loading) {
     return (
@@ -60,15 +71,73 @@ export function MarketingListsTable({
     );
   }
 
-  return (
+  // Sort helper
+  const renderSortableHeader = (columnKey: string, label: string) => {
+    if (!onSortChange) {
+      return label;
+    }
+
+    const isSorted = sort?.columnKey === columnKey;
+    const direction = isSorted ? sort.direction : undefined;
+
+    return (
+      <button
+        type="button"
+        onClick={() => onSortChange(columnKey)}
+        className={`inline-flex items-center gap-1 font-semibold hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1 -mx-1 ${
+          isSorted ? 'text-indigo-600' : 'text-slate-900'
+        }`}
+        aria-label={`Sort by ${label}${
+          isSorted
+            ? direction === 'asc'
+              ? ', currently ascending'
+              : ', currently descending'
+            : ''
+        }`}
+      >
+        <span>{label}</span>
+        <span className="text-xs" aria-hidden="true">
+          {isSorted ? (direction === 'asc' ? ' ▲' : ' ▼') : ' ↕'}
+        </span>
+      </button>
+    );
+  };
+
+  const getAriaSort = (columnKey: string): 'ascending' | 'descending' | 'none' | undefined => {
+    if (!onSortChange) return undefined;
+    if (sort?.columnKey === columnKey) {
+      return sort.direction === 'asc' ? 'ascending' : 'descending';
+    }
+    return 'none';
+  };
+
+  // Pagination calculation
+  const page = pagination?.page ?? 1;
+  const pageSize = pagination?.pageSize ?? 25;
+  const total = pagination?.total ?? lists.length;
+  const totalPages = pagination?.totalPages ?? Math.max(1, Math.ceil(total / pageSize));
+  const startItem = total > 0 ? (page - 1) * pageSize + 1 : 0;
+  const endItem = total > 0 ? Math.min(page * pageSize, total) : 0;
+
+  const tableContent = (
     <Table aria-label="CRM Marketing Lists Table">
       <TableHeader>
         <TableRow>
-          <TableHead className="w-1/3">List Name</TableHead>
-          <TableHead className="w-1/3">Description</TableHead>
-          <TableHead className="w-28 text-center">Campaigns</TableHead>
-          <TableHead className="w-36">Created Date</TableHead>
-          <TableHead className="w-28 text-right">Actions</TableHead>
+          <TableHead className="w-1/3" aria-sort={getAriaSort('name')}>
+            {renderSortableHeader('name', 'List Name')}
+          </TableHead>
+          <TableHead className="w-1/3">
+            Description
+          </TableHead>
+          <TableHead className="w-28 text-center" aria-sort={getAriaSort('campaignCount')}>
+            {renderSortableHeader('campaignCount', 'Campaigns')}
+          </TableHead>
+          <TableHead className="w-36" aria-sort={getAriaSort('createdAt')}>
+            {renderSortableHeader('createdAt', 'Created Date')}
+          </TableHead>
+          <TableHead className="w-28 text-right">
+            Actions
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -133,5 +202,75 @@ export function MarketingListsTable({
         ))}
       </TableBody>
     </Table>
+  );
+
+  if (!pagination) {
+    return tableContent;
+  }
+
+  return (
+    <div className="space-y-4">
+      {tableContent}
+
+      {/* Pagination Controls */}
+      <div
+        className="flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-2 border-t border-slate-200"
+        role="navigation"
+        aria-label="Marketing lists pagination"
+      >
+        <div className="text-sm text-slate-600" aria-live="polite">
+          Showing <span className="font-semibold text-slate-900">{startItem}</span> to{' '}
+          <span className="font-semibold text-slate-900">{endItem}</span> of{' '}
+          <span className="font-semibold text-slate-900">{total}</span> lists
+        </div>
+
+        <div className="flex items-center gap-4">
+          {onPageSizeChange && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="crm4-lists-page-size" className="text-sm text-slate-600">
+                Rows:
+              </label>
+              <select
+                id="crm4-lists-page-size"
+                value={pageSize}
+                onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                className="text-sm border border-slate-300 rounded px-2 py-1 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-label="Select rows per page"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange?.(page - 1)}
+              disabled={page <= 1}
+              aria-label="Previous page"
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-slate-600 px-2">
+              Page <span className="font-semibold text-slate-900">{page}</span> of{' '}
+              <span className="font-semibold text-slate-900">{totalPages}</span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange?.(page + 1)}
+              disabled={page >= totalPages}
+              aria-label="Next page"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

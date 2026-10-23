@@ -10,6 +10,7 @@ import {
   DetectDuplicatesInputSchema,
   ResolveDuplicateInputSchema,
   ExecuteBatchLoadInputSchema,
+  UpdateRunInputSchema,
 } from '@clearshift/contracts';
 import type { RoleType } from '@cs/identity';
 import { ControlCenterService } from '../services/control-center.service.js';
@@ -79,6 +80,99 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
 
     const result = service.getRuns(parsed.data);
     return reply.status(200).send(redactSensitiveObject(result));
+  });
+
+  // 1a. GET /runs/:id - Get specific migration run projection
+  fastify.get<{ Params: { id: string } }>('/runs/:id', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.RUNS_READ, authEnabled),
+  }, async (request, reply) => {
+    const { id } = request.params;
+    if (!id || id.trim().length === 0) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Run ID is required',
+        },
+      });
+    }
+
+    const run = service.getRunById(id);
+    if (!run) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Migration run with ID '${id}' could not be located`,
+        },
+      });
+    }
+
+    return reply.status(200).send(redactSensitiveObject(run));
+  });
+
+  // 1b. PATCH /runs/:id - Update allowlisted fields on migration run projection
+  fastify.patch<{ Params: { id: string } }>('/runs/:id', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.RUNS_UPDATE, authEnabled),
+  }, async (request, reply) => {
+    const { id } = request.params;
+    const actor = (request.user as any)?.sub || 'system';
+
+    const parsed = UpdateRunInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Validation failed for update run payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const updated = service.updateRun(id, parsed.data);
+
+      await auditService.logEvent({
+        actor,
+        action: 'crm5.run.updated',
+        entity: 'run_projection',
+        entityId: id,
+        batchId: updated.batchId,
+        result: 'success',
+        diff: {
+          updatedFields: Object.keys(parsed.data),
+          status: updated.status,
+        },
+      });
+
+      return reply.status(200).send(redactSensitiveObject(updated));
+    } catch (err: unknown) {
+      if (err instanceof DomainConflictError) {
+        return reply.status(409).send({
+          error: {
+            code: 'CONCURRENT_MODIFICATION',
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      if (err instanceof DomainValidationError) {
+        if (err.message.includes('not found')) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
   });
 
   // 2. GET /scores
