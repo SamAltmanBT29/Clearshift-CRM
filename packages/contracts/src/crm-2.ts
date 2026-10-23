@@ -80,11 +80,13 @@ export type Deal = z.infer<typeof DealSchema>;
 // Create Deal Input Schema
 export const CreateDealInputSchema = z.object({
   name: z.string().min(1, 'Deal name is required').max(255),
-  contact_id: z.string().uuid().nullable().optional(),
+  contact_id: z.string().uuid('Invalid Contact UUID').nullable().optional(),
   value: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),
   stage_name: Crm2StageNameSchema.default('New'),
-  close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Close date must be in YYYY-MM-DD format',
+  }),
 });
 export type CreateDealInput = z.infer<typeof CreateDealInputSchema>;
 
@@ -97,8 +99,10 @@ export const QuoteSchema = z.object({
   id: z.string().uuid(),
   deal_id: z.string().uuid(),
   deal_name: z.string().optional(),
-  quote_number: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  quote_number: z.string().min(1, 'Quote number is required'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Quote date must be in YYYY-MM-DD format',
+  }),
   amount: DecimalStringSchema,
   currency: CurrencyCodeSchema,
   note: z.string().nullable().optional(),
@@ -109,9 +113,11 @@ export type Quote = z.infer<typeof QuoteSchema>;
 
 // Create Quote Input Schema
 export const CreateQuoteInputSchema = z.object({
-  deal_id: z.string().uuid(),
+  deal_id: z.string().uuid('Invalid Deal UUID'),
   quote_number: z.string().min(1, 'Quote number is required'),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Quote date must be in YYYY-MM-DD format',
+  }),
   amount: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),
   note: z.string().nullable().optional(),
@@ -121,6 +127,89 @@ export type CreateQuoteInput = z.infer<typeof CreateQuoteInputSchema>;
 // Update Quote Input Schema
 export const UpdateQuoteInputSchema = CreateQuoteInputSchema.partial();
 export type UpdateQuoteInput = z.infer<typeof UpdateQuoteInputSchema>;
+
+/**
+ * Standard Contract Labels, Helper Text and Error Messages for CRM-2
+ * Guarantees field-level UX alignment between frontend forms and OpenAPI contract.
+ */
+export const CRM2_FIELD_CONTRACT = {
+  deal: {
+    name: {
+      label: 'Deal Name',
+      helperText: 'Enter a descriptive title for this sales opportunity.',
+      required: true,
+      errorRequired: 'Deal name is required',
+    },
+    contact_id: {
+      label: 'Contact UUID',
+      helperText: 'Optional link to CRM-1 contact. Leave blank for an Orphan Deal.',
+      orphanWarning: 'Orphan Deal: No contact is linked. This deal will be visibly flagged in the pipeline.',
+      required: false,
+    },
+    value: {
+      label: 'Deal Value',
+      helperText: 'Non-negative decimal monetary amount (e.g. 50000.00).',
+      required: true,
+      errorInvalid: 'Value must be a valid non-negative decimal string',
+    },
+    currency: {
+      label: 'Currency',
+      helperText: 'Explicit 3-letter uppercase ISO 4217 currency code.',
+      required: true,
+      errorInvalid: 'Currency must be an explicit 3-letter uppercase ISO code (e.g. USD, EUR, GBP)',
+    },
+    stage_name: {
+      label: 'Pipeline Stage',
+      helperText: 'Fixed V1 pipeline stage progression.',
+      required: true,
+      errorInvalid: 'Stage must be one of: New, Qualified, Proposal, Negotiation, Won, Lost',
+    },
+    close_date: {
+      label: 'Target Close Date',
+      helperText: 'Projected or actual closing date in YYYY-MM-DD format.',
+      required: true,
+      errorInvalid: 'Close date must be in YYYY-MM-DD format',
+    },
+  },
+  quote: {
+    quote_number: {
+      label: 'Quote Number',
+      helperText: 'Unique quote reference code (e.g. Q-2026-001).',
+      required: true,
+      errorRequired: 'Quote number is required',
+      errorConflict: 'Domain Invariant Violation: Quote number must be unique.',
+    },
+    deal_id: {
+      label: 'Linked Deal',
+      helperText: 'Parent sales deal to which this quote belongs.',
+      required: true,
+      errorRequired: 'Deal link is required',
+    },
+    date: {
+      label: 'Quote Date',
+      helperText: 'Issuance date in YYYY-MM-DD format.',
+      required: true,
+      errorInvalid: 'Quote date must be in YYYY-MM-DD format',
+    },
+    amount: {
+      label: 'Quote Amount',
+      helperText: 'Non-negative decimal quote total amount.',
+      required: true,
+      errorInvalid: 'Amount must be a valid non-negative decimal string',
+    },
+    currency: {
+      label: 'Currency',
+      helperText: 'Explicit 3-letter uppercase ISO code.',
+      required: true,
+      errorInvalid: 'Currency must be an explicit 3-letter uppercase ISO code (e.g. USD, EUR, GBP)',
+    },
+    note: {
+      label: 'Scope / Terms Note',
+      helperText: 'Optional notes, deliverables summary, or commercial terms.',
+      required: false,
+    },
+  },
+} as const;
 
 // Deals Query Filter Schema
 export const DealsQuerySchema = z.object({

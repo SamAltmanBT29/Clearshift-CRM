@@ -227,6 +227,30 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /quotes/{id}:
+    get:
+      summary: Retrieve a single quote by ID
+      operationId: getQuoteById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Quote details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '404':
+          description: Quote not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     patch:
       summary: Update a quote
       operationId: updateQuote
