@@ -3,17 +3,23 @@ import {
   type Deal,
   type Stage,
   type Quote,
+  type QuoteLine,
   type DealsQuery,
+  type DealsQueryInput,
   type DealsListResponse,
   type CreateDealInput,
   type UpdateDealInput,
   type QuotesQuery,
+  type QuotesQueryInput,
   type QuotesListResponse,
   type CreateQuoteInput,
   type UpdateQuoteInput,
+  type CreateQuoteLineInput,
   type Crm2StageName,
   type Crm2ImportRow,
   type Crm2ImportReceipt,
+  type BatchExecutionReport,
+  type ExecuteBatchLoadInput,
   CRM2_STAGE_SEEDS,
   CRM2_STAGES,
   assertValidStageName,
@@ -21,11 +27,33 @@ import {
   UpdateDealInputSchema,
   CreateQuoteInputSchema,
   UpdateQuoteInputSchema,
+  CreateQuoteLineInputSchema,
   DealsQuerySchema,
   QuotesQuerySchema,
   Crm2ImportRowSchema,
+  type Crm2DetectDuplicatesInput,
+  type Crm2ResolveDuplicateInput,
+  type Crm2DuplicateCandidate,
+  type Crm2DuplicateAuditLogEntry,
+  type DealCandidate,
+  type DealDuplicateEvaluationResult,
+  type QuoteCandidate,
+  type QuoteDuplicateEvaluationResult,
+  evaluateDealDuplicate,
+  evaluateQuoteDuplicate,
 } from '@clearshift/contracts';
 import type { ReferenceResolver } from '@cs/kernel';
+import {
+  executeCrm2ChunkedBatchLoad,
+  type Crm2BatchLoaderOptions,
+  type Crm2RowProcessorFn,
+} from '../domain/batch-loader.js';
+import {
+  ExactKeyRegistry,
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+  type DuplicateDetectionResult,
+} from '../domain/duplicate-policy.js';
 import {
   DealNotFoundError,
   QuoteNotFoundError,
@@ -115,8 +143,12 @@ export class Crm2Service {
   private stages: Stage[] = [];
   private deals: Deal[] = [];
   private quotes: Quote[] = [];
+  private quoteLines: QuoteLine[] = [];
   private importReceipts: Crm2ImportReceipt[] = [];
+  private batchReports: Map<string, BatchExecutionReport> = new Map();
   private contactResolver: ReferenceResolver;
+  private duplicateQueue: DuplicateReviewQueue = new DuplicateReviewQueue();
+  private keyRegistry: ExactKeyRegistry = new ExactKeyRegistry();
 
   constructor(options: Crm2ServiceOptions = {}) {
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
@@ -133,6 +165,10 @@ export class Crm2Service {
 
   public resetStore(): void {
     this.importReceipts = [];
+    this.quoteLines = [];
+    this.batchReports.clear();
+    this.duplicateQueue.clear();
+    this.keyRegistry = new ExactKeyRegistry();
     this.seedSyntheticData();
   }
 
@@ -297,7 +333,7 @@ export class Crm2Service {
   // Deals API & Business Logic
   // ---------------------------------------------------------------------------
 
-  public async getDeals(query: DealsQuery): Promise<DealsListResponse> {
+  public async getDeals(query: DealsQueryInput = {}): Promise<DealsListResponse> {
     const parsedQuery = DealsQuerySchema.parse(query);
     const { page, pageSize, search, stage } = parsedQuery;
 
@@ -383,6 +419,8 @@ export class Crm2Service {
       stage_name: stageName,
       close_date: validated.close_date,
       is_orphan: isOrphan,
+      source_system: validated.source_system ?? null,
+      source_id: validated.source_id ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -457,7 +495,7 @@ export class Crm2Service {
   // Quotes API & Business Logic
   // ---------------------------------------------------------------------------
 
-  public async getQuotes(query: QuotesQuery): Promise<QuotesListResponse> {
+  public async getQuotes(query: QuotesQueryInput = {}): Promise<QuotesListResponse> {
     const parsedQuery = QuotesQuerySchema.parse(query);
     const { page, pageSize, deal_id } = parsedQuery;
 
@@ -521,6 +559,8 @@ export class Crm2Service {
       amount: validated.amount,
       currency: validated.currency,
       note: validated.note ?? null,
+      source_system: validated.source_system ?? null,
+      source_id: validated.source_id ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -579,6 +619,101 @@ export class Crm2Service {
     return calculatePipelineSummary(this.deals);
   }
 
+  public async getDealBySource(sourceSystem: string, sourceId: string): Promise<Deal | null> {
+    const deal = this.deals.find(
+      (d) => d.source_system === sourceSystem && d.source_id === sourceId
+    );
+    return deal ? { ...deal } : null;
+  }
+
+  public async getQuoteBySource(sourceSystem: string, sourceId: string): Promise<Quote | null> {
+    const quote = this.quotes.find(
+      (q) => q.source_system === sourceSystem && q.source_id === sourceId
+    );
+    return quote ? { ...quote } : null;
+  }
+
+  public async getQuoteByNumber(quoteNumber: string): Promise<Quote | null> {
+    const quote = this.quotes.find(
+      (q) => q.quote_number.toLowerCase() === quoteNumber.toLowerCase()
+    );
+    return quote ? { ...quote } : null;
+  }
+
+  public async deleteDeal(id: string): Promise<boolean> {
+    const initialLen = this.deals.length;
+    this.deals = this.deals.filter((d) => d.id !== id);
+    return this.deals.length < initialLen;
+  }
+
+  public async deleteQuote(id: string): Promise<boolean> {
+    const initialLen = this.quotes.length;
+    this.quotes = this.quotes.filter((q) => q.id !== id);
+    return this.quotes.length < initialLen;
+  }
+
+  public async createQuoteLine(input: CreateQuoteLineInput): Promise<QuoteLine> {
+    const validated = CreateQuoteLineInputSchema.parse(input);
+    const quote = this.quotes.find((q) => q.id === validated.quote_id);
+    if (!quote) {
+      throw new QuoteNotFoundError(validated.quote_id);
+    }
+
+    const qty = parseFloat(validated.quantity);
+    const price = parseFloat(validated.unit_price);
+    const computedTotal = (qty * price).toFixed(2);
+
+    const now = new Date().toISOString();
+    const line: QuoteLine = {
+      id: randomUUID(),
+      quote_id: validated.quote_id,
+      line_number: validated.line_number,
+      product_id: validated.product_id ?? null,
+      description: validated.description.trim(),
+      quantity: validated.quantity,
+      unit_price: validated.unit_price,
+      line_total: validated.line_total ?? computedTotal,
+      created_at: now,
+      updated_at: now,
+    };
+
+    this.quoteLines.unshift(line);
+    return { ...line };
+  }
+
+  public async getQuoteLines(quoteId: string): Promise<QuoteLine[]> {
+    return this.quoteLines
+      .filter((l) => l.quote_id === quoteId)
+      .map((l) => ({ ...l }));
+  }
+
+  public async deleteQuoteLine(id: string): Promise<boolean> {
+    const initialLen = this.quoteLines.length;
+    this.quoteLines = this.quoteLines.filter((l) => l.id !== id);
+    return this.quoteLines.length < initialLen;
+  }
+
+  public snapshotState() {
+    return {
+      deals: [...this.deals],
+      quotes: [...this.quotes],
+      quoteLines: [...this.quoteLines],
+      importReceipts: [...this.importReceipts],
+    };
+  }
+
+  public restoreState(snapshot: {
+    deals: Deal[];
+    quotes: Quote[];
+    quoteLines: QuoteLine[];
+    importReceipts: Crm2ImportReceipt[];
+  }): void {
+    this.deals = [...snapshot.deals];
+    this.quotes = [...snapshot.quotes];
+    this.quoteLines = [...snapshot.quoteLines];
+    this.importReceipts = [...snapshot.importReceipts];
+  }
+
   // ---------------------------------------------------------------------------
   // Migration Kit Ingestion & Durable Idempotent Import Receipts
   // ---------------------------------------------------------------------------
@@ -610,8 +745,11 @@ export class Crm2Service {
 
     let targetId: string;
     let sourceId: string = (input.data['sourceId'] as string) || (input.data['source_id'] as string) || '';
+    let outcome: 'created' | 'linked' = 'created';
 
-    if (input.entity === 'deal') {
+    const entityLower = input.entity.toLowerCase();
+
+    if (entityLower === 'deal' || entityLower === 'deals') {
       const dealInput = {
         name: input.data['name'] as string,
         contact_id: (input.data['contact_id'] ?? input.data['contactId'] ?? null) as string | null,
@@ -619,16 +757,31 @@ export class Crm2Service {
         currency: (input.data['currency'] as string) || 'USD',
         stage_name: (input.data['stage_name'] ?? input.data['stageName'] ?? 'New') as any,
         close_date: (input.data['close_date'] ?? input.data['closeDate'] ?? '') as string,
+        source_system: input.sourceSystem,
+        source_id: sourceId || undefined,
       };
 
       const parseResult = CreateDealInputSchema.safeParse(dealInput);
       if (!parseResult.success) {
         throw new DomainValidationError('Invalid import deal payload', parseResult.error.issues, 422);
       }
-      const created = await this.createDeal(parseResult.data);
-      targetId = created.id;
-      if (!sourceId) sourceId = created.id;
-    } else if (input.entity === 'quote') {
+
+      // Check if deal already exists for type-safe UPSERT
+      const existing = (sourceId
+        ? this.deals.find((d) => d.source_system === input.sourceSystem && d.source_id === sourceId)
+        : null) || (input.data['id'] ? this.deals.find((d) => d.id === input.data['id']) : null);
+
+      if (existing) {
+        const updated = await this.updateDeal(existing.id, parseResult.data);
+        targetId = updated.id;
+        outcome = 'linked';
+      } else {
+        const created = await this.createDeal(parseResult.data);
+        targetId = created.id;
+        outcome = 'created';
+      }
+      if (!sourceId) sourceId = targetId;
+    } else if (entityLower === 'quote' || entityLower === 'quotes') {
       const quoteInput = {
         deal_id: (input.data['deal_id'] ?? input.data['dealId'] ?? '') as string,
         quote_number: (input.data['quote_number'] ?? input.data['quoteNumber'] ?? '') as string,
@@ -636,19 +789,85 @@ export class Crm2Service {
         amount: String(input.data['amount'] ?? ''),
         currency: (input.data['currency'] as string) || 'USD',
         note: (input.data['note'] as string | null | undefined) ?? null,
+        source_system: input.sourceSystem,
+        source_id: sourceId || undefined,
       };
 
       const parseResult = CreateQuoteInputSchema.safeParse(quoteInput);
       if (!parseResult.success) {
         throw new DomainValidationError('Invalid import quote payload', parseResult.error.issues, 422);
       }
-      const created = await this.createQuote(parseResult.data);
-      targetId = created.id;
-      if (!sourceId) sourceId = created.id;
+
+      // Check if quote already exists for type-safe UPSERT
+      const existing = (sourceId
+        ? this.quotes.find((q) => q.source_system === input.sourceSystem && q.source_id === sourceId)
+        : null) || this.quotes.find((q) => q.quote_number.toLowerCase() === parseResult.data.quote_number.toLowerCase());
+
+      if (existing) {
+        const updated = await this.updateQuote(existing.id, parseResult.data);
+        targetId = updated.id;
+        outcome = 'linked';
+      } else {
+        const created = await this.createQuote(parseResult.data);
+        targetId = created.id;
+        outcome = 'created';
+      }
+      if (!sourceId) sourceId = targetId;
+    } else if (entityLower === 'stage' || entityLower === 'stages') {
+      const stageName = (input.data['name'] ?? input.data['stage_name'] ?? input.data['stageName']) as string;
+      const stage = this.stages.find(
+        (s) => s.name.toLowerCase() === String(stageName).toLowerCase() || s.id === input.data['id']
+      );
+      if (!stage) {
+        throw new DomainValidationError(
+          `Pipeline stage '${stageName}' does not exist in fixed 6-stage reference set`,
+          [{ field: 'stage_name', message: 'Stage not found', code: 'invalid_stage' }],
+          422
+        );
+      }
+      targetId = stage.id;
+      outcome = 'linked';
+      if (!sourceId) sourceId = targetId;
+    } else if (entityLower === 'quote_line' || entityLower === 'quote_lines' || entityLower === 'quotelines') {
+      const lineInput = {
+        quote_id: (input.data['quote_id'] ?? input.data['quoteId'] ?? '') as string,
+        line_number: Number(input.data['line_number'] ?? input.data['lineNumber'] ?? 1),
+        product_id: (input.data['product_id'] ?? input.data['productId'] ?? null) as string | null,
+        description: String(input.data['description'] ?? ''),
+        quantity: String(input.data['quantity'] ?? '1.0000'),
+        unit_price: String(input.data['unit_price'] ?? input.data['unitPrice'] ?? '0.00'),
+        line_total: input.data['line_total'] ? String(input.data['line_total']) : undefined,
+      };
+
+      const parseResult = CreateQuoteLineInputSchema.safeParse(lineInput);
+      if (!parseResult.success) {
+        throw new DomainValidationError('Invalid import quote line payload', parseResult.error.issues, 422);
+      }
+
+      const existing = this.quoteLines.find(
+        (l) => l.quote_id === parseResult.data.quote_id && l.line_number === parseResult.data.line_number
+      );
+
+      if (existing) {
+        existing.description = parseResult.data.description;
+        existing.quantity = parseResult.data.quantity;
+        existing.unit_price = parseResult.data.unit_price;
+        const qty = parseFloat(existing.quantity);
+        const price = parseFloat(existing.unit_price);
+        existing.line_total = (qty * price).toFixed(2);
+        existing.updated_at = new Date().toISOString();
+        targetId = existing.id;
+        outcome = 'linked';
+      } else {
+        const created = await this.createQuoteLine(parseResult.data);
+        targetId = created.id;
+        outcome = 'created';
+      }
+      if (!sourceId) sourceId = targetId;
     } else {
       throw new DomainValidationError(
         `Unsupported import entity: ${input.entity}`,
-        [{ field: 'entity', message: "Entity must be 'deal' or 'quote'", code: 'invalid_entity' }],
+        [{ field: 'entity', message: "Entity must be 'deal', 'quote', 'stage', or 'quote_line'", code: 'invalid_entity' }],
         422
       );
     }
@@ -663,6 +882,8 @@ export class Crm2Service {
       targetId,
       idempotencyKey: key,
       payloadHash: digest,
+      kind: outcome,
+      outcome: outcome,
       createdAt: new Date().toISOString(),
     };
 
@@ -676,6 +897,154 @@ export class Crm2Service {
 
   public getReceiptByKey(key: string): Crm2ImportReceipt | undefined {
     return this.importReceipts.find((r) => r.idempotencyKey === key);
+  }
+
+  public deleteReceipt(key: string): boolean {
+    const initialLen = this.importReceipts.length;
+    this.importReceipts = this.importReceipts.filter((r) => r.idempotencyKey !== key);
+    return this.importReceipts.length < initialLen;
+  }
+
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Chunked Batch Load Execution & Idempotent Retries (CRM2-13)
+  // ---------------------------------------------------------------------------
+
+  public async executeBatchLoad(
+    input: ExecuteBatchLoadInput,
+    options?: Crm2BatchLoaderOptions
+  ): Promise<BatchExecutionReport> {
+    const defaultWorker: Crm2RowProcessorFn = async (record) => {
+      const data = record.data as Record<string, unknown>;
+      const isQuote = Boolean(
+        data['quote_number'] ||
+        data['quoteNumber'] ||
+        data['deal_id'] ||
+        data['dealId'] ||
+        data['entity'] === 'quote'
+      );
+      const entity = isQuote ? 'quote' : 'deal';
+
+      const importResult = await this.importRow(
+        {
+          batchId: input.batchId,
+          sourceRow: record.sourceRow,
+          sourceSystem: (data['sourceSystem'] as string) || (data['source_system'] as string) || 'crm2_batch_loader',
+          entity,
+          idempotencyKey: record.idempotencyKey,
+          data,
+        },
+        record.idempotencyKey
+      );
+
+      return {
+        targetId: importResult.targetId,
+        kind: importResult.isExisting ? 'linked' : 'created',
+      };
+    };
+
+    const loaderOptions: Crm2BatchLoaderOptions = {
+      baseBackoffMs: options?.baseBackoffMs,
+      sleepFn: options?.sleepFn,
+      worker: options?.worker ?? defaultWorker,
+    };
+
+    const report = await executeCrm2ChunkedBatchLoad(input, loaderOptions);
+    this.batchReports.set(input.batchId, report);
+    return report;
+  }
+
+  public getBatchReport(batchId: string): BatchExecutionReport | undefined {
+    return this.batchReports.get(batchId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Exact Duplicate Key Policy & Human Review Audit (CRM2-12 / KIT-10)
+  // ---------------------------------------------------------------------------
+
+  public detectDuplicates(input: Crm2DetectDuplicatesInput): DuplicateDetectionResult {
+    const result = detectExactDuplicates(input.records, input.keyType, {
+      batchId: input.batchId,
+      entity: input.entity,
+      registry: this.keyRegistry,
+      autoMerge: input.autoMerge,
+    });
+    this.duplicateQueue.addCandidates(result.duplicateCandidates);
+    return result;
+  }
+
+  public getHeldDuplicates(query?: {
+    batchId?: string;
+    keyType?: string;
+    entity?: string;
+  }): Crm2DuplicateCandidate[] {
+    return this.duplicateQueue.listHeld(query);
+  }
+
+  public resolveDuplicate(input: Crm2ResolveDuplicateInput): Crm2DuplicateAuditLogEntry {
+    const audit = this.duplicateQueue.resolve(input);
+
+    // If decision is MERGE, handle target-side consolidation
+    if (input.decision === 'MERGE') {
+      const keptDeal = this.deals.find((d) => d.id === input.keptId);
+      const mergedDealIndex = this.deals.findIndex((d) => d.id === input.mergedId);
+      if (keptDeal && mergedDealIndex !== -1) {
+        // Reassign child quotes pointing to mergedId over to keptId
+        for (let i = 0; i < this.quotes.length; i++) {
+          if (this.quotes[i]!.deal_id === input.mergedId) {
+            this.quotes[i] = {
+              ...this.quotes[i]!,
+              deal_id: input.keptId,
+              updated_at: new Date().toISOString(),
+            };
+          }
+        }
+      }
+    }
+
+    return audit;
+  }
+
+  public getDuplicateAuditLogs(query?: {
+    candidateId?: string;
+    actorId?: string;
+    entity?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    return this.duplicateQueue.getAuditLogs(query);
+  }
+
+  public evaluateDealDuplicate(candidate: DealCandidate): DealDuplicateEvaluationResult {
+    const pool = this.deals.map((d) => ({
+      id: d.id,
+      name: d.name,
+      stageId: d.stage_id,
+      stageName: d.stage_name,
+      contactId: d.contact_id,
+      value: d.value,
+      currency: d.currency,
+    }));
+    return evaluateDealDuplicate(candidate, pool);
+  }
+
+  public evaluateQuoteDuplicate(candidate: QuoteCandidate): QuoteDuplicateEvaluationResult {
+    const pool = this.quotes.map((q) => ({
+      id: q.id,
+      quoteNumber: q.quote_number,
+      dealId: q.deal_id,
+      amount: q.amount,
+      currency: q.currency,
+    }));
+    return evaluateQuoteDuplicate(candidate, pool);
+  }
+
+  public getKeyRegistry(): ExactKeyRegistry {
+    return this.keyRegistry;
+  }
+
+  public getDuplicateQueue(): DuplicateReviewQueue {
+    return this.duplicateQueue;
   }
 }
 

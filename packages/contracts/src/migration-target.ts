@@ -900,6 +900,16 @@ export const TargetEntityDefinitionSchema = z.object({
 });
 export type TargetEntityDefinition = z.infer<typeof TargetEntityDefinitionSchema>;
 
+export const TypeIncompatibilityWarningSchema = z.object({
+  targetField: z.string(),
+  targetLabel: z.string(),
+  targetType: z.string(),
+  sourceColumn: z.string(),
+  sourceType: z.string(),
+  warning: z.string(),
+});
+export type TypeIncompatibilityWarning = z.infer<typeof TypeIncompatibilityWarningSchema>;
+
 export const MappingValidationResultSchema = z.object({
   valid: z.boolean(),
   missingRequiredFields: z.array(z.string()),
@@ -911,6 +921,8 @@ export const MappingValidationResultSchema = z.object({
     })
   ),
   errors: z.array(z.string()),
+  warnings: z.array(z.string()).optional(),
+  typeIncompatibilities: z.array(TypeIncompatibilityWarningSchema).optional(),
 });
 export type MappingValidationResult = z.infer<typeof MappingValidationResultSchema>;
 
@@ -970,6 +982,125 @@ export const CRM_LEADS_TARGET_FIELDS: TargetFieldDefinition[] = [
   },
 ];
 
+export const CRM5_RUNS_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target ClearShift CRM module',
+  },
+  {
+    name: 'step',
+    label: 'Pipeline Step',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile'],
+    description: 'Active migration pipeline execution phase',
+  },
+  {
+    name: 'status',
+    label: 'Execution Status',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['pending', 'running', 'completed', 'failed', 'halted'],
+    description: 'Lifecycle run execution status',
+  },
+  { name: 'recordsIn', label: 'Source Records In', required: false, dataType: 'number', description: 'Total source records processed' },
+  { name: 'recordsOut', label: 'Loaded Records Out', required: false, dataType: 'number', description: 'Records successfully loaded' },
+  { name: 'recordsRejected', label: 'Rejected Records', required: false, dataType: 'number', description: 'Count of rejected rows' },
+  { name: 'startedAt', label: 'Started Timestamp', required: false, dataType: 'date', description: 'Run initiation timestamp' },
+  { name: 'completedAt', label: 'Completed Timestamp', required: false, dataType: 'date', description: 'Run finish timestamp' },
+];
+
+export const CRM5_SCORES_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target ClearShift CRM module',
+  },
+  { name: 'completeness', label: 'Completeness Ratio', required: false, dataType: 'number', description: 'Completeness score between 0 and 1' },
+  { name: 'validity', label: 'Validity Ratio', required: false, dataType: 'number', description: 'Validity score between 0 and 1' },
+  { name: 'duplicateRate', label: 'Duplicate Rate', required: false, dataType: 'number', description: 'Exact duplicate rate between 0 and 1' },
+  { name: 'rejectRate', label: 'Reject Rate', required: false, dataType: 'number', description: 'Rejection rate between 0 and 1' },
+  { name: 'linkIntegrity', label: 'Link Integrity', required: false, dataType: 'number', description: 'Linkage score between 0 and 1' },
+  { name: 'score', label: 'Overall Quality Score', required: true, dataType: 'number', description: 'Composite data quality score between 0 and 100' },
+];
+
+export const CRM5_REJECTS_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target module where rejection occurred',
+  },
+  { name: 'rowIndex', label: 'Source Row Index', required: true, dataType: 'number', description: '1-based source row index' },
+  { name: 'errorCode', label: 'Rejection Error Code', required: true, dataType: 'string', description: 'Machine error code' },
+  { name: 'errorMessage', label: 'Error Message', required: true, dataType: 'string', description: 'Human-readable failure reason' },
+  { name: 'rawPayloadHash', label: 'Raw Payload Hash', required: true, dataType: 'string', description: 'Deterministic SHA-256 hash of raw row payload' },
+];
+
+export const CRM5_RECONCILIATION_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target ClearShift module',
+  },
+  { name: 'sourceCount', label: 'Source Count', required: true, dataType: 'number', description: 'Total source records ingested' },
+  { name: 'loadedCount', label: 'Loaded Count', required: true, dataType: 'number', description: 'Total records written to target' },
+  { name: 'rejectedCount', label: 'Rejected Count', required: true, dataType: 'number', description: 'Total records rejected to audit table' },
+  { name: 'mergedCount', label: 'Merged Count', required: false, dataType: 'number', description: 'Total records merged into golden entities' },
+  { name: 'skippedCount', label: 'Skipped Count', required: false, dataType: 'number', description: 'Total records explicitly skipped' },
+  {
+    name: 'status',
+    label: 'Conservation Status',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['OK', 'UNBALANCED'],
+    description: 'Reconciliation conservation audit status',
+  },
+];
+
+export const CRM5_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
+  crm5_runs: {
+    entity: 'crm5_runs',
+    module: 'crm-5',
+    label: 'CRM-5 Run Projections',
+    fields: CRM5_RUNS_TARGET_FIELDS,
+  },
+  crm5_scores: {
+    entity: 'crm5_scores',
+    module: 'crm-5',
+    label: 'CRM-5 Data Quality Scores',
+    fields: CRM5_SCORES_TARGET_FIELDS,
+  },
+  crm5_rejects: {
+    entity: 'crm5_rejects',
+    module: 'crm-5',
+    label: 'CRM-5 Migration Rejections',
+    fields: CRM5_REJECTS_TARGET_FIELDS,
+  },
+  crm5_reconciliation_reports: {
+    entity: 'crm5_reconciliation_reports',
+    module: 'crm-5',
+    label: 'CRM-5 Reconciliation Reports',
+    fields: CRM5_RECONCILIATION_TARGET_FIELDS,
+  },
+};
+
 export const CRM_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
   contacts: {
     entity: 'contacts',
@@ -983,4 +1114,5 @@ export const CRM_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
     label: 'CRM Leads',
     fields: CRM_LEADS_TARGET_FIELDS,
   },
+  ...CRM5_TARGET_ENTITIES,
 };

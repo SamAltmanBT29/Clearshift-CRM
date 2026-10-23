@@ -11,7 +11,6 @@ import {
   crm1Contacts,
   crm1ImportBatches,
   crm1ImportReceipts,
-  crm1Leads,
   crm1Leads
 } from "../../db/schema.js";
 

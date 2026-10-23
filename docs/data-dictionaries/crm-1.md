@@ -432,3 +432,43 @@ Available in `@clearshift/contracts` for downstream module development and contr
 | **Group 1 Role 4** (Data Reliability & QA Lead) | Data / QA Lead | **APPROVED** | 2026-10-23 |
 | **Group 5 Peer Review** (CRM-5 Migration Control) | Peer Review Lead | **APPROVED** | 2026-10-23 |
 | **Workstream 12 PMO** (Architecture Baseline) | PMO Lead | **VERIFIED** | 2026-10-23 |
+
+---
+
+## 16. Target Adapter & Migration Kit Integration ([CRM1-07] — Issue #12 / KIT-08)
+
+### Target Adapter Architecture
+CRM-1 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
+* **Class**: `Crm1TargetAdapter` (`apps/crm/modules/crm-1/src/migration/target-adapter.ts`)
+* **Supported Entities**: `contacts` / `contact`, `companies` / `company`, `leads` / `lead`.
+* **Atomic Local Transaction**: Domain mutation (contact/company/lead) and durable import receipt (`crm1_import_receipts`) commit atomically in one PostgreSQL transaction.
+* **Idempotency Key Protocol**: Stable composite SHA-256 hash over `batchId + sourceRow + entity + canonicalPayload`.
+  - Replay of identical key + payload returns HTTP 200 with `isExisting: true` and prior target ID.
+  - Replay of identical key with altered payload/entity returns HTTP 409 Conflict.
+* **Transient Infrastructure Failures**: Simulated or transient 503 failures are retryable and never recorded as rejected rows or receipts.
+* **Consent Preservation**: Existing consent and unsubscribe suppression state is protected; older import timestamps or false states never overwrite newer consent records.
+* **HTTP Endpoints**: Exposed under `/api/v1/crm-contacts/import/row` and `/api/v1/crm-contacts/import/receipts`.
+
+---
+
+## 17. UI Presentation States & Error Sanitization (CRM1-19)
+
+Governs standard UI visual states across all CRM-1 entity tables and pages (`ContactsListPage`, `CompaniesListPage`, `LeadsPipelinePage`, `DuplicateReviewPage`, `ImportsOverviewPage`).
+
+### 17.1 State Hierarchy & Dispatch Matrix
+
+| Priority | State Condition | Visual Component | Accessibility / ARIA | Interactive Controls |
+| :---: | :--- | :--- | :--- | :--- |
+| 1 | 403 Forbidden / Missing Permission | `AccessDeniedView` | `role="region"`, `aria-labelledby="cs-access-denied-title"`, icon `aria-hidden="true"` | Primary CTA button (`Return to Safe Area` or custom `actionLabel`) |
+| 2 | Error (API failure, network abort) | `ErrorAlert` | `role="alert"`, `aria-live="assertive"`, dismissible banner | Primary `Retry` button (`aria-label="Retry operation"`), optional secondary action |
+| 3 | Initial or Active Fetching | `TableSkeleton` | `role="status"`, `aria-busy="true"`, `aria-label="Loading content..."` | Animated shimmering placeholders for toolbar, headers, and body rows |
+| 4 | Empty (Zero total records or filtered out) | `EmptyState` | `role="status"`, semantic header and description | Primary CTA button (`actionLabel` / `onAction`), secondary CTA or reset filters |
+| 5 | Normal Populated Data | `DataTable` | `role="table"`, sorting headers (`aria-sort`), paginator (`aria-label="Table Pagination"`) | Column sorting, search filter, page navigation, record actions |
+
+### 17.2 Error Message Sanitization Standard
+
+All error payloads rendered in user-facing components (`ErrorAlert`, `DataTableController`) MUST pass through `sanitizeErrorMessage()` before presentation:
+- **Stack Traces**: Strips any trailing lines containing `at functionName (path/to/file.ts:line:col)`.
+- **File System Paths**: Strips absolute or relative paths matching `(/[\w.-]+)+:\d+:\d+`.
+- **Database / Internal Diagnostics**: Masks SQL queries, syntax errors, and database connection strings into human-readable messages (`"An unexpected error occurred while communicating with the server."`).
+- **Sanitized Fallback**: Null, undefined, empty, or whitespace-only messages fall back to `"An unexpected error occurred. Please try again."`.

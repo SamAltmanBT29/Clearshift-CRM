@@ -11,11 +11,23 @@ import {
   type UpdateDealInput,
   type CreateQuoteInput,
   type UpdateQuoteInput,
+  type Crm2ExecuteBatchLoadInput,
+  type Crm2BatchExecutionReport,
+  type Crm2ImportReceipt,
+  type Crm2DetectDuplicatesInput,
+  type Crm2ResolveDuplicateInput,
+  type Crm2DuplicateCandidate,
+  type Crm2DuplicateAuditLogEntry,
+  type DealDuplicateEvaluationResult,
+  type QuoteDuplicateEvaluationResult,
+  type Crm2EvaluateDealDuplicateInput,
+  type Crm2EvaluateQuoteDuplicateInput,
   DealsListResponseSchema,
   StagesListResponseSchema,
   DealSchema,
   QuoteSchema,
   QuotesListResponseSchema,
+  Crm2BatchExecutionReportSchema,
 } from '@clearshift/contracts';
 
 export class Crm2ApiError extends Error {
@@ -230,4 +242,139 @@ export async function updateQuote(
   });
 
   return QuoteSchema.parse(data);
+}
+
+export async function executeBatchLoad(
+  input: Crm2ExecuteBatchLoadInput,
+  options?: RequestOptions
+): Promise<Crm2BatchExecutionReport> {
+  const data = await request<unknown>(`${API_BASE}/batches/execute-load`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    ...options,
+  });
+
+  return Crm2BatchExecutionReportSchema.parse(data);
+}
+
+export async function getBatchReport(
+  batchId: string,
+  options?: RequestOptions
+): Promise<Crm2BatchExecutionReport> {
+  const data = await request<unknown>(`${API_BASE}/batches/${batchId}/report`, {
+    method: 'GET',
+    ...options,
+  });
+
+  return Crm2BatchExecutionReportSchema.parse(data);
+}
+
+export async function getImportReceipts(
+  options?: RequestOptions
+): Promise<{ items: Crm2ImportReceipt[] }> {
+  return request<{ items: Crm2ImportReceipt[] }>(`${API_BASE}/import/receipts`, {
+    method: 'GET',
+    ...options,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Exact Duplicate Key Policy & Human Review Client (CRM2-12 / KIT-10)
+// ---------------------------------------------------------------------------
+
+export async function detectDuplicates(
+  input: Crm2DetectDuplicatesInput,
+  options?: RequestOptions
+): Promise<{
+  uniqueRecords: Array<{ id: string; keyValue: string }>;
+  duplicateCandidates: Crm2DuplicateCandidate[];
+  summary: {
+    totalRecords: number;
+    uniqueCount: number;
+    duplicateGroupCount: number;
+    duplicateRecordCount: number;
+  };
+}> {
+  return request(`${API_BASE}/duplicates/detect`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    ...options,
+  });
+}
+
+export async function getHeldDuplicates(
+  query?: { batchId?: string; keyType?: string; entity?: string },
+  options?: RequestOptions
+): Promise<{ items: Crm2DuplicateCandidate[]; total: number }> {
+  const url = new URL(`${API_BASE}/duplicates/held`, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  if (query?.batchId) url.searchParams.set('batchId', query.batchId);
+  if (query?.keyType) url.searchParams.set('keyType', query.keyType);
+  if (query?.entity) url.searchParams.set('entity', query.entity);
+
+  return request(url.pathname + url.search, {
+    method: 'GET',
+    ...options,
+  });
+}
+
+export async function resolveDuplicate(
+  input: Crm2ResolveDuplicateInput,
+  options?: RequestOptions
+): Promise<{ status: 'resolved'; audit: Crm2DuplicateAuditLogEntry }> {
+  return request(`${API_BASE}/duplicates/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    ...options,
+  });
+}
+
+export async function getDuplicateAuditLogs(
+  query?: {
+    candidateId?: string;
+    actorId?: string;
+    entity?: string;
+    page?: number;
+    pageSize?: number;
+  },
+  options?: RequestOptions
+): Promise<{
+  items: Crm2DuplicateAuditLogEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
+  const url = new URL(`${API_BASE}/duplicates/audit`, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  if (query?.candidateId) url.searchParams.set('candidateId', query.candidateId);
+  if (query?.actorId) url.searchParams.set('actorId', query.actorId);
+  if (query?.entity) url.searchParams.set('entity', query.entity);
+  if (query?.page) url.searchParams.set('page', String(query.page));
+  if (query?.pageSize) url.searchParams.set('pageSize', String(query.pageSize));
+
+  return request(url.pathname + url.search, {
+    method: 'GET',
+    ...options,
+  });
+}
+
+export async function evaluateDealDuplicate(
+  candidate: Crm2EvaluateDealDuplicateInput,
+  options?: RequestOptions
+): Promise<DealDuplicateEvaluationResult> {
+  return request(`${API_BASE}/deals/evaluate-duplicate`, {
+    method: 'POST',
+    body: JSON.stringify(candidate),
+    ...options,
+  });
+}
+
+export async function evaluateQuoteDuplicate(
+  candidate: Crm2EvaluateQuoteDuplicateInput,
+  options?: RequestOptions
+): Promise<QuoteDuplicateEvaluationResult> {
+  return request(`${API_BASE}/quotes/evaluate-duplicate`, {
+    method: 'POST',
+    body: JSON.stringify(candidate),
+    ...options,
+  });
 }

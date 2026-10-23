@@ -97,3 +97,59 @@ Indexes:
 - Deterministic Ordering: Tickets ordered `createdAt DESC, id DESC`. Notes ordered `createdAt DESC, id DESC`.
 - Search: Server-side case-insensitive match on `subject` and `orderRef`.
 - Domain Invariants: Status restricted to `[New, Open, Waiting, Solved, Closed]`; Priority restricted to `[Low, Normal, High, Urgent]`.
+
+---
+
+## 4. Frontend Module Routes, Navigation & Layout Shell (CRM3-16)
+
+### Module Route Registration
+CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-3/tickets` | `crm3-tickets` | Support Tickets Queue | Tickets | `module.read` |
+| `/crm-3/activities` | `crm3-activities` | Customer Activity Timeline | Activities | `module.read` |
+| `/crm-3/notes` | `crm3-notes` | Internal Ticket Notes | Notes | `module.read` |
+| `/crm-3/sla` | `crm3-sla` | SLA Tracking & Priority Escalations | SLA Tracking | `module.read` |
+| `/crm-3/imports` | `crm3-imports` | Import Batches & Receipts | Imports | `module.read` |
+
+### Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `module.read` capability. Users lacking this capability are redirected to `/access-denied?required=module.read`.
+
+### Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.
+
+## 5. Ticket Status Transitions & Relationship Integrity (CRM3-06 / #31)
+
+### Status transition map (user edits via `PATCH /tickets/{id}`)
+Source of truth: `CRM3_TICKET_STATUS_TRANSITIONS` in `packages/contracts/src/crm-3.ts`.
+
+| From | Allowed next statuses |
+|---|---|
+| `New` | `Open` |
+| `Open` | `Waiting`, `Solved` |
+| `Waiting` | `Open`, `Solved` |
+| `Solved` | `Closed`, `Open` (reopen) |
+| `Closed` | none (terminal) |
+
+- Setting the same status again is an idempotent no-op and is accepted.
+- An illegal transition returns `422 INVALID_TICKET_STATUS_TRANSITION` (detail code `invalid_transition`, message lists the allowed next statuses). The rule is checked before any write, so the stored ticket is unchanged.
+- Edits to the same ticket are serialized in the service, so two concurrent edits cannot both validate against the same stale status.
+- The map applies to edits only. Ticket creation (API and Migration Kit import) may use any valid status, because legacy history contains `Solved` and `Closed` tickets.
+
+### Relationship rules
+| Relationship | Rule | Failure |
+|---|---|---|
+| Ticket → CRM-1 contact (`contact_id`) | Required. Checked on create and on any edit that changes it, through the `ReferenceResolver` port (decision C7). No cross-schema foreign key; CRM-3 never reads or writes CRM-1 tables. | `422 VALIDATION_ERROR`, detail code `invalid_contact_reference`; nothing is written |
+| Note → ticket (`ticket_id`) | The ticket must exist in this module before the note is written. | `404 NOT_FOUND`, detail code `ticket_not_found` |
+| Ticket → ERP order (`order_ref`) | Plain text in V1, not validated against ERP. | — |
+
+### Read-model consistency
+- `GET /tickets/{id}` and the module's public `Crm3ReferenceResolver` read the same authoritative store, so status, contact link and order reference agree immediately after a successful write.
+- A contact that can no longer be resolved is shown with `contactName`/`contactEmail` = `null`; the ticket is still returned.
+- The public resolver projects only `id, subject, status, priority, contactId` (no note text, no contact PII).

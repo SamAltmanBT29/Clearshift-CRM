@@ -3,10 +3,10 @@ info:
   title: ClearShift CRM-4 Marketing Lists and Campaign History API
   version: 1.0.0
   description: >
-    Public CRM-4 contract for Marketing Lists and Campaign History.
-    Enforces monotonic contact opt-out (BR-CRM4-01), listId immutability on campaigns,
-    and strictly allowed member statuses (sent, opened, clicked).
-    Outbound delivery/sending workflows are out of scope for V1.
+    Public CRM-4 contract for Marketing Lists, Campaign History, Campaign Membership, and Contact Consent.
+    Enforces BR-CRM4-01: A known opt-out/unsubscribe is strictly monotonic.
+    Campaign membership status is strictly restricted to sent, opened, clicked.
+    Campaign sending/delivery is out of scope in V1 (recording and history only).
 servers:
   - url: /
 security:
@@ -16,21 +16,19 @@ tags:
 paths:
   /api/v1/crm-marketing/lists:
     get:
-      operationId: listCRM4MarketingLists
+      operationId: listMarketingLists
       tags: [CRM-4]
-      summary: List and search marketing lists
-      description: Retrieve marketing lists with optional name search and server pagination. Allowed roles - viewer, editor, analyst, admin.
+      summary: Search and page marketing lists
+      description: Retrieve paginated marketing lists matching optional search filter. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - name: search
           in: query
           required: false
-          description: Search term to filter lists by name
           schema:
             type: string
         - name: page
           in: query
           required: false
-          description: 1-indexed page number
           schema:
             type: integer
             minimum: 1
@@ -38,7 +36,6 @@ paths:
         - name: pageSize
           in: query
           required: false
-          description: Page size (maximum 100)
           schema:
             type: integer
             minimum: 1
@@ -46,11 +43,11 @@ paths:
             default: 25
       responses:
         "200":
-          description: Paginated list of marketing lists.
+          description: List of marketing lists with server pagination.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4ListResponse"
+                $ref: "#/components/schemas/MarketingListResponse"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -58,23 +55,23 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenError"
     post:
-      operationId: createCRM4MarketingList
+      operationId: createMarketingList
       tags: [CRM-4]
       summary: Create a marketing list
-      description: Create a new marketing list record. Allowed roles - editor, migration_runner, admin.
+      description: Create a new marketing list record. Allowed roles - editor, admin.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CRM4ListCreate"
+              $ref: "#/components/schemas/MarketingListCreate"
       responses:
         "201":
-          description: Marketing list created successfully.
+          description: Marketing list created.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4List"
+                $ref: "#/components/schemas/MarketingList"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -83,16 +80,42 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
 
   /api/v1/crm-marketing/lists/{id}:
-    patch:
-      operationId: patchCRM4MarketingList
+    get:
+      operationId: getMarketingList
       tags: [CRM-4]
-      summary: Update a marketing list
-      description: Partial update of a marketing list's name and/or description. Allowed roles - editor, admin.
+      summary: Retrieve a marketing list by UUID
+      description: Retrieve marketing list details. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - name: id
           in: path
           required: true
-          description: List UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Marketing list record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketingList"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+    patch:
+      operationId: updateMarketingList
+      tags: [CRM-4]
+      summary: Update a marketing list
+      description: Update an existing marketing list name or description. Allowed roles - editor, admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
           schema:
             type: string
             format: uuid
@@ -101,14 +124,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CRM4ListPatch"
+              $ref: "#/components/schemas/MarketingListPatch"
       responses:
         "200":
-          description: Marketing list updated successfully.
+          description: Marketing list updated.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4List"
+                $ref: "#/components/schemas/MarketingList"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -120,28 +143,25 @@ paths:
 
   /api/v1/crm-marketing/campaigns:
     get:
-      operationId: listCRM4Campaigns
+      operationId: listCampaigns
       tags: [CRM-4]
-      summary: List and search marketing campaigns
-      description: Retrieve campaigns with optional list filtering and server pagination. Allowed roles - viewer, editor, analyst, admin.
+      summary: Search and page campaigns
+      description: Retrieve paginated campaigns filtered by listId or search query. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - name: listId
           in: query
           required: false
-          description: Filter campaigns by associated marketing list UUID
           schema:
             type: string
             format: uuid
         - name: search
           in: query
           required: false
-          description: Search term to filter campaigns by name
           schema:
             type: string
         - name: page
           in: query
           required: false
-          description: 1-indexed page number
           schema:
             type: integer
             minimum: 1
@@ -149,7 +169,6 @@ paths:
         - name: pageSize
           in: query
           required: false
-          description: Page size (maximum 100)
           schema:
             type: integer
             minimum: 1
@@ -157,11 +176,11 @@ paths:
             default: 25
       responses:
         "200":
-          description: Paginated list of campaigns.
+          description: List of campaigns with server pagination.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4CampaignListResponse"
+                $ref: "#/components/schemas/CampaignListResponse"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -169,23 +188,23 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenError"
     post:
-      operationId: createCRM4Campaign
+      operationId: createCampaign
       tags: [CRM-4]
       summary: Create a campaign
-      description: Create a campaign linked to a marketing list. Allowed roles - editor, migration_runner, admin.
+      description: Create a new campaign record associated with a marketing list. Allowed roles - editor, admin.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CRM4CampaignCreate"
+              $ref: "#/components/schemas/CampaignCreate"
       responses:
         "201":
-          description: Campaign created successfully.
+          description: Campaign created.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4Campaign"
+                $ref: "#/components/schemas/Campaign"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -195,25 +214,26 @@ paths:
 
   /api/v1/crm-marketing/campaigns/{id}:
     get:
-      operationId: getCRM4CampaignById
+      operationId: getCampaign
       tags: [CRM-4]
-      summary: Retrieve a single campaign by ID
-      description: Fetch a campaign by UUID including metadata. Allowed roles - viewer, editor, analyst, admin.
+      summary: Retrieve a campaign by UUID
+      description: Retrieve campaign details. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - name: id
           in: path
           required: true
-          description: Campaign UUID
           schema:
             type: string
             format: uuid
       responses:
         "200":
-          description: Campaign found.
+          description: Campaign record.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4Campaign"
+                $ref: "#/components/schemas/Campaign"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
@@ -221,15 +241,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFoundError"
     patch:
-      operationId: patchCRM4Campaign
+      operationId: updateCampaign
       tags: [CRM-4]
       summary: Update a campaign
-      description: Partial update of a campaign's name and/or date. Note that listId is immutable and cannot be updated. Allowed roles - editor, admin.
+      description: Update campaign name or date. listId is immutable. Allowed roles - editor, admin.
       parameters:
         - name: id
           in: path
           required: true
-          description: Campaign UUID
           schema:
             type: string
             format: uuid
@@ -238,14 +257,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CRM4CampaignPatch"
+              $ref: "#/components/schemas/CampaignPatch"
       responses:
         "200":
-          description: Campaign updated successfully.
+          description: Campaign updated.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4Campaign"
+                $ref: "#/components/schemas/Campaign"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -257,29 +276,26 @@ paths:
 
   /api/v1/crm-marketing/campaigns/{id}/members:
     get:
-      operationId: listCRM4CampaignMembers
+      operationId: listCampaignMembers
       tags: [CRM-4]
-      summary: List members of a campaign
-      description: Retrieve members for a campaign filtered by member status with server pagination. Allowed roles - viewer, editor, analyst, admin.
+      summary: List campaign members
+      description: Retrieve paginated participants for a campaign. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - name: id
           in: path
           required: true
-          description: Campaign UUID
           schema:
             type: string
             format: uuid
         - name: status
           in: query
           required: false
-          description: Filter by member status
           schema:
             type: string
             enum: [sent, opened, clicked]
         - name: page
           in: query
           required: false
-          description: 1-indexed page number
           schema:
             type: integer
             minimum: 1
@@ -287,7 +303,6 @@ paths:
         - name: pageSize
           in: query
           required: false
-          description: Page size (maximum 100)
           schema:
             type: integer
             minimum: 1
@@ -295,11 +310,11 @@ paths:
             default: 25
       responses:
         "200":
-          description: Paginated campaign members.
+          description: Campaign members with server pagination.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4MemberListResponse"
+                $ref: "#/components/schemas/MemberListResponse"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -309,15 +324,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFoundError"
     post:
-      operationId: createCRM4CampaignMember
+      operationId: addCampaignMember
       tags: [CRM-4]
       summary: Add a member to a campaign
-      description: Add an existing contact to a campaign record. Allowed roles - editor, migration_runner, admin.
+      description: Add an existing contact as a campaign member. Enforces status in sent/opened/clicked and re-checks consent. Allowed roles - editor, admin.
       parameters:
         - name: id
           in: path
           required: true
-          description: Campaign UUID
           schema:
             type: string
             format: uuid
@@ -326,14 +340,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CRM4MemberCreateRequest"
+              $ref: "#/components/schemas/MemberCreate"
       responses:
         "201":
           description: Member added to campaign.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4Member"
+                $ref: "#/components/schemas/Member"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -342,29 +356,34 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
 
   /api/v1/crm-marketing/consents:
     post:
-      operationId: setCRM4Consent
+      operationId: setConsent
       tags: [CRM-4]
-      summary: Record or update contact consent status
-      description: >
-        Set or update consent status for a contact.
-        Enforces BR-CRM4-01: An unsubscribed contact cannot be updated to subscribed.
-        Allowed roles - editor, migration_runner, admin.
+      summary: Record or update contact consent
+      description: Record contact consent state. Enforces BR-CRM4-01 monotonic opt-out rule. Allowed roles - editor, admin.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CRM4ConsentSet"
+              $ref: "#/components/schemas/ConsentSet"
       responses:
         "200":
-          description: Consent recorded successfully.
+          description: Consent state updated.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4Consent"
+                $ref: "#/components/schemas/Consent"
+        "201":
+          description: Consent state created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consent"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -372,33 +391,30 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "409":
-          description: Conflict — attempt to overwrite a known unsubscribe with consent (BR-CRM4-01).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+          $ref: "#/components/responses/ConflictError"
 
   /api/v1/crm-marketing/consents/{contact}:
     get:
-      operationId: getCRM4ConsentByContact
+      operationId: getContactConsent
       tags: [CRM-4]
-      summary: Retrieve consent record for a contact
-      description: Get the current consent record for a contact UUID. Allowed roles - viewer, editor, analyst, admin.
+      summary: Retrieve consent for a contact
+      description: Get active consent state for contact UUID. Allowed roles - viewer, editor, analyst, admin.
       parameters:
         - name: contact
           in: path
           required: true
-          description: Contact UUID
           schema:
             type: string
             format: uuid
       responses:
         "200":
-          description: Contact consent record found.
+          description: Consent record for contact.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CRM4Consent"
+                $ref: "#/components/schemas/Consent"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
@@ -407,12 +423,20 @@ paths:
           $ref: "#/components/responses/NotFoundError"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
-    CRM4List:
+    MarketingList:
       type: object
       required:
         - id
         - name
+        - campaignCount
+        - memberCount
         - createdAt
         - updatedAt
       properties:
@@ -421,7 +445,6 @@ components:
           format: uuid
         name:
           type: string
-          minLength: 1
           maxLength: 255
         description:
           type: string
@@ -429,11 +452,9 @@ components:
         campaignCount:
           type: integer
           minimum: 0
-          default: 0
         memberCount:
           type: integer
           minimum: 0
-          default: 0
         createdAt:
           type: string
           format: date-time
@@ -441,7 +462,7 @@ components:
           type: string
           format: date-time
 
-    CRM4ListCreate:
+    MarketingListCreate:
       type: object
       required:
         - name
@@ -454,7 +475,7 @@ components:
           type: string
           nullable: true
 
-    CRM4ListPatch:
+    MarketingListPatch:
       type: object
       properties:
         name:
@@ -465,13 +486,27 @@ components:
           type: string
           nullable: true
 
-    CRM4Campaign:
+    MarketingListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketingList"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    Campaign:
       type: object
       required:
         - id
         - name
         - campaignDate
         - listId
+        - memberCount
         - createdAt
         - updatedAt
       properties:
@@ -480,12 +515,10 @@ components:
           format: uuid
         name:
           type: string
-          minLength: 1
           maxLength: 255
         campaignDate:
           type: string
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
-          example: "2026-10-23"
+          format: date
         listId:
           type: string
           format: uuid
@@ -494,7 +527,6 @@ components:
         memberCount:
           type: integer
           minimum: 0
-          default: 0
         createdAt:
           type: string
           format: date-time
@@ -502,7 +534,7 @@ components:
           type: string
           format: date-time
 
-    CRM4CampaignCreate:
+    CampaignCreate:
       type: object
       required:
         - name
@@ -515,13 +547,12 @@ components:
           maxLength: 255
         campaignDate:
           type: string
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
-          example: "2026-10-23"
+          format: date
         listId:
           type: string
           format: uuid
 
-    CRM4CampaignPatch:
+    CampaignPatch:
       type: object
       properties:
         name:
@@ -530,16 +561,29 @@ components:
           maxLength: 255
         campaignDate:
           type: string
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
-          example: "2026-10-23"
+          format: date
 
-    CRM4Member:
+    CampaignListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Campaign"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    Member:
       type: object
       required:
         - id
         - campaignId
         - contactId
         - status
+        - unsubscribed
         - createdAt
       properties:
         id:
@@ -556,12 +600,11 @@ components:
           enum: [sent, opened, clicked]
         unsubscribed:
           type: boolean
-          default: false
         createdAt:
           type: string
           format: date-time
 
-    CRM4MemberCreateRequest:
+    MemberCreate:
       type: object
       required:
         - contactId
@@ -577,7 +620,20 @@ components:
           type: boolean
           default: false
 
-    CRM4Consent:
+    MemberListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    Consent:
       type: object
       required:
         - id
@@ -602,7 +658,6 @@ components:
           format: date-time
         source:
           type: string
-          minLength: 1
         createdAt:
           type: string
           format: date-time
@@ -610,7 +665,7 @@ components:
           type: string
           format: date-time
 
-    CRM4ConsentSet:
+    ConsentSet:
       type: object
       required:
         - contactId
@@ -630,7 +685,7 @@ components:
           type: string
           minLength: 1
 
-    CRM4Pagination:
+    Pagination:
       type: object
       required:
         - page
@@ -652,45 +707,6 @@ components:
           type: integer
           minimum: 0
 
-    CRM4ListResponse:
-      type: object
-      required:
-        - items
-        - pagination
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/CRM4List"
-        pagination:
-          $ref: "#/components/schemas/CRM4Pagination"
-
-    CRM4CampaignListResponse:
-      type: object
-      required:
-        - items
-        - pagination
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/CRM4Campaign"
-        pagination:
-          $ref: "#/components/schemas/CRM4Pagination"
-
-    CRM4MemberListResponse:
-      type: object
-      required:
-        - items
-        - pagination
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/CRM4Member"
-        pagination:
-          $ref: "#/components/schemas/CRM4Pagination"
-
     ErrorEnvelope:
       type: object
       required:
@@ -710,10 +726,12 @@ components:
                 type: string
               message:
                 type: string
+        correlation_id:
+          type: string
 
   responses:
     ValidationError:
-      description: Request validation failed against schema invariants.
+      description: Request validation failed.
       content:
         application/json:
           schema:
@@ -725,26 +743,20 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     ForbiddenError:
-      description: Caller lacks required permissions or role.
+      description: Caller lacks required permissions.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     NotFoundError:
-      description: Requested resource was not found.
+      description: Resource not found.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     ConflictError:
-      description: Resource conflict or domain invariant violation (e.g. BR-CRM4-01).
+      description: Resource conflict or invariant violation (e.g. BR-CRM4-01 monotonic opt-out).
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
-
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
