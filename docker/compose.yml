@@ -23,7 +23,7 @@ services:
       - clearshift-net
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.10.1-alpine
     container_name: clearshift-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory-policy noeviction
