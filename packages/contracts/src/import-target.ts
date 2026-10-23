@@ -13,6 +13,26 @@ export const Crm5TargetEntitySchema = z.enum([
 export type Crm5TargetEntity = z.infer<typeof Crm5TargetEntitySchema>;
 
 /**
+ * Target Entities owned by CRM-1 Contacts, Companies and Leads
+ */
+export const Crm1TargetEntitySchema = z.enum([
+  'contacts',
+  'companies',
+  'leads',
+  'contact',
+  'company',
+  'lead',
+]);
+export type Crm1TargetEntity = z.infer<typeof Crm1TargetEntitySchema>;
+
+export const GenericTargetEntitySchema = z.union([
+  Crm5TargetEntitySchema,
+  Crm1TargetEntitySchema,
+  z.string().min(1).max(64),
+]);
+export type GenericTargetEntity = z.infer<typeof GenericTargetEntitySchema>;
+
+/**
  * Outcome classification for imported rows (KIT-08)
  */
 export const RowOutcomeClassificationSchema = z.enum([
@@ -31,7 +51,7 @@ export const ImportRowInputSchema = z.object({
   sourceRow: z.number().int({ message: 'sourceRow must be an integer' }).min(1, 'sourceRow must be >= 1'),
   sourceSystem: z.string().max(64).optional(),
   sourceId: z.string().max(128).optional(),
-  entity: Crm5TargetEntitySchema,
+  entity: GenericTargetEntitySchema,
   data: z.record(z.string(), z.unknown()),
   idempotencyKey: z.string().min(1, 'idempotencyKey is required').max(256),
   correlationId: z.string().max(128).optional(),
