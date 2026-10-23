@@ -947,6 +947,17 @@ export const CRM4_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'CRM-4 Profiling Configuration & Manifest Assertions (#179 / [CRM4-26])',
     verificationEvidence: 'profileCrm4Batch accurately computes total rows, null counts, distinct counts, invalid format rates, and 100% matches manifest defect numbers.',
   },
+  {
+    reqId: 'FR-CRM4-27',
+    requirement: 'Module cleaning configuration: standard cleaners, field-level change audit trail, structured rejections, and row conservation.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.5, §4.7 & Issue #180 [CRM4-27]',
+    category: 'Migration',
+    testType: 'unit',
+    testFile: 'apps/crm/modules/crm-4/tests/kit/cleaner.test.ts',
+    testSuite: 'CRM-4 Cleaning Rules & Field-Level Audit (#180 / [CRM4-27])',
+    verificationEvidence: 'cleanRows executes whitespace, email, phone, date, and enum normalization, records field-level audit entries, and emits structured row rejections.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
