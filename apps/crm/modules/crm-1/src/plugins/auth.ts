@@ -7,6 +7,9 @@ import { isRoleAllowed } from '../policies/roles.js';
 
 export interface AuthenticatedUser extends HubTokenClaims {
   disabled?: boolean | undefined;
+  tenant_id?: string | undefined;
+  tenantId?: string | undefined;
+  org_id?: string | undefined;
 }
 
 /**
@@ -35,6 +38,20 @@ const crm1AuthPluginAsync: FastifyPluginAsync = async (fastify) => {
       if (decoded && (decoded['disabled'] === true || decoded['status'] === 'disabled')) {
         claims.disabled = true;
         throw new AppError('UNAUTHORIZED', 'User account is disabled', 401);
+      }
+      if (decoded) {
+        if (typeof decoded['tenant_id'] === 'string') {
+          claims.tenant_id = decoded['tenant_id'];
+        }
+        if (typeof decoded['tenantId'] === 'string') {
+          claims.tenantId = decoded['tenantId'];
+        }
+        if (typeof decoded['org_id'] === 'string') {
+          claims.org_id = decoded['org_id'];
+        }
+        if (typeof decoded['employee_id'] === 'string' && !claims.employee_id) {
+          claims.employee_id = decoded['employee_id'];
+        }
       }
       request.user = claims;
     } catch (err: any) {
@@ -80,6 +97,17 @@ export function requireRoles(allowedRoles: readonly RoleType[]) {
     const user = request.user as AuthenticatedUser;
     if (user.disabled) {
       throw new AppError('UNAUTHORIZED', 'User account is disabled', 401);
+    }
+
+    // Check multi-tenant consistency between token and request headers
+    const tokenTenant = user.tenant_id || user.tenantId || user.org_id;
+    const headerTenant = request.headers['x-tenant-id'] as string | undefined;
+    if (tokenTenant && headerTenant && tokenTenant !== headerTenant) {
+      throw new AppError(
+        'FORBIDDEN',
+        `Multi-tenant boundary violation: token tenant '${tokenTenant}' does not match request tenant header '${headerTenant}'`,
+        403
+      );
     }
 
     if (!isRoleAllowed(user.roles, allowedRoles)) {

@@ -13,6 +13,14 @@ import {
 } from '../../src/policies/masking.js';
 import { CRM1_ENDPOINT_ROLES, isRoleAllowed } from '../../src/policies/roles.js';
 import { checkRouteAuth, HUB_LOGIN_PATH, ACCESS_DENIED_PATH } from '../../web/auth/route-guard.js';
+import {
+  assertTenantIsolation,
+  assertRecordOwnership,
+  assertNoImmutableFieldMutation,
+  extractTenantId,
+  CRM1_ENDPOINT_CAPABILITIES,
+  IMMUTABLE_MUTATION_FIELDS,
+} from '../../src/interface/authz.js';
 
 describe('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
   let app: ReturnType<typeof buildApp>;
@@ -657,6 +665,218 @@ describe('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
 
       expect(result.isAllowed).toBe(true);
       expect(result.redirectTo).toBeUndefined();
+    });
+  });
+
+  // ===========================================================================
+  // 9. CRM1-15 Module Authorization Policy & Object-Level Guards (Issue #108)
+  // ===========================================================================
+  describe('CRM1-15 Module Authorization Policy Integration & Object-Level Guards', () => {
+    let tenantAToken: string;
+    let tenantBToken: string;
+
+    beforeAll(async () => {
+      const keys = await getSigningKeys();
+      const now = Math.floor(Date.now() / 1000);
+
+      tenantAToken = await new jose.SignJWT({
+        roles: [Roles.EDITOR],
+        tenant_id: 'tenant-alpha',
+        employee_id: 'emp-tenant-a',
+      })
+        .setProtectedHeader({ alg: 'EdDSA', kid: 'cs-hub-key-v1' })
+        .setIssuer('clearshift-hub')
+        .setAudience('clearshift')
+        .setSubject('user-tenant-a')
+        .setExpirationTime(now + 900)
+        .sign(keys.privateKey);
+
+      tenantBToken = await new jose.SignJWT({
+        roles: [Roles.EDITOR],
+        tenant_id: 'tenant-beta',
+        employee_id: 'emp-tenant-b',
+      })
+        .setProtectedHeader({ alg: 'EdDSA', kid: 'cs-hub-key-v1' })
+        .setIssuer('clearshift-hub')
+        .setAudience('clearshift')
+        .setSubject('user-tenant-b')
+        .setExpirationTime(now + 900)
+        .sign(keys.privateKey);
+    });
+
+    describe('Multi-Tenant Boundary Enforcement', () => {
+      it('rejects request when token tenant does not match x-tenant-id header with 403 Forbidden', async () => {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/v1/crm-contacts/contacts',
+          headers: {
+            authorization: `Bearer ${tenantAToken}`,
+            'x-tenant-id': 'tenant-beta', // Mismatch!
+          },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.payload);
+        expect(body.code || body.error?.code).toBe('FORBIDDEN');
+        expect(body.message || body.error?.message).toContain('Multi-tenant boundary violation');
+      });
+
+      it('allows request when token tenant matches x-tenant-id header', async () => {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/v1/crm-contacts/contacts',
+          headers: {
+            authorization: `Bearer ${tenantAToken}`,
+            'x-tenant-id': 'tenant-alpha', // Match
+          },
+        });
+
+        expect(response.statusCode).toBe(200);
+      });
+
+      it('extracts tenant ID correctly from token claims or headers', () => {
+        expect(extractTenantId({ tenant_id: 't-1' } as any)).toBe('t-1');
+        expect(extractTenantId({ tenantId: 't-2' } as any)).toBe('t-2');
+        expect(extractTenantId({ org_id: 't-3' } as any)).toBe('t-3');
+        expect(
+          extractTenantId(undefined, { headers: { 'x-tenant-id': 't-header' } } as any)
+        ).toBe('t-header');
+      });
+
+      it('assertTenantIsolation throws 403 for mismatched resource tenant', () => {
+        expect(() => {
+          assertTenantIsolation(
+            { tenant_id: 'tenant-1' } as any,
+            'tenant-2',
+            undefined
+          );
+        }).toThrowError(/cross-tenant record mutation forbidden/);
+      });
+    });
+
+    describe('Immutable Field Mutation Guards', () => {
+      it('rejects attempt to mutate goldenId on PATCH /contacts/:id with 403 Forbidden', async () => {
+        const contactId = '11111111-1111-4111-8111-000000000001';
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/v1/crm-contacts/contacts/${contactId}`,
+          headers: headerFor(editorToken),
+          payload: {
+            goldenId: 'tampered-golden-id',
+          },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.payload);
+        expect(body.code || body.error?.code).toBe('FORBIDDEN');
+        expect(body.message || body.error?.message).toContain("modification of immutable field 'goldenId'");
+      });
+
+      it('rejects attempt to mutate sourceSystem on PATCH /contacts/:id with 403 Forbidden', async () => {
+        const contactId = '11111111-1111-4111-8111-000000000001';
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/v1/crm-contacts/contacts/${contactId}`,
+          headers: headerFor(editorToken),
+          payload: {
+            sourceSystem: 'hacked_source',
+          },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.payload);
+        expect(body.code || body.error?.code).toBe('FORBIDDEN');
+        expect(body.message || body.error?.message).toContain("modification of immutable field 'sourceSystem'");
+      });
+
+      it('rejects attempt to mutate id on PATCH /companies/:id with 403 Forbidden', async () => {
+        const companyId = '22222222-2222-4222-8222-000000000001';
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/v1/crm-contacts/companies/${companyId}`,
+          headers: headerFor(editorToken),
+          payload: {
+            id: '33333333-3333-4333-8333-000000000001',
+          },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.payload);
+        expect(body.code || body.error?.code).toBe('FORBIDDEN');
+        expect(body.message || body.error?.message).toContain("modification of immutable field 'id'");
+      });
+
+      it('allows ADMIN to override immutable field modifications for emergency operations', () => {
+        expect(() => {
+          assertNoImmutableFieldMutation(
+            { roles: [Roles.ADMIN] } as any,
+            { goldenId: 'admin-override', sourceSystem: 'new-source' }
+          );
+        }).not.toThrow();
+      });
+
+      it('rejects non-admin from modifying any field in IMMUTABLE_MUTATION_FIELDS', () => {
+        for (const field of IMMUTABLE_MUTATION_FIELDS) {
+          expect(() => {
+            assertNoImmutableFieldMutation(
+              { roles: [Roles.EDITOR] } as any,
+              { [field]: 'illegal-value' }
+            );
+          }).toThrowError(new RegExp(`modification of immutable field '${field}'`));
+        }
+      });
+    });
+
+    describe('Cross-User Record Ownership Guards', () => {
+      it('blocks non-admin from mutating a record owned by a different employee', () => {
+        expect(() => {
+          assertRecordOwnership(
+            { roles: [Roles.EDITOR], employee_id: 'emp-101', sub: 'user-101' } as any,
+            'emp-999' // Different owner
+          );
+        }).toThrowError(/unauthorized cross-user mutation/);
+      });
+
+      it('allows owner employee to mutate their own record', () => {
+        expect(() => {
+          assertRecordOwnership(
+            { roles: [Roles.EDITOR], employee_id: 'emp-101', sub: 'user-101' } as any,
+            'emp-101'
+          );
+        }).not.toThrow();
+      });
+
+      it('allows owner by sub to mutate their own record', () => {
+        expect(() => {
+          assertRecordOwnership(
+            { roles: [Roles.EDITOR], sub: 'user-101' } as any,
+            'user-101'
+          );
+        }).not.toThrow();
+      });
+
+      it('allows ADMIN to mutate records regardless of ownership', () => {
+        expect(() => {
+          assertRecordOwnership(
+            { roles: [Roles.ADMIN], employee_id: 'emp-admin', sub: 'admin-user' } as any,
+            'emp-999'
+          );
+        }).not.toThrow();
+      });
+    });
+
+    describe('Capability Matrix Validation', () => {
+      it('maps all CRM-1 endpoints to their standard RBAC capabilities', () => {
+        expect(CRM1_ENDPOINT_CAPABILITIES.CONTACTS_LIST).toBe('module.read');
+        expect(CRM1_ENDPOINT_CAPABILITIES.CONTACTS_CREATE).toBe('module.write');
+        expect(CRM1_ENDPOINT_CAPABILITIES.COMPANIES_LIST).toBe('module.read');
+        expect(CRM1_ENDPOINT_CAPABILITIES.COMPANIES_CREATE).toBe('module.write');
+        expect(CRM1_ENDPOINT_CAPABILITIES.LEADS_LIST).toBe('module.read');
+        expect(CRM1_ENDPOINT_CAPABILITIES.LEADS_CREATE).toBe('module.write');
+        expect(CRM1_ENDPOINT_CAPABILITIES.IMPORTS_START).toBe('kit.run');
+        expect(CRM1_ENDPOINT_CAPABILITIES.IMPORTS_STATUS).toBe('kit.read');
+        expect(CRM1_ENDPOINT_CAPABILITIES.IMPORTS_REJECTS).toBe('kit.read');
+      });
     });
   });
 });
