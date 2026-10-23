@@ -23,8 +23,8 @@ describe('CRM-5 Migration Control Center: Module Context Rejection Review & Expo
     const dispatcher = {
       useId: () => 'reject-detail-title-1',
       useRef: (init: unknown) => ({ current: init }),
-      useEffect: () => {},
-      useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => {}],
+      useEffect: () => { },
+      useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => { }],
     };
     const internals = (React as Record<string, unknown>).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as {
       H: unknown;
@@ -247,7 +247,7 @@ describe('CRM-5 Migration Control Center: Module Context Rejection Review & Expo
 
     it('masks government IDs and SSNs (***-**-7890)', () => {
       expect(maskGovernmentId('9876543210')).toBe('***-**-3210');
-      expect(maskGovernmentId('123-45-6789')).toBe('***-**-6789');
+      expect(maskGovernmentId('000-00-6789')).toBe('***-**-6789');
       expect(maskGovernmentId('12')).toBe('[REDACTED_ID]');
     });
 
@@ -262,7 +262,7 @@ describe('CRM-5 Migration Control Center: Module Context Rejection Review & Expo
         email: 'jane.doe@example.com',
         bank_account: '9876543210',
         iban: 'FR7630006000011234567890189',
-        ssn: '123-45-6789',
+        ssn: '000-00-6789',
         tax_id: '99-8877665',
         password: 'pwd123',
         token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
