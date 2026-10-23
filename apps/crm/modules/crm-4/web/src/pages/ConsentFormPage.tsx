@@ -11,7 +11,7 @@
  *   - POST /api/v1/crm-marketing/consents
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Spinner, Alert } from '@clearshift/ui';
+import { Card, Button, Spinner, Alert } from '@cs/ui';
 import type { CRM4Consent, CRM4ConsentSet } from '@clearshift/contracts';
 import {
   getConsent,

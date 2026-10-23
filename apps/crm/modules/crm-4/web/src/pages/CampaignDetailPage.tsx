@@ -27,7 +27,7 @@ import {
   TableHead,
   TableCell,
   Pagination,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type {
   CRM4Campaign,
   CRM4Member,
