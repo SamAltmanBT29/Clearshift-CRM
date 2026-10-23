@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, timestamp, jsonb, primaryKey } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, timestamp, jsonb, primaryKey, integer } from "drizzle-orm/pg-core";
 
 export const platformSchema = pgSchema("platform");
 
@@ -51,12 +51,15 @@ export const outbox = platformSchema.table("outbox", {
   eventType: text("event_type").notNull(),
   payload: jsonb("payload").notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  retryCount: integer("retry_count").notNull().default(0),
+  lastError: text("last_error")
 });
 
 export const consumedEvents = platformSchema.table("consumed_events", {
   consumer: text("consumer").notNull(),
-  eventId: uuid("event_id").notNull()
+  eventId: uuid("event_id").notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }).notNull().defaultNow()
 }, (table) => [
   primaryKey({ columns: [table.consumer, table.eventId] })
 ]);
