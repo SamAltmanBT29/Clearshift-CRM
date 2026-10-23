@@ -57,3 +57,11 @@ Indexes support deal and quote-date lookups.
 - All fixtures and test data must be synthetic.
 - Source-system/source-id pairs are both null or both non-blank. Duplicate source pairs are rejected.
 - Monetary values use `NUMERIC(14,2)` to avoid floating-point rounding errors.
+
+## API & Data Model Alignment (CRM2-04)
+
+All endpoint request payloads, query filters, and response representations strictly reflect these tables and invariants:
+- `GET /api/v1/crm-deals/deals`: Returns paginated list of deals with `is_orphan` flag and `stage_name`.
+- `GET /api/v1/crm-deals/stages`: Returns seeded stages ordered by `position ASC`.
+- `GET /api/v1/crm-deals/quotes`: Returns quotes linked to deals.
+
