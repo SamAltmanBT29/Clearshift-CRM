@@ -326,13 +326,48 @@ export const CRM2_FIELD_CONTRACT = {
   },
 } as const;
 
-// Deals Query Filter Schema
-export const DealsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(10),
-  search: z.string().optional(),
-  stage: Crm2StageNameSchema.optional(),
+// Health Check Schema
+export const Crm2HealthResponseSchema = z.object({
+  status: z.literal('ok'),
+  module: z.literal('crm-2'),
+  name: z.string(),
+  version: z.string(),
 });
+export type Crm2HealthResponse = z.infer<typeof Crm2HealthResponseSchema>;
+
+// Deals Query Filter Schema
+export const DealsQuerySchema = z
+  .object({
+    page: z.coerce
+      .number()
+      .int({ message: 'page must be an integer' })
+      .min(1, { message: 'page must be >= 1' })
+      .default(1),
+    pageSize: z.coerce
+      .number()
+      .int({ message: 'pageSize must be an integer' })
+      .min(1, { message: 'pageSize must be >= 1' })
+      .max(100, { message: 'pageSize cannot exceed 100' })
+      .optional(),
+    limit: z.coerce
+      .number()
+      .int({ message: 'limit must be an integer' })
+      .min(1, { message: 'limit must be >= 1' })
+      .max(100, { message: 'limit cannot exceed 100' })
+      .optional(),
+    search: z.string().optional(),
+    stage: Crm2StageNameSchema.optional(),
+  })
+  .transform((data) => {
+    const size = data.pageSize ?? data.limit ?? 10;
+    return {
+      page: data.page,
+      pageSize: size,
+      limit: size,
+      ...(data.search !== undefined ? { search: data.search } : {}),
+      ...(data.stage !== undefined ? { stage: data.stage } : {}),
+    };
+  });
 export type DealsQuery = z.infer<typeof DealsQuerySchema>;
 export type DealsQueryInput = z.input<typeof DealsQuerySchema>;
 
@@ -340,6 +375,7 @@ export type DealsQueryInput = z.input<typeof DealsQuerySchema>;
 export const Crm2PaginationMetaSchema = z.object({
   page: z.number().int(),
   pageSize: z.number().int(),
+  limit: z.number().int().optional(),
   totalCount: z.number().int(),
   totalPages: z.number().int(),
   hasNextPage: z.boolean(),
@@ -361,11 +397,36 @@ export const StagesListResponseSchema = z.object({
 export type StagesListResponse = z.infer<typeof StagesListResponseSchema>;
 
 // Quotes Query Filter Schema
-export const QuotesQuerySchema = z.object({
-  deal_id: z.string().uuid().optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(10),
-});
+export const QuotesQuerySchema = z
+  .object({
+    deal_id: z.string().uuid({ message: 'deal_id must be a valid UUID' }).optional(),
+    page: z.coerce
+      .number()
+      .int({ message: 'page must be an integer' })
+      .min(1, { message: 'page must be >= 1' })
+      .default(1),
+    pageSize: z.coerce
+      .number()
+      .int({ message: 'pageSize must be an integer' })
+      .min(1, { message: 'pageSize must be >= 1' })
+      .max(100, { message: 'pageSize cannot exceed 100' })
+      .optional(),
+    limit: z.coerce
+      .number()
+      .int({ message: 'limit must be an integer' })
+      .min(1, { message: 'limit must be >= 1' })
+      .max(100, { message: 'limit cannot exceed 100' })
+      .optional(),
+  })
+  .transform((data) => {
+    const size = data.pageSize ?? data.limit ?? 10;
+    return {
+      page: data.page,
+      pageSize: size,
+      limit: size,
+      ...(data.deal_id !== undefined ? { deal_id: data.deal_id } : {}),
+    };
+  });
 export type QuotesQuery = z.infer<typeof QuotesQuerySchema>;
 export type QuotesQueryInput = z.input<typeof QuotesQuerySchema>;
 
@@ -375,3 +436,52 @@ export const QuotesListResponseSchema = z.object({
   pagination: Crm2PaginationMetaSchema,
 });
 export type QuotesListResponse = z.infer<typeof QuotesListResponseSchema>;
+
+// CRM-2 Import Ingestion Schemas (KIT Integration & Mutation API)
+export const Crm2ImportRowSchema = z.object({
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  sourceSystem: z.string().min(1),
+  entity: z.enum(['deal', 'quote']),
+  idempotencyKey: z.string().min(1),
+  data: z.record(z.unknown()),
+});
+export type Crm2ImportRow = z.infer<typeof Crm2ImportRowSchema>;
+
+export const Crm2ImportBatchSchema = z.object({
+  batchId: z.string().uuid(),
+  sourceSystem: z.string().min(1),
+  rows: z.array(Crm2ImportRowSchema),
+});
+export type Crm2ImportBatch = z.infer<typeof Crm2ImportBatchSchema>;
+
+export const Crm2ImportReceiptSchema = z.object({
+  id: z.string().uuid(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  entity: z.enum(['deal', 'quote']),
+  sourceSystem: z.string().min(1),
+  sourceId: z.string().min(1),
+  targetId: z.string().uuid(),
+  idempotencyKey: z.string().min(1),
+  payloadHash: z.string(),
+  createdAt: z.string(),
+});
+export type Crm2ImportReceipt = z.infer<typeof Crm2ImportReceiptSchema>;
+
+// CRM-2 Shared Error Envelope Schema
+export const Crm2ErrorDetailSchema = z.object({
+  field: z.string().optional(),
+  message: z.string(),
+  code: z.string().optional(),
+});
+export type Crm2ErrorDetail = z.infer<typeof Crm2ErrorDetailSchema>;
+
+export const Crm2ErrorEnvelopeSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.array(Crm2ErrorDetailSchema).default([]),
+  correlation_id: z.string().optional(),
+});
+export type Crm2ErrorEnvelope = z.infer<typeof Crm2ErrorEnvelopeSchema>;
+

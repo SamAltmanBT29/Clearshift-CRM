@@ -10,6 +10,9 @@ export * from "./domain/relationships.js";
 export * from "./domain/errors.js";
 export * from "./domain/qa-specs.js";
 export * from "./services/crm2.service.js";
+export * from "./policies/roles.js";
+export * from "./plugins/auth.js";
+export * from "./app.js";
 
 export interface ModuleDefinition {
   id: string;
