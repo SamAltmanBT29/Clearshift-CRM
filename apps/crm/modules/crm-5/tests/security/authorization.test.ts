@@ -11,10 +11,20 @@ import {
   maskSensitiveLog,
   redactSensitiveObject,
 } from '../../src/policies/masking.js';
-import { CRM5_ENDPOINT_ROLES, isRoleAllowed } from '../../src/policies/roles.js';
+import {
+  CRM5_ENDPOINT_ROLES,
+  CRM5_ENDPOINT_CAPABILITIES,
+  isRoleAllowed,
+  isCapabilityAllowed,
+} from '../../src/policies/roles.js';
+import {
+  assertTenantIsolation,
+  assertRecordOwnership,
+  type AuthenticatedUser,
+} from '../../src/plugins/auth.js';
 import { checkRouteAuth, HUB_LOGIN_PATH, ACCESS_DENIED_PATH } from '../../web/auth/route-guard.js';
 
-describe('CRM-5 Security, Authorization & Audit (Issue #54 / [CRM5-15])', () => {
+describe('CRM-5 Security, Authorization & Audit (Issue #54 / [CRM5-15] / Issue #188)', () => {
   let app: ReturnType<typeof buildApp>;
   let service: ControlCenterService;
   let auditService: Crm5AuditService;
@@ -25,6 +35,9 @@ describe('CRM-5 Security, Authorization & Audit (Issue #54 / [CRM5-15])', () => 
   let analystToken: string;
   let migrationRunnerToken: string;
   let adminToken: string;
+  let tenantAlphaViewerToken: string;
+  let tenantAlphaEditorToken: string;
+  let tenantAlphaMigratorToken: string;
 
   const headerFor = (token: string) => ({ authorization: `Bearer ${token}` });
 
@@ -40,6 +53,45 @@ describe('CRM-5 Security, Authorization & Audit (Issue #54 / [CRM5-15])', () => 
     analystToken = await signAccessToken('synthetic-analyst', [Roles.ANALYST]);
     migrationRunnerToken = await signAccessToken('synthetic-migrator', [Roles.MIGRATION_RUNNER]);
     adminToken = await signAccessToken('synthetic-admin', [Roles.ADMIN]);
+
+    const keys = await getSigningKeys();
+    const now = Math.floor(Date.now() / 1000);
+
+    tenantAlphaViewerToken = await new jose.SignJWT({
+      roles: [Roles.VIEWER],
+      sub: 'tenant-viewer-sub',
+      employee_id: 'emp-viewer-1',
+      tenant_id: 'tenant-alpha',
+    })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'cs-hub-key-v1' })
+      .setIssuer('clearshift-hub')
+      .setAudience('clearshift')
+      .setExpirationTime(now + 3600)
+      .sign(keys.privateKey);
+
+    tenantAlphaEditorToken = await new jose.SignJWT({
+      roles: [Roles.EDITOR],
+      sub: 'tenant-editor-sub',
+      employee_id: 'emp-editor-1',
+      tenant_id: 'tenant-alpha',
+    })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'cs-hub-key-v1' })
+      .setIssuer('clearshift-hub')
+      .setAudience('clearshift')
+      .setExpirationTime(now + 3600)
+      .sign(keys.privateKey);
+
+    tenantAlphaMigratorToken = await new jose.SignJWT({
+      roles: [Roles.MIGRATION_RUNNER],
+      sub: 'tenant-migrator-sub',
+      employee_id: 'emp-migrator-1',
+      tenant_id: 'tenant-alpha',
+    })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'cs-hub-key-v1' })
+      .setIssuer('clearshift-hub')
+      .setAudience('clearshift')
+      .setExpirationTime(now + 3600)
+      .sign(keys.privateKey);
   });
 
   beforeEach(() => {
@@ -836,6 +888,348 @@ describe('CRM-5 Security, Authorization & Audit (Issue #54 / [CRM5-15])', () => 
       expect(isRoleAllowed([Roles.VIEWER], CRM5_ENDPOINT_ROLES.RUNS_LIST)).toBe(true);
       expect(isRoleAllowed([Roles.ANALYST], CRM5_ENDPOINT_ROLES.RUNS_LIST)).toBe(true);
       expect(isRoleAllowed([Roles.EDITOR], CRM5_ENDPOINT_ROLES.RUNS_LIST)).toBe(false);
+    });
+  });
+
+  // ===========================================================================
+  // 11. Multi-Tenant Boundary Isolation Guards (Acceptance Criterion 4)
+  // ===========================================================================
+  describe('Multi-Tenant Boundary Isolation Guards (Acceptance Criterion 4)', () => {
+    it('allows requests when request header x-tenant-id matches user token tenant_id', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-control/runs',
+        headers: {
+          authorization: `Bearer ${tenantAlphaViewerToken}`,
+          'x-tenant-id': 'tenant-alpha',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('rejects requests with 403 Forbidden when x-tenant-id does not match token tenant_id', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-control/runs',
+        headers: {
+          authorization: `Bearer ${tenantAlphaViewerToken}`,
+          'x-tenant-id': 'tenant-beta',
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+      expect(body.message || body.error?.message).toContain('Multi-tenant boundary violation');
+    });
+
+    it('rejects requests with 403 Forbidden when x-organization-id mismatches token tenant', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-control/runs',
+        headers: {
+          authorization: `Bearer ${tenantAlphaViewerToken}`,
+          'x-organization-id': 'tenant-beta',
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+      expect(body.message || body.error?.message).toContain('Multi-tenant boundary violation');
+    });
+
+    it('rejects requests with 403 Forbidden when x-org-id mismatches token tenant', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-control/runs',
+        headers: {
+          authorization: `Bearer ${tenantAlphaViewerToken}`,
+          'x-org-id': 'tenant-beta',
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+      expect(body.message || body.error?.message).toContain('Multi-tenant boundary violation');
+    });
+
+    it('rejects POST /runs when metadata tenant_id mismatches caller token tenant', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/runs',
+        headers: headerFor(tenantAlphaMigratorToken),
+        payload: {
+          batchId: 'batch-tenant-mismatch',
+          module: 'crm-1',
+          step: 'extract',
+          status: 'running',
+          recordsIn: 10,
+          recordsOut: 10,
+          recordsRejected: 0,
+          metadata: {
+            tenant_id: 'tenant-beta',
+          },
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+      expect(body.message || body.error?.message).toContain('cross-tenant record mutation forbidden');
+    });
+
+    it('rejects POST /import/row when payload data tenant_id mismatches caller token tenant', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/import/row',
+        headers: headerFor(tenantAlphaMigratorToken),
+        payload: {
+          batchId: 'batch-import-mismatch',
+          sourceRow: 1,
+          entity: 'crm5_run_projections',
+          idempotencyKey: 'idemp-tenant-mismatch-1',
+          data: {
+            tenant_id: 'tenant-beta',
+            module: 'crm-1',
+            step: 'extract',
+          },
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+      expect(body.message || body.error?.message).toContain('cross-tenant record mutation forbidden');
+    });
+
+    it('allows POST /import/row when payload data tenant_id matches caller token tenant', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/import/row',
+        headers: headerFor(tenantAlphaMigratorToken),
+        payload: {
+          batchId: 'batch-import-matching',
+          sourceRow: 1,
+          entity: 'crm5_run_projections',
+          idempotencyKey: 'idemp-tenant-matching-1',
+          data: {
+            tenant_id: 'tenant-alpha',
+            module: 'crm-1',
+            step: 'extract',
+          },
+        },
+      });
+      expect([200, 201]).toContain(response.statusCode);
+    });
+  });
+
+  // ===========================================================================
+  // 12. Object-Level Cross-User Mutation Prevention (Acceptance Criterion 4)
+  // ===========================================================================
+  describe('Object-Level Cross-User Mutation Prevention (Acceptance Criterion 4)', () => {
+    let candidateId: string;
+
+    beforeEach(() => {
+      const detectResult = service.detectDuplicates({
+        batchId: 'batch-cross-user-test',
+        keyType: 'email',
+        records: [
+          { id: 'rec-u1', keyValue: 'operator@clearshift.test' },
+          { id: 'rec-u2', keyValue: 'operator@clearshift.test' },
+        ],
+      });
+      candidateId = detectResult.duplicateCandidates[0]!.id;
+    });
+
+    it('rejects POST /duplicates/resolve with 403 when actorId does not match caller identity', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/duplicates/resolve',
+        headers: headerFor(editorToken), // sub is 'synthetic-editor'
+        payload: {
+          candidateId,
+          decision: 'MERGE',
+          actorId: 'impersonated-user-999',
+          keptId: 'rec-u1',
+          mergedId: 'rec-u2',
+          reason: 'Legitimate resolution attempt',
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.payload);
+      expect(body.code || body.error?.code).toBe('FORBIDDEN');
+      expect(body.message || body.error?.message).toContain('unauthorized cross-user mutation');
+    });
+
+    it('allows POST /duplicates/resolve when actorId matches caller identity', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/duplicates/resolve',
+        headers: headerFor(editorToken),
+        payload: {
+          candidateId,
+          decision: 'MERGE',
+          actorId: 'synthetic-editor',
+          keptId: 'rec-u1',
+          mergedId: 'rec-u2',
+          reason: 'Authorized editor resolution',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.status).toBe('resolved');
+      expect(body.audit.actorId).toBe('synthetic-editor');
+    });
+
+    it('allows ADMIN to resolve duplicate with any actorId (universal administrative override)', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/crm-control/duplicates/resolve',
+        headers: headerFor(adminToken),
+        payload: {
+          candidateId,
+          decision: 'KEEP_SEPARATE',
+          actorId: 'delegated-operator-55',
+          keptId: 'rec-u1',
+          mergedId: 'rec-u2',
+          reason: 'Admin override resolution',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.status).toBe('resolved');
+    });
+  });
+
+  // ===========================================================================
+  // 13. RBAC Capability Matrix Integration (@cs/rbac)
+  // ===========================================================================
+  describe('RBAC Capability Matrix Integration (@cs/rbac)', () => {
+    it('verifies VIEWER role has CONTROL_READ capability and can read runs', () => {
+      expect(isCapabilityAllowed([Roles.VIEWER], 'RUNS_LIST')).toBe(true);
+      expect(isCapabilityAllowed([Roles.VIEWER], 'BATCH_SUMMARY')).toBe(true);
+      expect(isCapabilityAllowed([Roles.VIEWER], 'IMPORT_RECEIPTS')).toBe(true);
+      expect(isCapabilityAllowed([Roles.VIEWER], 'RUNS_CREATE')).toBe(false);
+      expect(isCapabilityAllowed([Roles.VIEWER], 'DUPLICATES_RESOLVE')).toBe(false);
+    });
+
+    it('verifies EDITOR role has KIT_REVIEW capability for duplicate resolution', () => {
+      expect(isCapabilityAllowed([Roles.EDITOR], 'DUPLICATES_RESOLVE')).toBe(true);
+      expect(isCapabilityAllowed([Roles.EDITOR], 'RUNS_CREATE')).toBe(false);
+      expect(isCapabilityAllowed([Roles.EDITOR], 'BATCH_EXECUTE_LOAD')).toBe(false);
+    });
+
+    it('verifies MIGRATION_RUNNER role has KIT_RUN capability for pipeline operations', () => {
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'RUNS_CREATE')).toBe(true);
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'SCORES_CREATE')).toBe(true);
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'RECONCILIATION_CREATE')).toBe(true);
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'REJECTS_CREATE')).toBe(true);
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'BATCH_EXECUTE_LOAD')).toBe(true);
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'IMPORT_ROW')).toBe(true);
+      expect(isCapabilityAllowed([Roles.MIGRATION_RUNNER], 'DUPLICATES_RESOLVE')).toBe(false);
+    });
+
+    it('verifies ANALYST role has CONTROL_READ capability across quality and audit endpoints', () => {
+      expect(isCapabilityAllowed([Roles.ANALYST], 'RUNS_LIST')).toBe(true);
+      expect(isCapabilityAllowed([Roles.ANALYST], 'SCORES_LIST')).toBe(true);
+      expect(isCapabilityAllowed([Roles.ANALYST], 'REJECTS_LIST')).toBe(true);
+      expect(isCapabilityAllowed([Roles.ANALYST], 'RECONCILIATION_READ')).toBe(true);
+      expect(isCapabilityAllowed([Roles.ANALYST], 'DUPLICATES_HELD')).toBe(true);
+      expect(isCapabilityAllowed([Roles.ANALYST], 'DUPLICATES_AUDIT')).toBe(true);
+      expect(isCapabilityAllowed([Roles.ANALYST], 'RUNS_CREATE')).toBe(false);
+    });
+
+    it('verifies ADMIN role has universal capability access across all CRM-5 endpoints', () => {
+      const endpoints = Object.keys(CRM5_ENDPOINT_CAPABILITIES) as (keyof typeof CRM5_ENDPOINT_CAPABILITIES)[];
+      for (const ep of endpoints) {
+        expect(isCapabilityAllowed([Roles.ADMIN], ep)).toBe(true);
+      }
+    });
+  });
+
+  // ===========================================================================
+  // 14. Direct Guard Unit Tests (assertTenantIsolation & assertRecordOwnership)
+  // ===========================================================================
+  describe('Direct Guard Unit Tests', () => {
+    it('assertTenantIsolation throws 403 on tenant header mismatch', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-1',
+        roles: [Roles.VIEWER],
+        tenant_id: 'tenant-corp',
+      };
+      const mockReq = {
+        headers: { 'x-tenant-id': 'tenant-foreign' },
+      } as any;
+
+      expect(() => assertTenantIsolation(user, undefined, mockReq)).toThrowError(
+        /Multi-tenant boundary violation/
+      );
+    });
+
+    it('assertTenantIsolation throws 403 on resource tenant mismatch', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-1',
+        roles: [Roles.VIEWER],
+        tenant_id: 'tenant-corp',
+      };
+
+      expect(() => assertTenantIsolation(user, 'tenant-foreign')).toThrowError(
+        /cross-tenant record mutation forbidden/
+      );
+    });
+
+    it('assertTenantIsolation succeeds when tenant matches', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-1',
+        roles: [Roles.VIEWER],
+        tenant_id: 'tenant-corp',
+      };
+      const mockReq = {
+        headers: { 'x-tenant-id': 'tenant-corp' },
+      } as any;
+
+      expect(() => assertTenantIsolation(user, 'tenant-corp', mockReq)).not.toThrow();
+    });
+
+    it('assertRecordOwnership throws 403 when non-admin caller does not match owner', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-regular',
+        roles: [Roles.EDITOR],
+        employee_id: 'emp-100',
+      };
+
+      expect(() => assertRecordOwnership(user, 'emp-200')).toThrowError(
+        /unauthorized cross-user mutation for record owned by 'emp-200'/
+      );
+    });
+
+    it('assertRecordOwnership allows non-admin caller when employee_id matches owner', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-regular',
+        roles: [Roles.EDITOR],
+        employee_id: 'emp-100',
+      };
+
+      expect(() => assertRecordOwnership(user, 'emp-100')).not.toThrow();
+    });
+
+    it('assertRecordOwnership allows non-admin caller when sub matches owner', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-regular',
+        roles: [Roles.EDITOR],
+      };
+
+      expect(() => assertRecordOwnership(user, 'usr-regular')).not.toThrow();
+    });
+
+    it('assertRecordOwnership always permits ADMIN role', () => {
+      const user: AuthenticatedUser = {
+        sub: 'usr-admin',
+        roles: [Roles.ADMIN],
+        employee_id: 'emp-admin',
+      };
+
+      expect(() => assertRecordOwnership(user, 'emp-anybody')).not.toThrow();
     });
   });
 });

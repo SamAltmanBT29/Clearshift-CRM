@@ -10,6 +10,8 @@ export * from './domain/qa-specs.js';
 export * from './services/crm1.service.js';
 export * from './services/crm1-mutation.service.js';
 export * from './services/audit.js';
+export * from './kit/cleaner.js';
+export * from './services/crm1-cleaning.service.js';
 export * from './policies/index.js';
 export * from './plugins/auth.js';
 export * from './interface/authz.js';
