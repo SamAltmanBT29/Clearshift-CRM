@@ -1,28 +1,26 @@
 import React, { useState, useEffect, useCallback, useTransition, useMemo } from 'react';
 import {
   Card,
+  Input,
+  Select,
   Button,
   Pagination,
 } from '@clearshift/ui';
 import {
   type Deal,
   type Stage,
+  type Crm2StageName,
   CRM2_STAGES,
 } from '@clearshift/contracts';
 import { getDeals, getStages, Crm2ApiError } from '../api/crm-2.js';
 import { DealsTable } from '../components/DealsTable.js';
-import { FilterToolbar } from '../components/FilterToolbar.js';
 import { TableSkeleton } from '../components/TableSkeleton.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
 import { AccessDeniedView } from '../components/AccessDeniedView.js';
-import { CRM2_DEALS_FACETS } from '../table/facets.js';
-import { SearchFilterController } from '../table/SearchFilterController.js';
 import type {
   TableSortState,
   TablePaginationState,
-  TableFilterState,
-  ActiveFilterPill,
-  FilterFacet,
 } from '../table/types.js';
 
 export interface DealsListPageProps {
@@ -47,22 +45,25 @@ export interface DealsListPageProps {
   initialPage?: number;
   initialPageSize?: number;
   initialSearch?: string;
-  initialFilters?: TableFilterState;
   sort?: TableSortState | undefined;
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
   onPageChange?: ((newPage: number) => void) | undefined;
   search?: string;
   onSearchChange?: ((term: string) => void) | undefined;
-  filters?: TableFilterState;
-  onFilterChange?: ((key: string, value: string) => void) | undefined;
-  onRemoveFilter?: ((key: string) => void) | undefined;
-  onClearAllFilters?: (() => void) | undefined;
-  activePills?: ActiveFilterPill[];
-  facets?: FilterFacet[];
+  selectedStage?: Crm2StageName | '';
+  onStageChange?: ((stage: Crm2StageName | '') => void) | undefined;
+  onClearFilters?: (() => void) | undefined;
   hasActiveFilters?: boolean;
+  stages?: Stage[];
 }
 
+/**
+ * Main CRM-2 Deals & Pipeline List Page
+ * Conforms to ClearShift V1 Issue #130 (CRM2-17).
+ * Features server-side pagination, predictable header sorting,
+ * distinct loading skeleton, empty states, and 403 Forbidden access-denied UI.
+ */
 export function DealsListPage({
   data: dataProp,
   isLoading: isLoadingProp,
@@ -74,7 +75,7 @@ export function DealsListPage({
   requiredCapability = 'module.read',
   requiredRole,
   currentRole,
-  emptyActionLabel = '+ New Deal',
+  emptyActionLabel = '+ New Opportunity',
   onEmptyAction,
   simulatePermissionDenied = false,
   simulateError = false,
@@ -85,20 +86,17 @@ export function DealsListPage({
   initialPage = 1,
   initialPageSize = 10,
   initialSearch = '',
-  initialFilters = {},
   sort: sortProp,
   onSortChange: onSortChangeProp,
   pagination: paginationProp,
   onPageChange: onPageChangeProp,
   search: searchProp,
   onSearchChange: onSearchChangeProp,
-  filters: filtersProp,
-  onFilterChange: onFilterChangeProp,
-  onRemoveFilter: onRemoveFilterProp,
-  onClearAllFilters: onClearAllFiltersProp,
-  activePills: activePillsProp,
-  facets: facetsProp = CRM2_DEALS_FACETS,
+  selectedStage: selectedStageProp,
+  onStageChange: onStageChangeProp,
+  onClearFilters: onClearFiltersProp,
   hasActiveFilters: hasActiveFiltersProp,
+  stages: stagesProp,
 }: DealsListPageProps) {
   // Read initial values from URL query string if present
   const urlParams = useMemo(() => {
@@ -118,54 +116,36 @@ export function DealsListPage({
       : undefined);
   const initPage = paginationProp?.page ?? initialPage ?? parseInt(urlParams.get('page') || '1', 10);
   const initPageSize = paginationProp?.pageSize ?? initialPageSize ?? parseInt(urlParams.get('pageSize') || '10', 10);
+  const initStage = selectedStageProp ?? (urlParams.get('stage') as Crm2StageName) ?? '';
 
-  const initFilters: TableFilterState = useMemo(() => {
-    if (filtersProp) return filtersProp;
-    const f: TableFilterState = { ...initialFilters };
-    if (urlParams.get('stage')) f.stage = urlParams.get('stage')!;
-    if (urlParams.get('is_orphan')) f.is_orphan = urlParams.get('is_orphan')!;
-    if (urlParams.get('source_system')) f.source_system = urlParams.get('source_system')!;
-    return f;
-  }, [filtersProp, initialFilters, urlParams]);
-
-  // Query state (internal)
+  // Internal Query State
   const [search, setSearch] = useState<string>(initSearch);
-  const [filters, setFilters] = useState<TableFilterState>(initFilters);
+  const [selectedStage, setSelectedStage] = useState<Crm2StageName | ''>(initStage);
   const [currentPage, setCurrentPage] = useState<number>(initPage);
-  const [pageSize, setPageSize] = useState<number>(initPageSize);
+  const pageSize = paginationProp?.pageSize ?? initialPageSize ?? initPageSize;
   const [sort, setSort] = useState<TableSortState | undefined>(initSort);
 
-  // Data state
+  // Data State
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [, setStages] = useState<Stage[]>([]);
+  const [stages, setStages] = useState<Stage[]>(stagesProp || []);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
 
-  // Status state
+  // Status State
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Crm2ApiError | null>(null);
   const [, startTransition] = useTransition();
 
-  // SearchFilterController instance for pill computation & state management
-  const sfController = useMemo(() => {
-    return new SearchFilterController({
-      initialSearch: search,
-      initialFilters: filters,
-    });
-  }, [search, filters]);
-
   // Synchronize URL query params
   const syncUrlParams = useCallback(
-    (newSearch: string, newFilters: TableFilterState, newSort?: TableSortState, newPage?: number) => {
+    (newSearch: string, newStage: string, newSort?: TableSortState, newPage?: number) => {
       if (typeof window === 'undefined' || !window.history?.replaceState) return;
       const params = new URLSearchParams();
       if (newSearch && newSearch.trim()) {
         params.set('search', newSearch.trim());
       }
-      for (const [key, val] of Object.entries(newFilters)) {
-        if (val && val.trim()) {
-          params.set(key, val.trim());
-        }
+      if (newStage && newStage.trim()) {
+        params.set('stage', newStage.trim());
       }
       if (newSort) {
         params.set('sort', newSort.columnKey);
@@ -181,8 +161,12 @@ export function DealsListPage({
     []
   );
 
-  // Load available stages on mount
+  // Load available stages on mount if not provided via props
   useEffect(() => {
+    if (stagesProp && stagesProp.length > 0) {
+      setStages(stagesProp);
+      return;
+    }
     let isSubscribed = true;
     getStages()
       .then((res) => {
@@ -197,28 +181,31 @@ export function DealsListPage({
     return () => {
       isSubscribed = false;
     };
-  }, []);
+  }, [stagesProp]);
 
   // Fetch deals from server
   const loadDeals = useCallback(async () => {
-    // If external data is supplied, do not fetch
+    // Skip remote fetch if controlled data is provided
     if (dataProp !== undefined) return;
 
     setIsLoading(true);
     setError(null);
 
+    const activeSort = sortProp ?? sort;
+    const activeSearch = searchProp ?? search;
+    const activeStage = selectedStageProp ?? selectedStage;
+    const activePage = paginationProp?.page ?? currentPage;
+
     try {
       const response = await getDeals(
         {
-          page: currentPage,
+          page: activePage,
           pageSize,
-          search: search || undefined,
-          stage: (filters.stage as any) || undefined,
-          sort: sort?.columnKey,
-          order: sort?.direction,
-          is_orphan: filters.is_orphan !== undefined ? (filters.is_orphan === 'true' as any) : undefined,
-          source_system: filters.source_system || undefined,
-        } as any,
+          search: activeSearch || undefined,
+          stage: activeStage || undefined,
+          sort: activeSort?.columnKey,
+          order: activeSort?.direction,
+        },
         {
           simulatePermissionDenied,
           simulateError,
@@ -228,22 +215,27 @@ export function DealsListPage({
       setDeals(response.items);
       setTotalCount(response.pagination.totalCount);
       setTotalPages(response.pagination.totalPages);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof Crm2ApiError) {
         setError(err);
       } else {
-        setError(new Crm2ApiError(500, 'UNEXPECTED_ERROR', err.message || 'An unexpected error occurred.'));
+        const msg = err instanceof Error ? err.message : 'An unexpected error occurred.';
+        setError(new Crm2ApiError(500, 'UNEXPECTED_ERROR', msg));
       }
     } finally {
       setIsLoading(false);
     }
   }, [
     dataProp,
+    sortProp,
+    sort,
+    searchProp,
+    search,
+    selectedStageProp,
+    selectedStage,
+    paginationProp?.page,
     currentPage,
     pageSize,
-    search,
-    filters,
-    sort,
     simulatePermissionDenied,
     simulateError,
   ]);
@@ -252,112 +244,114 @@ export function DealsListPage({
     loadDeals();
   }, [loadDeals]);
 
-  // Handlers for sorting
+  // Sorting Handler
   const handleSortChange = (columnKey: string) => {
     if (onSortChangeProp) {
       onSortChangeProp(columnKey);
       return;
     }
-
-    startTransition(() => {
-      const nextSort: TableSortState =
-        sort?.columnKey === columnKey
-          ? { columnKey, direction: sort.direction === 'asc' ? 'desc' : 'asc' }
-          : { columnKey, direction: 'asc' };
-      setSort(nextSort);
-      setCurrentPage(1);
-      syncUrlParams(search, filters, nextSort, 1);
-    });
+    const currentSort = sortProp ?? sort;
+    let nextSort: TableSortState;
+    if (currentSort?.columnKey === columnKey) {
+      nextSort = {
+        columnKey,
+        direction: currentSort.direction === 'asc' ? 'desc' : 'asc',
+      };
+    } else {
+      nextSort = { columnKey, direction: 'asc' };
+    }
+    setSort(nextSort);
+    setCurrentPage(1);
+    syncUrlParams(search, selectedStage, nextSort, 1);
   };
 
-  // Handlers for search debouncing (300ms)
-  const handleSearchChange = (term: string) => {
+  // Pagination Handler
+  const handlePageChange = (newPage: number) => {
+    if (onPageChangeProp) {
+      onPageChangeProp(newPage);
+      return;
+    }
+    setCurrentPage(newPage);
+    syncUrlParams(search, selectedStage, sort, newPage);
+  };
+
+  // Search Handler
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
     if (onSearchChangeProp) {
-      onSearchChangeProp(term);
+      onSearchChangeProp(val);
+      return;
     }
     startTransition(() => {
-      setSearch(term);
+      setSearch(val);
       setCurrentPage(1);
-      syncUrlParams(term, filters, sort, 1);
+      syncUrlParams(val, selectedStage, sort, 1);
     });
   };
 
-  // Handlers for faceted filter modification
-  const handleFilterChange = (key: string, value: string) => {
-    if (onFilterChangeProp) {
-      onFilterChangeProp(key, value);
+  // Stage Filter Handler
+  const handleStageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value as Crm2StageName | '';
+    if (onStageChangeProp) {
+      onStageChangeProp(val);
+      return;
     }
     startTransition(() => {
-      const next = { ...filters };
-      if (!value || value.trim() === '') {
-        delete next[key];
-      } else {
-        next[key] = value.trim();
-      }
-      setFilters(next);
+      setSelectedStage(val);
       setCurrentPage(1);
-      syncUrlParams(search, next, sort, 1);
+      syncUrlParams(search, val, sort, 1);
     });
   };
 
-  // Handlers for active filter tag removal
-  const handleRemoveFilter = (key: string) => {
-    if (onRemoveFilterProp) {
-      onRemoveFilterProp(key);
-    }
-    startTransition(() => {
-      if (key === 'search') {
-        setSearch('');
-        setCurrentPage(1);
-        syncUrlParams('', filters, sort, 1);
-      } else {
-        const next = { ...filters };
-        delete next[key];
-        setFilters(next);
-        setCurrentPage(1);
-        syncUrlParams(search, next, sort, 1);
-      }
-    });
-  };
-
-  // Handler for Clear All action
-  const handleClearAllFilters = () => {
-    if (onClearAllFiltersProp) {
-      onClearAllFiltersProp();
+  // Reset Filters Handler
+  const handleClearFilters = () => {
+    if (onClearFiltersProp) {
+      onClearFiltersProp();
+      return;
     }
     startTransition(() => {
       setSearch('');
-      setFilters({});
+      setSelectedStage('');
       setCurrentPage(1);
-      syncUrlParams('', {}, sort, 1);
+      syncUrlParams('', '', sort, 1);
     });
   };
 
-  // Compute active pills
-  const activePills =
-    activePillsProp ?? sfController.getActiveFilterPills(facetsProp);
+  // Controlled vs Uncontrolled Resolution
+  const isControlledLoading = isLoadingProp !== undefined;
+  const isControlledError = errorProp !== undefined;
+  const isControlledAccess = isAccessDeniedProp !== undefined;
 
+  const loading = isControlledLoading ? isLoadingProp : isLoading;
+  const activeError = isControlledError ? errorProp : error;
+  const accessForbidden = isControlledAccess
+    ? isAccessDeniedProp || httpStatus === 403
+    : httpStatus === 403 || error?.isPermissionDenied || false;
+
+  const displayData = isEmptyProp ? [] : dataProp !== undefined ? dataProp : deals;
+  const total = paginationProp?.total ?? totalCount;
+  const pages = paginationProp?.totalPages ?? totalPages;
+  const page = paginationProp?.page ?? currentPage;
+  const activeSort = sortProp ?? sort;
   const isFiltersActive =
-    hasActiveFiltersProp !== undefined
-      ? hasActiveFiltersProp
-      : Boolean(search.trim().length > 0) ||
-        Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
-        activePills.length > 0;
+    hasActiveFiltersProp ?? Boolean((searchProp ?? search) || (selectedStageProp ?? selectedStage));
 
-  const displayData = isEmptyProp ? [] : dataProp ?? deals;
-  const loading = isLoadingProp ?? isLoading;
-  const accessForbidden = isAccessDeniedProp || httpStatus === 403 || error?.isPermissionDenied;
-  const activeError = errorProp || error;
+  const stageOptions = (stages.length > 0 ? stages.map((s) => s.name) : CRM2_STAGES).map(
+    (stageName) => ({
+      label: stageName,
+      value: stageName,
+    })
+  );
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 cs-page-container">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5 cs-page-header">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 cs-deals-page">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             Deals &amp; Pipeline
           </h1>
-          <p className="mt-1 text-sm text-slate-500 cs-page-desc">
+          <p className="mt-1 text-sm text-slate-500">
             ClearShift CRM-2: Monitor pipeline opportunities, stage progressions, and sales quotes.
           </p>
         </div>
@@ -393,18 +387,52 @@ export function DealsListPage({
         />
       ) : (
         <>
-          {/* Composite Filter Toolbar: Debounced Search, Facet Selectors, Active Filter Pills */}
-          <FilterToolbar
-            search={search}
-            onSearchChange={handleSearchChange}
-            facets={facetsProp}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            activePills={activePills}
-            onRemoveFilter={handleRemoveFilter}
-            onClearAll={handleClearAllFilters}
-            searchPlaceholder="Search deals by name or contact..."
-          />
+          {/* Controls Bar: Search, Stage Filter, Reset */}
+          <Card>
+            <form
+              onSubmit={(e) => e.preventDefault()}
+              className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
+              role="search"
+              aria-label="Filter opportunities by keyword or stage"
+            >
+              <div className="sm:col-span-2">
+                <Input
+                  id="deals-search-input"
+                  label="Search Opportunities"
+                  placeholder="Search by deal name or contact..."
+                  value={searchProp ?? search}
+                  onChange={handleSearchChange}
+                  aria-label="Search deals by name or contact"
+                />
+              </div>
+
+              <div>
+                <Select
+                  id="deals-stage-filter"
+                  label="Filter by Stage"
+                  placeholder="All Stages"
+                  options={stageOptions}
+                  value={selectedStageProp ?? selectedStage}
+                  onChange={handleStageChange}
+                  aria-label="Filter deals by pipeline stage"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isFiltersActive && (
+                  <Button
+                    variant="ghost"
+                    size="md"
+                    onClick={handleClearFilters}
+                    className="w-full sm:w-auto"
+                    aria-label="Reset search and filters"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
 
           {/* Recoverable Error Banner */}
           {activeError && (
@@ -427,16 +455,14 @@ export function DealsListPage({
             ) : displayData.length === 0 ? (
               /* Empty Results State */
               <div
-                className={`py-16 px-6 text-center ${
-                  isFiltersActive ? 'cs-empty-filter-state' : 'cs-empty-state'
-                }`}
-                data-testid="empty-results-state"
+                className="py-16 px-6 text-center"
+                data-testid={isFiltersActive ? 'empty-filtered-state' : 'empty-results-state'}
               >
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-4 text-xl cs-empty-icon">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-4 text-xl">
                   {isFiltersActive ? '🔍' : '📂'}
                 </div>
-                <h3 className="text-base font-semibold text-slate-900 cs-empty-title">
-                  {isFiltersActive ? 'No matching deals found' : 'No deals found'}
+                <h3 className="text-base font-semibold text-slate-900">
+                  {isFiltersActive ? 'No matching records found' : 'No deals found'}
                 </h3>
                 <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto cs-empty-text">
                   {isFiltersActive
@@ -448,7 +474,7 @@ export function DealsListPage({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleClearAllFilters}
+                      onClick={handleClearFilters}
                       className="cs-clear-all-filters-btn cs-empty-reset-btn"
                       data-action="clear-all-filters"
                       aria-label="Reset all search and filter criteria"
@@ -477,22 +503,15 @@ export function DealsListPage({
                   deals={displayData}
                   onSelectDeal={onSelectDeal}
                   onViewQuotes={onViewQuotes}
-                  sort={sortProp ?? sort}
+                  sort={activeSort}
                   onSortChange={handleSortChange}
                 />
                 <Pagination
-                  currentPage={paginationProp?.page ?? currentPage}
-                  totalPages={paginationProp?.totalPages ?? totalPages}
-                  totalCount={paginationProp?.total ?? totalCount}
-                  pageSize={paginationProp?.pageSize ?? pageSize}
-                  onPageChange={(page) => {
-                    if (onPageChangeProp) {
-                      onPageChangeProp(page);
-                    } else {
-                      setCurrentPage(page);
-                      syncUrlParams(search, filters, sort, page);
-                    }
-                  }}
+                  currentPage={page}
+                  totalPages={pages}
+                  totalCount={total}
+                  pageSize={pageSize}
+                  onPageChange={handlePageChange}
                 />
               </div>
             )}
@@ -502,3 +521,5 @@ export function DealsListPage({
     </div>
   );
 }
+
+export default DealsListPage;
