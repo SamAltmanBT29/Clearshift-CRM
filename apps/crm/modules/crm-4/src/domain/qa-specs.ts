@@ -958,6 +958,17 @@ export const CRM4_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'CRM-4 Cleaning Rules & Field-Level Audit (#180 / [CRM4-27])',
     verificationEvidence: 'cleanRows executes whitespace, email, phone, date, and enum normalization, records field-level audit entries, and emits structured row rejections.',
   },
+  {
+    reqId: 'FR-CRM4-28',
+    requirement: 'Mapping and value translation configuration: canonical/legacy mapping templates, deterministic type coercion, enum allowlists/translations, dry-run guards, and BR-CRM4-01 monotonic opt-out rule.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.5, §4.7 & Issue #181 [CRM4-28]',
+    category: 'Migration',
+    testType: 'unit',
+    testFile: 'apps/crm/modules/crm-4/tests/kit/mapping.test.ts',
+    testSuite: 'CRM-4 Mapping Configuration & Dry-Run Guard (#181 / [CRM4-28])',
+    verificationEvidence: 'mapRow, assertDryRunReady, and crm4MappingService enforce source-to-target field mapping, type coercion, enum translations, required target column enforcement, and monotonic opt-out invariant.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
