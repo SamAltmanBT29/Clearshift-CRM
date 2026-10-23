@@ -1,0 +1,440 @@
+openapi: 3.1.0
+info:
+  title: ClearShift CRM-4 Marketing Lists and Campaign History API
+  description: Public module contract for CRM-4 (Marketing Lists, Campaign History, Campaign Members, Contact Consent Records).
+  version: 1.0.0
+servers:
+  - url: /api/v1/crm-marketing
+    description: CRM-4 V1 Base Endpoint
+
+paths:
+  /lists:
+    get:
+      summary: List marketing lists with search and bounded server-side pagination
+      operationId: listMarketingLists
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number (1-based)
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+          description: Number of records per page (capped at 100)
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Free-text search matching list name
+      responses:
+        '200':
+          description: Paginated marketing lists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingListsResponse'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Create marketing list
+      operationId: createMarketingList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateListInput'
+      responses:
+        '201':
+          description: Created marketing list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingList'
+        '400':
+          description: Validation error
+        '403':
+          description: Forbidden
+
+  /lists/{id}:
+    patch:
+      summary: Update marketing list
+      operationId: patchMarketingList
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchListInput'
+      responses:
+        '200':
+          description: Updated marketing list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingList'
+        '404':
+          description: Marketing list not found
+
+  /campaigns:
+    get:
+      summary: List campaign history records
+      operationId: listCampaigns
+      parameters:
+        - name: listId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 25
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated campaigns list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignsResponse'
+    post:
+      summary: Record campaign (record-only, no email/SMS transmission)
+      operationId: recordCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCampaignInput'
+      responses:
+        '201':
+          description: Recorded campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+
+  /campaigns/{id}:
+    patch:
+      summary: Update campaign record
+      operationId: patchCampaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchCampaignInput'
+      responses:
+        '200':
+          description: Updated campaign
+
+  /campaigns/{id}/members:
+    get:
+      summary: List members and delivery status for a campaign
+      operationId: listCampaignMembers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MemberStatus'
+      responses:
+        '200':
+          description: Campaign members list
+    post:
+      summary: Add member to campaign (re-verifying contact existence and consent)
+      operationId: addCampaignMember
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMemberInput'
+      responses:
+        '201':
+          description: Added member
+
+  /consents:
+    post:
+      summary: Set contact consent (enforces strictly monotonic opt-out per BR-CRM4-01)
+      operationId: setConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetConsentInput'
+      responses:
+        '200':
+          description: Set consent result
+        '400':
+          description: Invariant violation (e.g. attempting to revert opt-out)
+
+  /consents/{contact}:
+    get:
+      summary: Get consent status of one contact
+      operationId: getContactConsent
+      parameters:
+        - name: contact
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Contact consent record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentRecord'
+        '404':
+          description: Consent record not found
+
+components:
+  schemas:
+    MemberStatus:
+      type: string
+      enum: [sent, opened, clicked]
+
+    ConsentStatus:
+      type: string
+      enum: [subscribed, unsubscribed]
+
+    MarketingList:
+      type: object
+      required: [id, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        campaignCount:
+          type: integer
+          default: 0
+        memberCount:
+          type: integer
+          default: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MarketingListsResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketingList'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Campaign:
+      type: object
+      required: [id, name, campaignDate, listId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        campaignDate:
+          type: string
+          format: date
+        listId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CampaignsResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ConsentRecord:
+      type: object
+      required: [id, contactId, status, consentDate, source, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        contactId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ConsentStatus'
+        consentDate:
+          type: string
+          format: date-time
+        source:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateListInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    PatchListInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    CreateCampaignInput:
+      type: object
+      required: [name, campaignDate, listId]
+      properties:
+        name:
+          type: string
+        campaignDate:
+          type: string
+          format: date
+        listId:
+          type: string
+          format: uuid
+
+    PatchCampaignInput:
+      type: object
+      properties:
+        name:
+          type: string
+        campaignDate:
+          type: string
+          format: date
+
+    CreateMemberInput:
+      type: object
+      required: [contactId]
+      properties:
+        contactId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/MemberStatus'
+
+    SetConsentInput:
+      type: object
+      required: [contactId, status, source]
+      properties:
+        contactId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ConsentStatus'
+        source:
+          type: string
+        consentDate:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      required: [page, pageSize, totalCount, totalPages]
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
