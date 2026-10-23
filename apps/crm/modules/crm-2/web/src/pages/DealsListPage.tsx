@@ -7,16 +7,22 @@ import {
 import {
   type Deal,
   type Stage,
+  type CreateDealInput,
   CRM2_STAGES,
 } from '@clearshift/contracts';
-import { getDeals, getStages, Crm2ApiError } from '../api/crm-2.js';
+import { getDeals, getStages, createDeal, Crm2ApiError } from '../api/crm-2.js';
 import { DealsTable } from '../components/DealsTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
 import { TableSkeleton } from '../components/TableSkeleton.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
 import { AccessDeniedView } from '../components/AccessDeniedView.js';
+import { CreateDealModal } from '../components/CreateDealModal.js';
+import { ConfirmationToast } from '../components/ConfirmationToast.js';
+import { type CreateDealFormData } from '../components/CreateDealForm.js';
 import { CRM2_DEALS_FACETS } from '../table/facets.js';
 import { SearchFilterController } from '../table/SearchFilterController.js';
+import { DataTableController } from '../table/DataTableController.js';
+import { DEALS_COLUMNS } from '../table/columns.js';
 import type {
   TableSortState,
   TablePaginationState,
@@ -137,14 +143,67 @@ export function DealsListPage({
 
   // Data state
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [, setStages] = useState<Stage[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
+
+  // Modal & Toast states (CRM2-20)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [toast, setToast] = useState<{
+    show: boolean;
+    message: string;
+    type?: 'success' | 'info' | 'warning' | 'error';
+  }>({ show: false, message: '' });
 
   // Status state
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Crm2ApiError | null>(null);
   const [, startTransition] = useTransition();
+
+  // DataTableController instance for managing bounded table cache (CRM2-20)
+  const tableController = useMemo(() => {
+    return new DataTableController<Deal>({
+      columns: DEALS_COLUMNS as any,
+      initialPage: currentPage,
+      initialPageSize: pageSize,
+      initialSort: sort,
+      initialFilters: filters,
+    });
+  }, []);
+
+  // Update controller cache whenever deals collection changes
+  useEffect(() => {
+    tableController.setCachedData(deals);
+  }, [deals, tableController]);
+
+  const handleCreateSubmit = async (values: CreateDealFormData) => {
+    const payload: CreateDealInput = {
+      name: values.name,
+      contact_id: values.contactId || null,
+      contact_email: values.contactEmail || null,
+      contact_phone: values.contactPhone || null,
+      probability: values.probability !== undefined ? values.probability : null,
+      value: values.value,
+      currency: values.currency,
+      stage_name: values.stageName,
+      close_date: values.closeDate,
+      source_system: values.sourceSystem || null,
+      source_id: values.sourceId || null,
+    };
+    return await createDeal(payload);
+  };
+
+  const handleCreateSuccess = (result: unknown) => {
+    const createdDeal = result as Deal;
+    tableController.addRecordToCache(createdDeal);
+    setDeals((prev) => [createdDeal, ...prev]);
+    setTotalCount((prev) => prev + 1);
+    setToast({
+      show: true,
+      message: `Deal "${createdDeal.name}" was successfully created.`,
+      type: 'success',
+    });
+  };
 
   // SearchFilterController instance for pill computation & state management
   const sfController = useMemo(() => {
@@ -371,16 +430,21 @@ export function DealsListPage({
           >
             Refresh
           </Button>
-          {(onCreateDeal || onEmptyAction) && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onCreateDeal || onEmptyAction}
-              aria-label="Create new deal opportunity"
-            >
-              {emptyActionLabel}
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              if (onCreateDeal) {
+                onCreateDeal();
+              } else {
+                setIsCreateModalOpen(true);
+              }
+            }}
+            className="cs-create-deal-btn"
+            aria-label="Create new deal opportunity"
+          >
+            {emptyActionLabel || '+ Create Deal'}
+          </Button>
         </div>
       </div>
 
@@ -499,6 +563,23 @@ export function DealsListPage({
           </Card>
         </>
       )}
+
+      {/* Entity Creation Modal with React Hook Form & Zod Validation (CRM2-20) */}
+      <CreateDealModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={handleCreateSubmit}
+        onSuccess={handleCreateSuccess}
+        stages={stages}
+      />
+
+      {/* Confirmation Toast Notification (CRM2-20) */}
+      <ConfirmationToast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onDismiss={() => setToast({ show: false, message: '' })}
+      />
     </div>
   );
 }
