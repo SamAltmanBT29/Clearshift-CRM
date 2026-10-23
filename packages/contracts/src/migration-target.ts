@@ -1364,3 +1364,131 @@ export class ReconciliationInvariantError extends Error {
     this.name = 'ReconciliationInvariantError';
   }
 }
+
+// ============================================================================
+// KIT-10: Exact Duplicate Candidate Review & Audited Merge Decisions
+// ============================================================================
+
+/**
+ * V1 Exact Normalized Matching Rule Types (Decision KIT-10 & SDS §11.5)
+ * Fuzzy matching is strictly prohibited in V1.
+ */
+export const ExactMatchingRuleTypeSchema = z.enum([
+  'exact_email',
+  'exact_phone_name',
+  'exact_tax_number',
+]);
+export type ExactMatchingRuleType = z.infer<typeof ExactMatchingRuleTypeSchema>;
+
+/**
+ * Duplicate Candidate Review Status (Migration Kit)
+ */
+export const KitDuplicateCandidateStatusSchema = z.enum([
+  'pending_review',
+  'resolved_keep_both',
+  'resolved_merge',
+]);
+export type KitDuplicateCandidateStatus = z.infer<typeof KitDuplicateCandidateStatusSchema>;
+
+/**
+ * Duplicate Candidate Schema (Migration Kit: identifies candidate matches between source row and target entity)
+ */
+export const KitDuplicateCandidateSchema = z.object({
+  id: z.string().uuid(),
+  batchId: z.string().min(1).max(128),
+  sourceRow: z.number().int().min(1),
+  entity: z.string().min(1).max(64),
+  sourceRecord: z.record(z.string(), z.unknown()),
+  targetRecord: z.record(z.string(), z.unknown()),
+  targetId: z.string().uuid(),
+  matchingRule: ExactMatchingRuleTypeSchema,
+  matchingRuleVersion: z.string().default('1.0.0'),
+  evidence: z.string().min(1),
+  status: KitDuplicateCandidateStatusSchema.default('pending_review'),
+  createdAt: z.coerce.date().default(() => new Date()),
+});
+export type KitDuplicateCandidate = z.infer<typeof KitDuplicateCandidateSchema>;
+
+/**
+ * Decision option selected by reviewer: Keep both or Merge
+ */
+export const DuplicateReviewDecisionTypeSchema = z.enum(['keep_both', 'merge']);
+export type DuplicateReviewDecisionType = z.infer<typeof DuplicateReviewDecisionTypeSchema>;
+
+/**
+ * Merge Decision Submission Payload
+ */
+export const MergeDecisionPayloadSchema = z.object({
+  candidateId: z.string().uuid(),
+  batchId: z.string().min(1).max(128),
+  decision: DuplicateReviewDecisionTypeSchema,
+  keptId: z.string().uuid(),
+  absorbedSourceRows: z.array(z.number().int().min(1)).min(1),
+  fieldChoices: z.record(z.string(), z.unknown()).default({}),
+  reviewer: z.string().min(1).max(128),
+  reviewerRole: z.enum([
+    'migration_admin',
+    'platform_admin',
+    'editor',
+    'runner',
+    'viewer',
+  ]),
+  notes: z.string().max(1000).optional(),
+});
+export type MergeDecisionPayload = z.infer<typeof MergeDecisionPayloadSchema>;
+
+/**
+ * Durable Merge Audit Receipt Schema (stored in target or kit audit log)
+ */
+export const MergeReceiptSchema = z.object({
+  id: z.string().uuid(),
+  batchId: z.string().min(1).max(128),
+  candidateId: z.string().uuid(),
+  keptId: z.string().uuid(),
+  absorbedSourceRows: z.array(z.number().int().min(1)),
+  matchingRule: ExactMatchingRuleTypeSchema,
+  matchingRuleVersion: z.string().default('1.0.0'),
+  evidence: z.string(),
+  reviewer: z.string().max(128),
+  reviewedAt: z.coerce.date(),
+  fieldChoices: z.record(z.string(), z.unknown()),
+  idempotencyKey: z.string().max(256),
+  createdAt: z.coerce.date().default(() => new Date()),
+});
+export type MergeReceipt = z.infer<typeof MergeReceiptSchema>;
+
+/**
+ * Unreviewed Candidate Merge Error (HTTP 400)
+ * Raised when an unreviewed duplicate candidate row is attempted to be loaded as merged.
+ */
+export class UnreviewedCandidateMergeError extends Error {
+  public readonly statusCode = 400;
+  public readonly code = 'UNREVIEWED_CANDIDATE_MERGE';
+
+  constructor(
+    public readonly batchId: string,
+    public readonly sourceRow: number,
+    reason: string = `Row ${sourceRow} in batch '${batchId}' is an unreviewed duplicate candidate. No auto-merge path exists; explicit human review is required.`
+  ) {
+    super(reason);
+    this.name = 'UnreviewedCandidateMergeError';
+  }
+}
+
+/**
+ * Unauthorized Merge Decision Error (HTTP 403)
+ * Raised when a reviewer lacks permissions (editor or admin required) to submit a merge decision.
+ */
+export class UnauthorizedMergeDecisionError extends Error {
+  public readonly statusCode = 403;
+  public readonly code = 'FORBIDDEN_MERGE_DECISION';
+
+  constructor(
+    public readonly reviewer: string,
+    public readonly reviewerRole: string,
+    reason: string = `User '${reviewer}' with role '${reviewerRole}' is not authorized to submit duplicate review decisions. Editor or Admin authorization is required.`
+  ) {
+    super(reason);
+    this.name = 'UnauthorizedMergeDecisionError';
+  }
+}

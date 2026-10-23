@@ -831,3 +831,125 @@ WHERE b.id = 'BATCH_UUID'
 GROUP BY b.id, b.batch_number, b.total_rows;
 ```
 
+---
+
+## 14. Step 5/6: Exact Duplicate Candidate Review & Audited Merge Decisions (KIT-10)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.9 (FR-DP-01–04), §12.1–12.9; Project Plan v3.0 §§9, 11, 17; Issue #77 `[KIT-10]`.
+
+### 14.1 Pipeline Stage Overview & Invariants
+
+Under ClearShift Core Rules and V1 specifications, duplicate handling enforces strict mathematical certainty and zero data loss:
+1. **Zero Auto-Merge Policy:** No automatic merging is permitted under any circumstances. When a target match is identified, it is staged into a human review queue (`DuplicateCandidate`).
+2. **Deterministic Normalized Exact-Key Matching Only:** V1 prohibits fuzzy matching, Levenshtein distance, phonetic indexing, or probabilistic matching. Only deterministic normalized keys are evaluated:
+   - **Exact Email:** `normalizeEmail(email)` (case-folded, whitespace-trimmed).
+   - **Exact Phone + Name:** `normalizePhone(phone) + '#' + normalizeName(firstName + ' ' + lastName)`.
+   - **Exact Tax Number in Jurisdiction Scope:** `normalizeTaxNumber(taxNumber) + '@' + jurisdiction`.
+3. **Company Name Separation Invariant:** Companies with identical or shared names but different tax numbers or jurisdictions **remain completely separate entities**. Name similarity without matching tax ID never constitutes a duplicate match (`COMPANY_NAME_ONLY_MATCH_KEPT_SEPARATE`).
+4. **Unreviewed Candidate Load Guard:** Unreviewed candidates cannot proceed to load as merged. Calling load for a row in `pending_review` raises `UnreviewedCandidateMergeError` (HTTP 400).
+
+```
+   [Incoming Source Row]  ➔  [Scan against Target Pool using V1 Exact Rules]
+                                        │
+                         ┌──────────────┴──────────────┐
+                         ▼                             ▼
+                 [No Exact Match]             [Exact Key Match Found]
+                 Proceeds to standard         Staged in Review Queue
+                 load pipeline                (status: `pending_review`)
+                                                       │
+                                        ┌──────────────┴──────────────┐
+                                        ▼                             ▼
+                                  [Keep Both]                      [Merge]
+                           - Status: `resolved_keep_both`   - Reauthorization Guard (Editor/Admin)
+                           - Source row loads as distinct   - Field-by-Field choice resolution
+                           - No merge receipt               - Audited `MergeReceipt` created
+                                                            - Terminal outcome: `merged`
+```
+
+### 14.2 The Human Review Workflow (`DuplicateReview.tsx`)
+
+The interactive web console at `apps/migration-kit/web/src/pages/DuplicateReview.tsx` provides operators and editors with:
+1. **Candidate Queue:** Real-time visibility into pending duplicate candidates for the active batch.
+2. **Evidence Badges:** Clear display of matched rule type (`exact_email`, `exact_phone_name`, `exact_tax_number`), matching rule version (`1.0.0`), and canonical normalized evidence string.
+3. **Side-by-Side Comparison:** Attribute comparison between incoming source row and existing target entity record.
+4. **Field-by-Field Choice Resolution:** Interactive selectors determining which attribute values to retain (source vs target) upon merge.
+5. **Audited Comments:** Operator rationale input captured as durable audit evidence.
+
+### 14.3 Reauthorization at Submit Guard
+
+To prevent privilege escalation or unauthorized mutations:
+- **Authorized Roles:** Only `editor`, `migration_admin`, and `platform_admin` can authorize a merge decision.
+- **Blocked Roles:** A Migration `runner` or read-only `viewer` is strictly forbidden from authorizing merge decisions. Attempting to submit returns `UnauthorizedMergeDecisionError` (HTTP 403 Forbidden).
+
+### 14.4 Audited Merge Receipts (`MergeReceipt`) & Terminal Outcome Integration
+
+When an authorized reviewer submits a `merge` decision:
+1. **Durable Receipt Generated:**
+   ```json
+   {
+     "id": "RECEIPT_UUID",
+     "batchId": "BATCH_UUID",
+     "candidateId": "CANDIDATE_UUID",
+     "keptId": "TARGET_ENTITY_UUID",
+     "absorbedSourceRows": [15],
+     "matchingRule": "exact_tax_number",
+     "matchingRuleVersion": "1.0.0",
+     "evidence": "Normalized tax key '112233445@US' matches target",
+     "reviewer": "admin-auditor",
+     "reviewedAt": "2026-10-24T01:30:00.000Z",
+     "fieldChoices": { "companyName": "source" },
+     "idempotencyKey": "merge_dec:CANDIDATE_UUID:HASH"
+   }
+   ```
+2. **Replay-Safe Idempotency:** The decision payload is canonically hashed. Resubmission of identical decisions returns the existing receipt without duplicate writes (`isExisting = true`).
+3. **Terminal Outcome Ledger Mutation:** Row outcome is recorded atomically in `public.kit_row_outcomes`:
+   - `outcome = 'merged'`
+   - `target_id = keptId`
+   - `actor = reviewer`
+   - `reason_code = matchingRule`
+   - `policy_code = 'human_reviewed_merge'`
+
+### 14.5 Verification Queries
+
+```sql
+-- 1. Review pending duplicate candidates for a batch
+SELECT
+    id AS candidate_id,
+    batch_id,
+    source_row,
+    entity,
+    matching_rule,
+    evidence,
+    status,
+    created_at
+FROM public.kit_duplicate_candidates
+WHERE batch_id = 'BATCH_UUID' AND status = 'pending_review';
+
+-- 2. Inspect audited merge receipts
+SELECT
+    id AS receipt_id,
+    batch_id,
+    candidate_id,
+    kept_id,
+    absorbed_source_rows,
+    matching_rule,
+    reviewer,
+    reviewed_at,
+    idempotency_key
+FROM public.kit_merge_receipts
+WHERE batch_id = 'BATCH_UUID';
+
+-- 3. Verify terminal outcome ledger consistency for merged rows
+SELECT
+    o.source_row,
+    o.outcome,
+    o.target_id,
+    o.reason_code,
+    o.actor,
+    o.approved_at
+FROM public.kit_row_outcomes o
+WHERE o.batch_id = 'BATCH_UUID' AND o.outcome = 'merged'
+ORDER BY o.source_row ASC;
+```
+
+
