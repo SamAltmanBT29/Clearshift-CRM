@@ -1,5 +1,6 @@
 import {
   type DealsQuery,
+  type DealsQueryInput,
   type DealsListResponse,
   type StagesListResponse,
   type QuotesQueryInput,
@@ -102,7 +103,7 @@ async function request<T>(
 }
 
 export async function getDeals(
-  query: DealsQuery,
+  query: DealsQueryInput | DealsQuery,
   options?: RequestOptions
 ): Promise<DealsListResponse> {
   const searchParams = new URLSearchParams();

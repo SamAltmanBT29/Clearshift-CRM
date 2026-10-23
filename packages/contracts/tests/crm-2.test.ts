@@ -142,5 +142,19 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
       expect(query.page).toBe(1);
       expect(query.pageSize).toBe(10);
     });
+
+    it('enforces bounded pagination and rejects pageSize or limit > 100', () => {
+      expect(DealsQuerySchema.safeParse({ pageSize: 101 }).success).toBe(false);
+      expect(DealsQuerySchema.safeParse({ limit: 101 }).success).toBe(false);
+      expect(DealsQuerySchema.safeParse({ page: 0 }).success).toBe(false);
+      expect(DealsQuerySchema.safeParse({ page: -1 }).success).toBe(false);
+
+      const parsedLimit = DealsQuerySchema.safeParse({ limit: 50 });
+      expect(parsedLimit.success).toBe(true);
+      if (parsedLimit.success) {
+        expect(parsedLimit.data.pageSize).toBe(50);
+        expect(parsedLimit.data.limit).toBe(50);
+      }
+    });
   });
 });

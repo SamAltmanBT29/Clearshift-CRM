@@ -306,3 +306,27 @@ export function calculatePipelineSummary(deals: Deal[]): PipelineSummary {
     byStage,
   };
 }
+
+/**
+ * Protected system fields that must never be accepted as authoritative from browser/user edits.
+ * "For user edits, never accept protected/system-maintained fields as authoritative from the browser."
+ */
+export const PROTECTED_DEAL_FIELDS = ['id', 'created_at', 'updated_at', 'is_orphan', 'stage_id'] as const;
+export const PROTECTED_QUOTE_FIELDS = ['id', 'created_at', 'updated_at', 'deal_id'] as const;
+
+export function sanitizeDealUserEdit<T extends Record<string, unknown>>(input: T): Omit<T, typeof PROTECTED_DEAL_FIELDS[number]> {
+  const sanitized = { ...input };
+  for (const field of PROTECTED_DEAL_FIELDS) {
+    delete sanitized[field];
+  }
+  return sanitized;
+}
+
+export function sanitizeQuoteUserEdit<T extends Record<string, unknown>>(input: T): Omit<T, typeof PROTECTED_QUOTE_FIELDS[number]> {
+  const sanitized = { ...input };
+  for (const field of PROTECTED_QUOTE_FIELDS) {
+    delete sanitized[field];
+  }
+  return sanitized;
+}
+
