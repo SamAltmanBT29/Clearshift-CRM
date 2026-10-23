@@ -65,6 +65,24 @@ describe('KIT-05: Mapping Contracts & Zod Schemas', () => {
     expect(CRM_TARGET_ENTITIES.contacts.fields.some((f) => f.name === 'email' && f.required)).toBe(true);
     expect(CRM_TARGET_ENTITIES.leads).toBeDefined();
     expect(CRM_TARGET_ENTITIES.leads.fields.some((f) => f.name === 'leadStatus' && f.required)).toBe(true);
+
+    // CRM-5 target entities
+    expect(CRM_TARGET_ENTITIES.crm5_runs).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm5_runs.module).toBe('crm-5');
+    expect(CRM_TARGET_ENTITIES.crm5_runs.fields.some((f) => f.name === 'batchId' && f.required)).toBe(true);
+    expect(CRM_TARGET_ENTITIES.crm5_runs.fields.some((f) => f.name === 'step' && f.dataType === 'enum')).toBe(true);
+
+    expect(CRM_TARGET_ENTITIES.crm5_scores).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm5_scores.module).toBe('crm-5');
+    expect(CRM_TARGET_ENTITIES.crm5_scores.fields.some((f) => f.name === 'score' && f.required && f.dataType === 'number')).toBe(true);
+
+    expect(CRM_TARGET_ENTITIES.crm5_rejects).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm5_rejects.module).toBe('crm-5');
+    expect(CRM_TARGET_ENTITIES.crm5_rejects.fields.some((f) => f.name === 'errorCode' && f.required)).toBe(true);
+
+    expect(CRM_TARGET_ENTITIES.crm5_reconciliation_reports).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm5_reconciliation_reports.module).toBe('crm-5');
+    expect(CRM_TARGET_ENTITIES.crm5_reconciliation_reports.fields.some((f) => f.name === 'status' && f.dataType === 'enum')).toBe(true);
   });
 
   it('validates BatchMappedPayloadSchema outbox event contract', () => {

@@ -29,4 +29,5 @@ export * from './pages/ScoresOverviewPage.js';
 export * from './pages/RejectsOverviewPage.js';
 export * from './pages/DuplicatesQueuePage.js';
 export * from './pages/ReconciliationOverviewPage.js';
+export * from './pages/WizardMappingPage.js';
 export * from './utils/reject-helpers.js';
