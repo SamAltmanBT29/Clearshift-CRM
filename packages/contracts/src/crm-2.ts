@@ -485,3 +485,6 @@ export const Crm2ErrorEnvelopeSchema = z.object({
 });
 export type Crm2ErrorEnvelope = z.infer<typeof Crm2ErrorEnvelopeSchema>;
 
+// CRM-2 Exact Duplicate Key Policy Contracts & Normalizers (CRM2-12)
+export * from './crm-2-duplicates.js';
+

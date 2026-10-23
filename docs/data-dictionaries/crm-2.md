@@ -293,3 +293,47 @@ Verification suites for CRM-2 API and Contracts:
 - `apps/crm/modules/crm-2/tests/api/crm2-routes.test.ts`: 23 integration tests for routes.
 - `packages/contracts/tests/crm-2.test.ts`: 9 contract tests for OpenAPI 3.1 schema and Zod validation constraints.
 - `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`: 18 QA Gate G1 data dictionary conformance tests.
+
+---
+
+## 11. CRM2-12 Exact Duplicate Key Policy & Human Review Audit (Issue #125)
+
+### 11.1 Purpose & Policy Constraints
+Conforming strictly to ClearShift V1 stack guidelines, deterministic exact duplicate matching is enforced across CRM-2 entities (`crm2_deals`, `crm2_stages`, `crm2_quotes`, `crm2_quote_lines`):
+- **Deterministic Exact Matching Only**: Fuzzy scoring, probabilistic matching, and automated merging (`autoMerge: true`) are strictly out of scope and forbidden in V1. Requests attempting auto-merge are rejected with HTTP 422 `AUTO_MERGE_FORBIDDEN`.
+- **Target-Side Review Queue**: All duplicate candidates detected are held in `held_for_review` status for authorized human operator evaluation.
+- **Audited Human Decisions**: Merge, reject duplicate, and keep separate decisions require explicit `actorId`, `reason`, `keptId`, and `mergedId`. For merges, `keptId !== mergedId` and both must belong to the candidate set.
+- **Immutable Audit Trail**: All resolutions are logged immutably with timestamp, actor ID, candidate IDs, action, and rationale.
+
+### 11.2 Deterministic Key Normalization Rules
+| Entity | Key Type | Normalization Rule | Formula / Format |
+|---|---|---|---|
+| `crm2_deals` | `deal_business` | Collapsed whitespace lowercase name + lowercase stageId + lowercase contactId (or 'orphan') | `${btrim(lower(name))}#${stageId}#${contactId \|\| 'orphan'}` |
+| `crm2_deals` | `deal_name_contact` | Lowercase contactId (or 'orphan') + collapsed whitespace lowercase name | `${contactId \|\| 'orphan'}#${btrim(lower(name))}` |
+| `crm2_deals` | `source_key` | Lowercase source_system + raw trimmed source_id | `${lower(source_system)}:${btrim(source_id)}` |
+| `crm2_quotes` | `quote_number` | Trimmed uppercase quote reference | `btrim(upper(quote_number))` |
+| `crm2_quotes` | `source_key` | Lowercase source_system + raw trimmed source_id | `${lower(source_system)}:${btrim(source_id)}` |
+| `crm2_quote_lines` | `quote_line_sku` | Lowercase quoteId + integer lineNumber + trimmed uppercase product SKU/ID | `${quoteId}#${lineNumber}#${btrim(upper(sku \|\| 'NOSKU'))}` |
+| Platform Shared | `email` | Trimmed lowercase email address | `btrim(lower(email))` |
+| Platform Shared | `tax_id` | Uppercase alphanumeric only (stripped spaces & punctuation) | `upper(replace(nonAlphanumeric, ''))` |
+| Platform Shared | `sku` | Trimmed uppercase SKU code | `btrim(upper(sku))` |
+
+### 11.3 Duplicate Endpoints Catalog
+Base route prefix: `/api/v1/crm-deals`
+
+| Verb | Path | Auth / Role Requirement | Success Status | Description |
+|---|---|---|---|---|
+| `POST` | `/duplicates/detect` | `admin`, `migration_runner`, `editor` | `200 OK` | Evaluates records for exact duplicate candidates. Rejects `autoMerge: true` with `422 Unprocessable Entity`. |
+| `GET` | `/duplicates/held` | `viewer`, `editor`, `analyst`, `admin` | `200 OK` | Retrieves candidate pairs held for human review with status filters (`held_for_review`, `merged`, etc.). |
+| `POST` | `/duplicates/resolve` | `admin`, `migration_runner`, `editor` | `200 OK` | Resolves a held duplicate candidate via human review decision (`MERGE`, `REJECT_DUPLICATE`, `KEEP_SEPARATE`). Reassigns child quotes on deal merge. |
+| `GET` | `/duplicates/audit` | `viewer`, `editor`, `analyst`, `admin` | `200 OK` | Returns immutable audit log entries for all human review duplicate decisions. |
+| `POST` | `/deals/evaluate-duplicate` | `viewer`, `editor`, `analyst`, `admin` | `200 OK` | Computes deterministic exact business and contact keys for deal payload, returning duplicate match verdict. |
+| `POST` | `/quotes/evaluate-duplicate` | `viewer`, `editor`, `analyst`, `admin` | `200 OK` | Computes normalized exact quote key, returning duplicate match verdict. |
+
+### 11.4 Invariant Specifications
+- **INV-CRM2-DUP-01 (Zero Fuzzy / Auto-Merge Forbidden)**: Automated fuzzy or heuristic merging is prohibited. Any detect/resolve request requesting auto-merging fails with `AUTO_MERGE_FORBIDDEN`.
+- **INV-CRM2-DUP-02 (Deterministic Normalization)**: Identical semantic values produce identical exact key strings regardless of case, surrounding whitespace, or internal repeated whitespace.
+- **INV-CRM2-DUP-03 (Human Review Accountability)**: Every resolution requires a non-empty `actorId`, `reason` (minimum 3 characters), `keptId`, and `mergedId`.
+- **INV-CRM2-DUP-04 (Distinct Merge Identifiers)**: On `MERGE`, `keptId` and `mergedId` must be strictly different entities from within the candidate ID set.
+- **INV-CRM2-DUP-05 (Audit Trail Immutability)**: Every human resolution atomically registers an immutable audit log entry.
+
