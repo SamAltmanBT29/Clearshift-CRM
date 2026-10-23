@@ -147,16 +147,45 @@ Stores row-level rejections with machine reason codes and privacy-safe diagnosti
 
 ---
 
-## 3. Exact Duplicate Key Policy & Human Review Audit (CRM2-12 / Issue #125)
+## 3. Migration Target Adapter & Durable Import Receipt Contract (KIT-08 / [CRM2-11])
 
-### 3.1 Policy Overview
+### 3.1 Architecture & In-Process Execution Boundary
+In strict accordance with SDS ClearShift CRM v2.0 §4.2, Gate G2 requirements, and Decision C4, migration data loading is governed by `Crm2TargetAdapter` implementing the `@cs/kit` `TargetAdapter` port:
+- **Zero Direct SQL Privileges:** External migration loaders never write directly to `crm2.*` tables. All data commits occur strictly through in-process domain operations or public REST endpoints (`POST /api/v1/crm-deals/import/row`, `POST /api/v1/crm-deals/import/batch`).
+- **Atomic Local Transaction:** For every imported row, the target business entity (deal, quote, stage link, quote line) and its durable import receipt (`crm2_import_receipts`) commit atomically in one local database transaction. If the receipt cannot be persisted, the domain mutation rolls back completely.
+- **Type-Safe UPSERT:** Ingesting a record with a known `source_system` and `source_id` updates/links the existing target entity (`outcome: 'linked'`) without duplicating business records. New source entities are inserted (`outcome: 'created'`).
+
+### 3.2 Durable Import Receipt Schema & Field Registry
+Import receipts persist in `crm2.crm2_import_receipts` with immutable audit fields:
+- `id`: UUID surrogate key
+- `batch_id`: Migration batch identifier
+- `source_row`: 1-indexed source row number
+- `entity`: Target entity (`deal`, `quote`, `stage`, `quote_line`)
+- `source_system`: Legacy origin system name
+- `source_id`: Legacy primary key
+- `target_id`: UUID of committed business entity
+- `idempotency_key`: Stable deduplication key
+- `payload_hash`: SHA-256 canonical payload digest
+- `kind` / `outcome`: `created` or `linked`
+- `created_at`: UTC timestamp of atomic commit
+
+### 3.3 Idempotency Policy & Conflict Semantics
+- **Identical Replay:** Re-submitting an identical row with the same `Idempotency-Key` and matching payload returns the previously generated receipt with HTTP 200 OK and `isExisting: true`, producing zero duplicate records.
+- **Payload Conflict:** Submitting an existing `Idempotency-Key` with an altered payload immediately aborts with HTTP 409 Conflict (`IDEMPOTENCY_KEY_REUSED`) without mutating any data.
+- **Preflight Dry-Run:** `preflight(batchId, rows)` validates business invariants across entire batches with zero database mutations.
+
+---
+
+## 4. Exact Duplicate Key Policy & Human Review Audit (CRM2-12 / Issue #125)
+
+### 4.1 Policy Overview
 To prevent data contamination and duplicate records during migration and ongoing CRM-2 operations, deterministic exact-duplicate matching keys and human review governance are enforced:
 1. **Deterministic Exact Matching Only**: Fuzzy scoring, probabilistic algorithms, and automatic merging (`autoMerge: true`) are strictly forbidden in V1 (HTTP 422 `AUTO_MERGE_FORBIDDEN`).
 2. **Review Holding Queue**: All detected duplicates are quarantined in `held_for_review` status pending authorized operator action.
 3. **Mandatory Human Audit**: Merge and reject actions require authenticated `actorId`, explicit rationale (`reason`), and strict validation that `keptId !== mergedId`.
 4. **Child Quotes Reassignment**: When merging deals (`MERGE`), child quotes referencing `mergedId` are safely reassigned to `keptId` within the domain service.
 
-### 3.2 Normalized Exact Keys
+### 4.2 Normalized Exact Keys
 - **Deal Business Key (`deal_business`)**: `${btrim(lower(name))}#${stageId}#${contactId || 'orphan'}`
 - **Deal Name + Contact Key (`deal_name_contact`)**: `${contactId || 'orphan'}#${btrim(lower(name))}`
 - **Quote Number Key (`quote_number`)**: `btrim(upper(quote_number))`
