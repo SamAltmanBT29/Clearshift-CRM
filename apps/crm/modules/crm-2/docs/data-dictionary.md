@@ -239,6 +239,48 @@ The main CRM-2 collection screens implement bounded paginated tables with stable
 - **WAI-ARIA Conformance**: Accessible `<table role="table">`, `<th scope="col" aria-sort="...">`, sort toggle buttons with accessible labels, and pagination toolbar (`<nav aria-label="Table Pagination">`).
 - **Semantic UI States**: Full representation for skeleton loading, zero-data empty state with filter reset, error banner with sanitized message and retry, and 403 Forbidden access-denied view.
 
+---
+
+## 6. Search, Filters and Sorting Controls Specification (CRM2-18)
+
+### 6.1 Debounced Search Bar (300ms Protocol)
+Free-text opportunity discovery is implemented via `SearchInput` and governed by `SearchFilterController`:
+- **Keystroke Debounce**: 300ms delay (`SEARCH_DEBOUNCE_MS = 300`) buffers typing events to prevent overloading server APIs.
+- **Search Target Fields**: Matches `crm2_deals.name` and joined contact name (`crm1_contacts.first_name || ' ' || crm1_contacts.last_name`).
+- **Immediate Flush**: Pressing `Enter` immediately cancels pending timers and dispatches query synchronously.
+- **Immediate Reset**: Pressing `Escape` or clicking clear (`×`) wipes search and dispatches empty query.
+
+### 6.2 Faceted Filter Dimensions & Sidebar
+Collection views provide faceted dimension filters matching the data dictionary:
+- **Deals Facets (`CRM2_DEALS_FACETS`)**:
+  - `stage`: Fixed 6 stages (`New`, `Qualified`, `Proposal`, `Negotiation`, `Won`, `Lost`).
+  - `is_orphan`: Boolean orphan indicator (`true` for unlinked deals, `false` for deals linked to contacts).
+  - `source_system`: Source origin (`hubspot`, `salesforce`, `csv_import`, `manual`).
+- **Quotes Facets (`CRM2_QUOTES_FACETS`)**:
+  - `source_system`: (`csv_import`, `manual`, `erp_sync`).
+- **Duplicate Review Facets (`CRM2_DUPLICATES_FACETS`)**:
+  - `entity`: (`deal`, `quote`).
+  - `status`: (`pending`, `resolved`, `ignored`).
+
+### 6.3 Active Filter Pill Tags & Removal Lifecycle
+Active filter criteria are rendered as pill tags via `ActiveFilterPills`:
+- **Format**: `[Dimension Label]: [Display Value]` (e.g. `Search: "Cloud Deal"`, `Pipeline Stage: Won`, `Orphan Status: Orphan (Unlinked)`).
+- **Individual Dismissal**: Clicking `×` removes that single filter criterion and resets pagination to page 1.
+- **Clear All Reset**: Clicking `Clear All` wipes all filter facets and search input simultaneously.
+
+### 6.4 Informative Empty Search/Filter State
+When search or filter criteria return zero matching records:
+- **Visual Presentation**: Styled container (`cs-empty-filter-state`) with search icon (`🔍`).
+- **Header**: "No matching deals found".
+- **Guidance Text**: "No opportunities match your current filter criteria. Try clearing or modifying your filters."
+- **Action Control**: Explicit "Reset All Filters" button (`data-action="clear-all-filters"`).
+
+### 6.5 Bidirectional URL Query State Synchronization
+State is bidirectionally synchronized with browser URL query parameters:
+- **Query Keys**: `search`, `stage`, `is_orphan`, `source_system`, `sort`, `order`, `page`, `pageSize`.
+- **Deep Linking**: Preserves exact filter and sorting states.
+- **Pagination Boundary Invariant**: Any mutation to search input or faceted filters immediately resets `page` to 1.
+
 
 
 
