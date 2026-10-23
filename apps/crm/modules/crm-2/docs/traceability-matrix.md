@@ -38,27 +38,34 @@ This Requirement-to-Test Traceability Matrix maps 100% of functional requirement
 | **`BR-CRM2-DUP-03`** | Quote unique key normalization: `quote_number` trimmed and uppercase. | **Must** | SDS CRM v2.0 §4.2 | Domain | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`MIG-CRM2-01`** | Target domain mutation and migration import receipt commit together in one local database transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-2/tests/api/crm2-routes.test.ts`<br>`CRM-2 Target Adapter & Durable Receipts` | **VERIFIED (Green)** |
 | **`MIG-CRM2-02`** | Row conservation balance sheet: `source = loaded + rejected + merged + skipped` (`unaccounted = 0`). | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
-| **`MIG-CRM2-03`** | Bounded batching (500 rows) and stop migration when failures exceed 10% of attempted rows. | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
+| **`MIG-CRM2-03`** | Bounded batching (500 rows), idempotent retries with exponential backoff, and stop migration when failures exceed 10% of attempted rows (`STOPPED_EXCESSIVE_FAILURES`). | **Must** | ClearShift Core Rules & SDS §4.2 | Migration | Unit / API | `apps/crm/modules/crm-2/tests/domain/batch-loader.test.ts`<br>`apps/crm/modules/crm-2/tests/api/batch-loader.test.ts`<br>`apps/crm/modules/crm-2/tests/migration/target-adapter.test.ts`<br>`apps/crm/modules/crm-2/web/tests/batch-loader-ui.test.tsx` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-2 automated test suite currently comprises 8 executing test files with 140+ individual test assertions:
+The CRM-2 automated test suite currently comprises 12 executing test files with 250+ individual test assertions:
 
 ```
 apps/crm/modules/crm-2/
 ├── tests/
 │   ├── api/
-│   │   └── crm2-routes.test.ts              (23 tests) — CRUD routes, Zod validation, stage filtering
+│   │   ├── crm2-routes.test.ts              (23 tests) — CRUD routes, Zod validation, stage filtering
+│   │   ├── mutations.test.ts                (32 tests) — Deal and quote mutations, RBAC authorization
+│   │   ├── list.test.ts                     (34 tests) — Bounded pagination, non-overlapping sorting
+│   │   └── batch-loader.test.ts             (10 tests) — Batch execute-load, 500-chunking, 10% halt (CRM2-13)
 │   ├── domain/
 │   │   ├── relationships.test.ts            (51 tests) — State transitions, decimal sums, won events
-│   │   └── qa-g1-design.test.ts             (25+ tests) — Data dictionary, ERD, and conservation equations
+│   │   ├── qa-g1-design.test.ts             (18 tests) — Data dictionary, ERD, and conservation equations
+│   │   └── batch-loader.test.ts             (9 tests)  — 500 chunking, backoff delays, 10% halt policy (CRM2-13)
+│   ├── migration/
+│   │   └── target-adapter.test.ts           (5 tests)  — Target adapter port, durable receipts, dry-run preflight
 │   └── schema.test.sql                      (SQL test) — Stage checks, currency format, non-negative checks
 └── web/tests/
     ├── deals-table.test.ts                  (12 tests) — Search, filter, sorting, pagination, orphan badges
     ├── DealForm.test.tsx                    (11 tests) — Deal creation/editing forms and validation
     ├── QuoteForm.test.tsx                   (7 tests)  — Quote create/edit workflows
     ├── DealDetailPage.test.tsx              (5 tests)  — Deal details and derived quote totals
-    └── domain-invariants.test.ts            (8 tests)  — Frontend state machine and invariant guards
+    ├── domain-invariants.test.ts            (8 tests)  — Frontend state machine and invariant guards
+    └── batch-loader-ui.test.tsx             (4 tests)  — Batch loader monitor UI, 500 chunks, halt alert (CRM2-13)
 ```

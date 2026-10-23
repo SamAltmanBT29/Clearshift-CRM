@@ -1,3 +1,8 @@
+/**
+ * CRM-4 Marketing Lists and Campaign History — Frontend API Layer
+ * API base: /api/v1/crm-marketing
+ * All responses are Zod-validated before being returned to the UI.
+ */
 import {
   type CRM4ListQuery,
   type CRM4ListResponse,
@@ -7,8 +12,12 @@ import {
   type CRM4CampaignQuery,
   type CRM4CampaignListResponse,
   type CRM4Campaign,
+  type CRM4CampaignCreate,
+  type CRM4CampaignPatch,
   type CRM4MemberQuery,
   type CRM4MemberListResponse,
+  type CRM4Member,
+  type CRM4MemberCreate,
   type CRM4Consent,
   type CRM4ConsentSet,
   CRM4ListResponseSchema,
@@ -16,9 +25,13 @@ import {
   CRM4CampaignListResponseSchema,
   CRM4CampaignSchema,
   CRM4MemberListResponseSchema,
+  CRM4MemberSchema,
   CRM4ConsentSchema,
 } from '@clearshift/contracts';
 
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
 export class Crm4ApiError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -39,190 +52,245 @@ const API_BASE = '/api/v1/crm-marketing';
 
 export interface RequestOptions {
   signal?: AbortSignal;
-  permissionHeader?: string;
   simulateError?: boolean;
   simulatePermissionDenied?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Internal fetch helper
+// ---------------------------------------------------------------------------
 async function request<T>(
   endpoint: string,
   options: RequestInit & RequestOptions = {}
 ): Promise<T> {
-  const { signal, permissionHeader, simulateError, simulatePermissionDenied, ...init } = options;
+  const { signal, simulateError, simulatePermissionDenied, ...init } = options;
 
   let origin = '';
   if (typeof window !== 'undefined' && window.location?.origin) {
     origin = window.location.origin;
   }
   const url = new URL(endpoint, origin || 'http://localhost');
-  if (simulateError) {
-    url.searchParams.set('simulateError', 'true');
-  }
-  if (simulatePermissionDenied) {
-    url.searchParams.set('simulatePermissionDenied', 'true');
-  }
+  if (simulateError) url.searchParams.set('simulateError', 'true');
+  if (simulatePermissionDenied) url.searchParams.set('simulatePermissionDenied', 'true');
 
   const headers: Record<string, string> = {
-    'Accept': 'application/json',
+    Accept: 'application/json',
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string>),
   };
 
-  if (permissionHeader) {
-    headers['x-user-permission'] = permissionHeader;
+  const fetchInit: RequestInit = { ...init, headers };
+  if (signal) {
+    fetchInit.signal = signal;
   }
 
   let response: Response;
   try {
-    const fetchInit: RequestInit = {
-      ...init,
-      headers,
-    };
-    if (signal) {
-      fetchInit.signal = signal;
-    }
     response = await fetch(url.toString(), fetchInit);
   } catch (err: any) {
-    if (err.name === 'AbortError') {
-      throw err;
-    }
-    throw new Crm4ApiError(0, 'NETWORK_ERROR', 'Network communication failed. Please verify your connection.');
+    if (err?.name === 'AbortError') throw err;
+    throw new Crm4ApiError(0, 'NETWORK_ERROR', 'Network error: unable to reach the server.');
+  }
+
+  let body: unknown;
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    body = await response.json();
+  } else {
+    body = null;
   }
 
   if (!response.ok) {
-    let errorData: any = {};
-    try {
-      errorData = await response.json();
-    } catch {
-      // response was not JSON
-    }
+    const err = (body && typeof body === 'object') ? (body as Record<string, any>) : {};
     throw new Crm4ApiError(
       response.status,
-      errorData.code || 'HTTP_ERROR',
-      errorData.message || `Request failed with status ${response.status}`,
-      errorData.details
+      err['code'] ?? 'API_ERROR',
+      err['message'] ?? `Request failed with status ${response.status}`,
+      err['details']
     );
   }
 
-  return response.json() as Promise<T>;
+  return body as T;
 }
+
+// ---------------------------------------------------------------------------
+// Marketing Lists
+// ---------------------------------------------------------------------------
 
 export async function getMarketingLists(
   query: Partial<CRM4ListQuery> = {},
-  options?: RequestOptions
+  opts: RequestOptions = {}
 ): Promise<CRM4ListResponse> {
-  const searchParams = new URLSearchParams();
-  searchParams.set('page', String(query.page ?? 1));
-  searchParams.set('pageSize', String(query.pageSize ?? 25));
+  const params = new URLSearchParams();
+  if (query.search) params.set('search', query.search);
+  if (query.page) params.set('page', String(query.page));
+  if (query.pageSize) params.set('pageSize', String(query.pageSize));
 
-  if (query.search && query.search.trim() !== '') {
-    searchParams.set('search', query.search.trim());
-  }
-
-  const data = await request<unknown>(`${API_BASE}/lists?${searchParams.toString()}`, {
+  const raw = await request<unknown>(`${API_BASE}/lists?${params}`, {
     method: 'GET',
-    ...options,
+    ...opts,
   });
-
-  return CRM4ListResponseSchema.parse(data);
+  return CRM4ListResponseSchema.parse(raw);
 }
 
 export async function getMarketingListById(
   id: string,
-  options?: RequestOptions
+  opts: RequestOptions = {}
 ): Promise<CRM4List> {
-  const data = await request<unknown>(`${API_BASE}/lists/${id}`, {
+  const raw = await request<unknown>(`${API_BASE}/lists/${encodeURIComponent(id)}`, {
     method: 'GET',
-    ...options,
+    ...opts,
   });
-
-  return CRM4ListSchema.parse(data);
+  return CRM4ListSchema.parse(raw);
 }
 
-export async function createMarketingList(
-  input: CRM4ListCreate,
-  options?: RequestOptions
+export async function createList(
+  body: CRM4ListCreate,
+  opts: RequestOptions = {}
 ): Promise<CRM4List> {
-  const data = await request<unknown>(`${API_BASE}/lists`, {
+  const raw = await request<unknown>(`${API_BASE}/lists`, {
     method: 'POST',
-    body: JSON.stringify(input),
-    ...options,
+    body: JSON.stringify(body),
+    ...opts,
   });
-
-  return CRM4ListSchema.parse(data);
+  return CRM4ListSchema.parse(raw);
 }
 
-export async function updateMarketingList(
+export const createMarketingList = createList;
+
+export async function patchList(
   id: string,
-  input: CRM4ListPatch,
-  options?: RequestOptions
+  body: CRM4ListPatch,
+  opts: RequestOptions = {}
 ): Promise<CRM4List> {
-  const data = await request<unknown>(`${API_BASE}/lists/${id}`, {
+  const raw = await request<unknown>(`${API_BASE}/lists/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify(input),
-    ...options,
+    body: JSON.stringify(body),
+    ...opts,
   });
-
-  return CRM4ListSchema.parse(data);
+  return CRM4ListSchema.parse(raw);
 }
+
+export const updateMarketingList = patchList;
+
+// ---------------------------------------------------------------------------
+// Campaigns
+// ---------------------------------------------------------------------------
 
 export async function getCampaigns(
   query: Partial<CRM4CampaignQuery> = {},
-  options?: RequestOptions
+  opts: RequestOptions = {}
 ): Promise<CRM4CampaignListResponse> {
-  const searchParams = new URLSearchParams();
-  if (query.page) searchParams.set('page', String(query.page));
-  if (query.pageSize) searchParams.set('pageSize', String(query.pageSize));
-  if (query.listId) searchParams.set('listId', query.listId);
-  if (query.search) searchParams.set('search', query.search);
+  const params = new URLSearchParams();
+  if (query.listId) params.set('listId', query.listId);
+  if (query.search) params.set('search', query.search);
+  if (query.page) params.set('page', String(query.page));
+  if (query.pageSize) params.set('pageSize', String(query.pageSize));
 
-  const data = await request<unknown>(`${API_BASE}/campaigns?${searchParams.toString()}`, {
+  const raw = await request<unknown>(`${API_BASE}/campaigns?${params}`, {
     method: 'GET',
-    ...options,
+    ...opts,
   });
-
-  return CRM4CampaignListResponseSchema.parse(data);
+  return CRM4CampaignListResponseSchema.parse(raw);
 }
+
+export async function getCampaignById(
+  id: string,
+  opts: RequestOptions = {}
+): Promise<CRM4Campaign> {
+  const raw = await request<unknown>(`${API_BASE}/campaigns/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    ...opts,
+  });
+  return CRM4CampaignSchema.parse(raw);
+}
+
+export async function createCampaign(
+  body: CRM4CampaignCreate,
+  opts: RequestOptions = {}
+): Promise<CRM4Campaign> {
+  const raw = await request<unknown>(`${API_BASE}/campaigns`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    ...opts,
+  });
+  return CRM4CampaignSchema.parse(raw);
+}
+
+export async function patchCampaign(
+  id: string,
+  body: CRM4CampaignPatch,
+  opts: RequestOptions = {}
+): Promise<CRM4Campaign> {
+  const raw = await request<unknown>(`${API_BASE}/campaigns/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+    ...opts,
+  });
+  return CRM4CampaignSchema.parse(raw);
+}
+
+// ---------------------------------------------------------------------------
+// Campaign Members
+// ---------------------------------------------------------------------------
 
 export async function getCampaignMembers(
   campaignId: string,
   query: Partial<CRM4MemberQuery> = {},
-  options?: RequestOptions
+  opts: RequestOptions = {}
 ): Promise<CRM4MemberListResponse> {
-  const searchParams = new URLSearchParams();
-  if (query.page) searchParams.set('page', String(query.page));
-  if (query.pageSize) searchParams.set('pageSize', String(query.pageSize));
-  if (query.status) searchParams.set('status', query.status);
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  if (query.page) params.set('page', String(query.page));
+  if (query.pageSize) params.set('pageSize', String(query.pageSize));
 
-  const data = await request<unknown>(`${API_BASE}/campaigns/${campaignId}/members?${searchParams.toString()}`, {
-    method: 'GET',
-    ...options,
-  });
-
-  return CRM4MemberListResponseSchema.parse(data);
+  const raw = await request<unknown>(
+    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/members?${params}`,
+    { method: 'GET', ...opts }
+  );
+  return CRM4MemberListResponseSchema.parse(raw);
 }
 
-export async function getContactConsent(
-  contactId: string,
-  options?: RequestOptions
-): Promise<CRM4Consent> {
-  const data = await request<unknown>(`${API_BASE}/consents/${contactId}`, {
-    method: 'GET',
-    ...options,
-  });
-
-  return CRM4ConsentSchema.parse(data);
+export async function createCampaignMember(
+  body: CRM4MemberCreate,
+  opts: RequestOptions = {}
+): Promise<CRM4Member> {
+  const { campaignId, ...payload } = body;
+  const raw = await request<unknown>(
+    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/members`,
+    { method: 'POST', body: JSON.stringify(payload), ...opts }
+  );
+  return CRM4MemberSchema.parse(raw);
 }
 
-export async function setContactConsent(
-  input: CRM4ConsentSet,
-  options?: RequestOptions
+// ---------------------------------------------------------------------------
+// Consents
+// ---------------------------------------------------------------------------
+
+export async function setConsent(
+  body: CRM4ConsentSet,
+  opts: RequestOptions = {}
 ): Promise<CRM4Consent> {
-  const data = await request<unknown>(`${API_BASE}/consents`, {
+  const raw = await request<unknown>(`${API_BASE}/consents`, {
     method: 'POST',
-    body: JSON.stringify(input),
-    ...options,
+    body: JSON.stringify(body),
+    ...opts,
   });
+  return CRM4ConsentSchema.parse(raw);
+}
 
-  return CRM4ConsentSchema.parse(data);
+export async function getConsent(
+  contactId: string,
+  opts: RequestOptions = {}
+): Promise<CRM4Consent | null> {
+  try {
+    const raw = await request<unknown>(
+      `${API_BASE}/consents/${encodeURIComponent(contactId)}`,
+      { method: 'GET', ...opts }
+    );
+    return CRM4ConsentSchema.parse(raw);
+  } catch (err) {
+    if (err instanceof Crm4ApiError && err.statusCode === 404) return null;
+    throw err;
+  }
 }

@@ -1,3 +1,5 @@
+import type React from 'react';
+
 export type SortDirection = 'asc' | 'desc';
 
 export interface TableSortState {
@@ -18,7 +20,7 @@ export interface DataTableColumn<T = Record<string, unknown>> {
   sortable?: boolean;
   align?: 'left' | 'center' | 'right';
   width?: string;
-  format?: (value: unknown, row: T) => string;
+  format?: (value: unknown, row: T) => React.ReactNode;
 }
 
 export interface TableFilterState {

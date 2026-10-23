@@ -3,11 +3,14 @@ import { AppError } from '@cs/kernel';
 import { jwtPlugin } from '@cs/identity';
 import { crm1AuthPlugin } from './plugins/auth.js';
 import { crm1Routes, type Crm1RouteOptions } from './routes/crm1.routes.js';
+import { importRoutes, type ImportRouteOptions } from './routes/import.js';
+import { Crm1TargetAdapter } from './migration/target-adapter.js';
 import { Crm1Service } from './services/crm1.service.js';
 import { Crm1AuditService, crm1Audit } from './services/audit.js';
 
-export interface AppOptions extends Crm1RouteOptions {
+export interface AppOptions extends Crm1RouteOptions, ImportRouteOptions {
   auditService?: Crm1AuditService | undefined;
+  adapter?: Crm1TargetAdapter | undefined;
 }
 
 /**
@@ -55,13 +58,19 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     });
   });
 
-  const service = opts.service ?? new Crm1Service();
+  const adapter = opts.adapter ?? new Crm1TargetAdapter(opts.service);
+  const service = opts.service ?? adapter.getService();
   const auditService = opts.auditService ?? crm1Audit;
 
   app.register(crm1Routes, {
     prefix: '/api/v1/crm-contacts',
     service,
     auditService,
+  });
+
+  app.register(importRoutes, {
+    prefix: '/api/v1/crm-contacts',
+    adapter,
   });
 
   return app;

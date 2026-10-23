@@ -1,6 +1,12 @@
+/**
+ * @clearshift/contracts — CRM-4 Marketing Lists and Campaign History
+ * SDS ClearShift CRM v2.0, V1: FR-CRM4-01..05; BR-CRM4-01
+ *
+ * Owned tables: crm4_lists, crm4_campaigns, crm4_members, crm4_consents
+ * API base: /api/v1/crm-marketing
+ */
 import { z } from 'zod';
-
-export const CRM4_API_PREFIX = '/api/v1/crm-marketing';
+import { ClearShiftRoles, type RoleType } from './roles.js';
 
 // ---------------------------------------------------------------------------
 // 1. Enums & Domain Invariants (FR-CRM4-01..05, BR-CRM4-01)
@@ -56,7 +62,7 @@ export function assertMonotonicOptOut(currentStatus: string | null | undefined, 
 
 export const CRM4ListSchema = z.object({
   id: z.string().uuid(),
-  name: z.string().trim().min(1, 'List name cannot be empty'),
+  name: z.string().trim().min(1, 'List name cannot be empty').max(255, 'List name cannot exceed 255 characters'),
   description: z.string().nullable().optional(),
   campaignCount: z.number().int().nonnegative().default(0),
   memberCount: z.number().int().nonnegative().default(0),
@@ -67,9 +73,11 @@ export type CRM4List = z.infer<typeof CRM4ListSchema>;
 
 export const CRM4CampaignSchema = z.object({
   id: z.string().uuid(),
-  name: z.string().trim().min(1, 'Campaign name cannot be empty'),
+  name: z.string().trim().min(1, 'Campaign name cannot be empty').max(255, 'Campaign name cannot exceed 255 characters'),
   campaignDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be formatted YYYY-MM-DD'),
   listId: z.string().uuid(),
+  listName: z.string().optional(),
+  memberCount: z.number().int().nonnegative().default(0),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -101,13 +109,13 @@ export type CRM4Consent = z.infer<typeof CRM4ConsentSchema>;
 // ---------------------------------------------------------------------------
 
 export const CRM4ListCreateSchema = z.object({
-  name: z.string().trim().min(1, 'List name is required'),
+  name: z.string().trim().min(1, 'List name is required').max(255, 'List name cannot exceed 255 characters'),
   description: z.string().trim().optional().nullable(),
 }).strict();
 export type CRM4ListCreate = z.infer<typeof CRM4ListCreateSchema>;
 
 export const CRM4ListPatchSchema = z.object({
-  name: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   description: z.string().trim().optional().nullable(),
 }).strict().refine((data) => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
@@ -115,14 +123,14 @@ export const CRM4ListPatchSchema = z.object({
 export type CRM4ListPatch = z.infer<typeof CRM4ListPatchSchema>;
 
 export const CRM4CampaignCreateSchema = z.object({
-  name: z.string().trim().min(1, 'Campaign name is required'),
+  name: z.string().trim().min(1, 'Campaign name is required').max(255, 'Campaign name cannot exceed 255 characters'),
   campaignDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be formatted YYYY-MM-DD'),
-  listId: z.string().uuid(),
+  listId: z.string().uuid('A valid marketing list must be selected'),
 }).strict();
 export type CRM4CampaignCreate = z.infer<typeof CRM4CampaignCreateSchema>;
 
 export const CRM4CampaignPatchSchema = z.object({
-  name: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   campaignDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 }).strict().refine((data) => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
@@ -131,14 +139,14 @@ export type CRM4CampaignPatch = z.infer<typeof CRM4CampaignPatchSchema>;
 
 export const CRM4MemberCreateSchema = z.object({
   campaignId: z.string().uuid(),
-  contactId: z.string().uuid(),
+  contactId: z.string().uuid('A valid contact ID (UUID) is required'),
   status: CRM4MemberStatusSchema.default('sent'),
   unsubscribed: z.boolean().optional().default(false),
 }).strict();
 export type CRM4MemberCreate = z.infer<typeof CRM4MemberCreateSchema>;
 
 export const CRM4ConsentSetSchema = z.object({
-  contactId: z.string().uuid(),
+  contactId: z.string().uuid('A valid contact ID (UUID) is required'),
   status: CRM4ConsentStatusSchema,
   consentDate: z.string().datetime().optional(),
   source: z.string().trim().min(1, 'Consent source is required'),
@@ -197,3 +205,29 @@ export const CRM4MemberListResponseSchema = z.object({
   pagination: CRM4PaginationSchema,
 });
 export type CRM4MemberListResponse = z.infer<typeof CRM4MemberListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// 5. Route Prefix and Role Capability Matrix (SDS v2.0 §4 / §7.1)
+// ---------------------------------------------------------------------------
+
+export const CRM4_API_PREFIX = '/api/v1/crm-marketing' as const;
+
+export const CRM4_ENDPOINT_ROLES = {
+  LISTS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  LISTS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  LISTS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+  LISTS_UPDATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  CAMPAIGNS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  CAMPAIGNS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  CAMPAIGNS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+  CAMPAIGNS_UPDATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  MEMBERS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  MEMBERS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  CONSENTS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  CONSENTS_SET: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+} as const;
+
+export type CRM4EndpointKey = keyof typeof CRM4_ENDPOINT_ROLES;
