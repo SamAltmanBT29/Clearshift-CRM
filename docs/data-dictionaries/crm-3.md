@@ -80,6 +80,26 @@ Indexes:
 
 ---
 
+## 3. Public REST API Specification & Bounded Pagination (`/api/v1/crm-tickets`)
+
+| Method | Endpoint | Description | Request Body | Response | Error Codes |
+|---|---|---|---|---|---|
+| `GET` | `/api/v1/crm-tickets/tickets` | List tickets with filters (`status`, `priority`, `contactId`, `search`), bounded pagination (`page`, `pageSize` <= 100). | None | `CRM3TicketListResponse` | 400 (INVALID_QUERY), 401, 403 |
+| `GET` | `/api/v1/crm-tickets/tickets/{id}` | Read single ticket by UUID with enriched contact metadata. | None | `CRM3TicketRead` | 400 (VALIDATION_ERROR), 401, 403, 404 (NOT_FOUND) |
+| `POST` | `/api/v1/crm-tickets/tickets` | Create support ticket with contact existence verification and optional initial note. | `CRM3TicketCreate` | `CRM3TicketRead` (201) | 400 (VALIDATION_ERROR), 401, 403, 422 (Unprocessable) |
+| `PATCH` | `/api/v1/crm-tickets/tickets/{id}` | Update ticket fields (status, priority, subject, contactId, orderRef). | `CRM3TicketPatch` | `CRM3TicketRead` | 400 (VALIDATION_ERROR), 401, 403, 404 (NOT_FOUND), 422 |
+| `GET` | `/api/v1/crm-tickets/tickets/{id}/notes` | List ticket notes ordered newest-first with timestamp/id tie-breaker. | None | `CRM3NoteListResponse` | 400 (INVALID_QUERY), 401, 403, 404 (NOT_FOUND) |
+| `POST` | `/api/v1/crm-tickets/notes` | Append a note to a ticket (append-only audit trail). | `CRM3NoteCreate` | `CRM3Note` (201) | 400 (VALIDATION_ERROR), 401, 403, 404 (NOT_FOUND) |
+
+### Query & Pagination Bounds
+- `page`: 1-based positive integer (default 1).
+- `pageSize`: 1-based positive integer bounded by hard cap of 100 (default 25). Requests with `pageSize > 100` are rejected with `400 Bad Request` (`INVALID_QUERY`).
+- Deterministic Ordering: Tickets ordered `createdAt DESC, id DESC`. Notes ordered `createdAt DESC, id DESC`.
+- Search: Server-side case-insensitive match on `subject` and `orderRef`.
+- Domain Invariants: Status restricted to `[New, Open, Waiting, Solved, Closed]`; Priority restricted to `[Low, Normal, High, Urgent]`.
+
+---
+
 ## 4. Frontend Module Routes, Navigation & Layout Shell (CRM3-16)
 
 ### Module Route Registration

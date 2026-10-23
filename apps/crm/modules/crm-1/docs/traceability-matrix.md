@@ -44,15 +44,20 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`BR-CRM4-01`** | Unsubscribed contact protection: status `unsubscribed` can never be overwritten by import or bulk action. | **Must** | SDS CRM v2.0 §4.5 | Domain / DB | Schema | `apps/crm/modules/crm-1/tests/db/schema.test.ts`<br>`CRM-1 Drizzle schema constraints` | **VERIFIED (Green)** |
 | **`SEC-01`** | Authenticate via asymmetric EdDSA JWTs and enforce 5 RBAC roles (viewer, editor, analyst, admin, migration_runner). | **Must** | SDS CRM v2.0 §7.1 | Security | Security | `apps/crm/modules/crm-1/tests/security/authorization.test.ts`<br>`CRM-1 Security & Authorization (Issue #14 / [CRM1-09])` | **VERIFIED (Green)** |
 | **`SEC-02`** | Mask sensitive fields (bank accounts XXXX-XXXX-7890, salary XX,XXX, CSV formula injection escape). | **Must** | ClearShift Core Rules | Security | Security | `apps/crm/modules/crm-1/tests/security/authorization.test.ts`<br>`CRM-1 Security & Authorization (Issue #14 / [CRM1-09])` | **VERIFIED (Green)** |
-| **`MIG-01`** | Atomic transaction: target business record and per-row import receipt commit in single transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-1/tests/services/crm1-mutation.service.test.ts`<br>`CRM-1 mutation service & idempotent imports` | **VERIFIED (Green)** |
+| **`MIG-01`** | Atomic transaction: target business record and per-row import receipt commit in single transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-1/tests/migration/idempotency.test.ts`<br>`CRM-1 Target Adapter & Durable Import Receipts (Issue #12 / [CRM1-07])` | **VERIFIED (Green)** |
 | **`MIG-02`** | Mathematical row conservation invariant: `source = loaded + rejected + merged + skipped` (`unaccounted = 0`). | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-1/tests/domain/qa-g1-design.test.ts`<br>`CRM-1 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`MIG-03`** | Bounded batching (500 rows) and stop migration when failures exceed 10% of attempted rows. | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-1/tests/domain/qa-g1-design.test.ts`<br>`CRM-1 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
+| **`FR-CRM1-27-01`** | Standard cleaners execute: whitespace trimming, name proper casing, email lowercasing, phone normalization, tax stripping, date coercion. | **Must** | Issue #120 [CRM1-27] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/cleaner.test.ts`<br>`CRM-1 cleaning rules and field audit` | **VERIFIED (Green)** |
+| **`FR-CRM1-27-02`** | Every modified field value generates an audit entry with source_row, field_name, original_value, cleaned_value, and rule_id. | **Must** | Issue #120 [CRM1-27] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/cleaner.test.ts`<br>`CRM-1 cleaning rules and field audit` | **VERIFIED (Green)** |
+| **`FR-CRM1-27-03`** | Unrecoverable required-field and syntax anomalies result in structured row rejection with standard reason codes. | **Must** | Issue #120 [CRM1-27] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/cleaner.test.ts`<br>`CRM-1 cleaning rules and field audit` | **VERIFIED (Green)** |
+| **`FR-CRM1-27-04`** | Batch cleaning service and summary metrics breakdown by rule_id and reason_code. | **Must** | Issue #120 [CRM1-27] | Service | Integration | `apps/crm/modules/crm-1/tests/services/crm1-cleaning.service.test.ts`<br>`Crm1CleaningService` | **VERIFIED (Green)** |
+| **`FR-CRM1-27-05`** | Cleaning audit UI component renders before/after audit trail and rejected row tables. | **Should** | Issue #120 [CRM1-27] | Web | Component | `apps/crm/modules/crm-1/tests/web/cleaning-audit-page.test.ts`<br>`CleaningAuditPage Frontend Component` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 9 executing test files with 141 individual test cases:
+The CRM-1 automated test suite comprises 14 executing test files:
 
 ```
 apps/crm/modules/crm-1/tests/
@@ -65,21 +70,30 @@ apps/crm/modules/crm-1/tests/
 ├── domain/
 │   ├── qa-g1-design.test.ts                 (15 tests) — Data dictionary, ERD, traceability, dirty pack
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
+├── kit/
+│   └── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
+├── migration/
+│   └── idempotency.test.ts                  (14 tests) — Target adapter, durable receipts, idempotency retries & 409 conflicts (Issue #12 / [CRM1-07])
 ├── security/
-│   └── authorization.test.ts                (37 tests) — EdDSA JWTs, RBAC 5 roles, sensitive masking, audit
+│   └── authorization.test.ts                (51 tests) — EdDSA JWTs, RBAC 5 roles, sensitive masking, audit
 ├── services/
+│   ├── crm1-cleaning.service.test.ts        ( 6 tests) — Batch cleaning service and summary metrics
 │   └── crm1-mutation.service.test.ts        ( 2 tests) — Atomic target + receipt commit in 1 transaction
 └── web/
-    └── routes.test.ts                       (14 tests) — Frontend route guards, layout shell, ARIA landmarks
+    ├── cleaning-audit-page.test.ts          ( 3 tests) — Cleaning audit page frontend component and columns
+    ├── data-table.test.ts                   (21 tests) — Paginated data table and column layout
+    ├── routes.test.ts                       (14 tests) — Frontend route guards, layout shell, ARIA landmarks
+    └── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 141 tests (100% Green, 0 Failures, 0 Skipped in test DB run)
+Total Automated Test Cases: 236 tests (100% Green, 0 Failures, 0 Skipped in test DB run)
 ```
 
 ---
 
-## 4. Gate G1 Sign-Off Verification
+## 4. Gate G3 Sign-Off Verification
 
-* [x] **Requirement Coverage:** All 12 Must requirements from SDS §4.2 map to automated test suites.
-* [x] **Platform Invariants:** Duplicate normalization, RBAC authorization, and atomic receipts verified.
-* [x] **Conservation Formula:** Mathematical invariant `source = loaded + rejected + merged + skipped` tested.
-* [x] **CI Readiness:** Vitest test suite runs in under 4 seconds with $>60\%$ domain statement coverage.
+* [x] **Cleaning Execution:** All approved V1 cleaning rules execute deterministically.
+* [x] **Field Audit:** Every modified value generates an audit entry with before/after diff and rule ID.
+* [x] **Anomaly Rejection:** Unrecoverable required-field and syntax anomalies result in structured row rejections.
+* [x] **Row Outcome Conservation:** Balance sheet `source = loaded + rejected + merged + skipped` strictly upheld.
+* [x] **Zero Duplicate Platform Infra:** Reuses shared normalizers and registry from `@cs/core`.

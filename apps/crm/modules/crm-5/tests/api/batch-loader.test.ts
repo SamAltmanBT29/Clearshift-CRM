@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { Roles, signAccessToken } from '@cs/identity';
 import { buildApp } from '../../src/app.js';
 import { ControlCenterService } from '../../src/services/control-center.service.js';
 import { BatchExecutionReportSchema, ErrorEnvelopeSchema } from '@clearshift/contracts';
@@ -6,11 +7,28 @@ import { BatchExecutionReportSchema, ErrorEnvelopeSchema } from '@clearshift/con
 describe('CRM-5 Batch Load Execution API (CRM5-13)', () => {
   let app: ReturnType<typeof buildApp>;
   let service: ControlCenterService;
+  let adminToken: string;
 
-  beforeEach(() => {
+  beforeAll(async () => {
+    adminToken = await signAccessToken('synthetic-admin', [Roles.ADMIN]);
+  });
+
+  beforeEach(async () => {
     service = new ControlCenterService();
     service.clear();
     app = buildApp({ service });
+    await app.ready();
+    const rawInject = app.inject.bind(app);
+    app.inject = ((opts: any) => {
+      const headers = {
+        authorization: `Bearer ${adminToken}`,
+        ...(opts?.headers || {}),
+      };
+      return rawInject({
+        ...opts,
+        headers,
+      });
+    }) as any;
   });
 
   describe('POST /api/v1/crm-control/batches/execute-load', () => {

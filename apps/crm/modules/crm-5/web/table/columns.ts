@@ -46,6 +46,21 @@ export const REJECTS_COLUMNS: DataTableColumn[] = [
 ];
 
 /**
+ * Enhanced Rejection Review Columns with Module Context Identifiers (CRM5-23 / Issue #196)
+ */
+export const REJECTS_AUDIT_COLUMNS: DataTableColumn[] = [
+  { key: 'rowIndex', header: 'Row #', sortable: true, align: 'right', width: '90px' },
+  { key: 'module', header: 'Module', sortable: true, align: 'left', width: '110px' },
+  { key: 'batchId', header: 'Batch ID', sortable: true, align: 'left', width: '180px' },
+  { key: 'contextIdentifier', header: 'Module Context Identifier', sortable: false, align: 'left', width: '180px' },
+  { key: 'errorCode', header: 'Error Code', sortable: true, align: 'left', width: '160px' },
+  { key: 'errorMessage', header: 'Failure Explanation / Reason', sortable: false, align: 'left', width: '280px' },
+  { key: 'rawPayloadHash', header: 'Payload Hash', sortable: false, align: 'left', width: '140px' },
+  { key: 'createdAt', header: 'Recorded At', sortable: true, align: 'left', width: '160px' },
+  { key: 'actions', header: 'Actions', sortable: false, align: 'center', width: '100px' },
+];
+
+/**
  * Reconciliation Data Table Columns matching CRM-5 Data Dictionary (Section 2.4)
  */
 export const RECONCILIATION_COLUMNS: DataTableColumn[] = [

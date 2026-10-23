@@ -19,7 +19,8 @@
     "@cs/core": "*",
     "@cs/kit": "*",
     "@cs/identity": "*",
-    "@cs/rbac": "*"
+    "@cs/rbac": "*",
+    "fastify": "^5.2.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

@@ -356,6 +356,25 @@ export class Crm1Service {
     return row ? toContact(row) : null;
   }
 
+  public async getContactBySource(sourceSystem: string, sourceId: string): Promise<Contact | null> {
+    const [row] = await this.db
+      .select()
+      .from(crm1Contacts)
+      .where(and(eq(crm1Contacts.sourceSystem, sourceSystem), eq(crm1Contacts.sourceId, sourceId)))
+      .limit(1);
+
+    return row ? toContact(row) : null;
+  }
+
+  public async deleteContact(id: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(crm1Contacts)
+      .where(eq(crm1Contacts.id, id))
+      .returning({ id: crm1Contacts.id });
+
+    return deleted.length > 0;
+  }
+
   // ---------------------------------------------------------------------------
   // 2. Companies
   // ---------------------------------------------------------------------------
@@ -489,6 +508,25 @@ export class Crm1Service {
       .returning();
 
     return row ? toCompany(row) : null;
+  }
+
+  public async getCompanyBySource(sourceSystem: string, sourceId: string): Promise<Company | null> {
+    const [row] = await this.db
+      .select()
+      .from(crm1Companies)
+      .where(and(eq(crm1Companies.sourceSystem, sourceSystem), eq(crm1Companies.sourceId, sourceId)))
+      .limit(1);
+
+    return row ? toCompany(row) : null;
+  }
+
+  public async deleteCompany(id: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(crm1Companies)
+      .where(eq(crm1Companies.id, id))
+      .returning({ id: crm1Companies.id });
+
+    return deleted.length > 0;
   }
 
   // ---------------------------------------------------------------------------
@@ -766,6 +804,45 @@ export class Crm1Service {
       contactId: row.contactId,
       updatedAt: row.updatedAt,
     };
+  }
+
+  public async getLeadBySource(sourceSystem: string, sourceId: string): Promise<Lead | null> {
+    const [row] = await this.db
+      .select({
+        id: crm1Leads.id,
+        contactId: crm1Leads.contactId,
+        status: crm1Leads.status,
+        sourceSystem: crm1Leads.sourceSystem,
+        sourceId: crm1Leads.sourceId,
+        createdAt: crm1Leads.createdAt,
+        updatedAt: crm1Leads.updatedAt,
+        contactFirstName: crm1Contacts.firstName,
+        contactLastName: crm1Contacts.lastName,
+        contactEmail: crm1Contacts.email,
+      })
+      .from(crm1Leads)
+      .leftJoin(crm1Contacts, eq(crm1Leads.contactId, crm1Contacts.id))
+      .where(and(eq(crm1Leads.sourceSystem, sourceSystem), eq(crm1Leads.sourceId, sourceId)))
+      .limit(1);
+
+    if (!row) {
+      return null;
+    }
+
+    return toLead(row, {
+      firstName: row.contactFirstName ?? undefined,
+      lastName: row.contactLastName ?? undefined,
+      email: row.contactEmail,
+    });
+  }
+
+  public async deleteLead(id: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(crm1Leads)
+      .where(eq(crm1Leads.id, id))
+      .returning({ id: crm1Leads.id });
+
+    return deleted.length > 0;
   }
 
   // ---------------------------------------------------------------------------

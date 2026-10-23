@@ -70,3 +70,24 @@ export const IMPORTS_COLUMNS: DataTableColumn[] = [
   { key: 'createdAt', header: 'Started At', sortable: true, align: 'left', width: '180px' },
   { key: 'completedAt', header: 'Completed At', sortable: false, align: 'left', width: '180px' },
 ];
+
+/**
+ * Cleaning Rule Audit Trail Columns (CRM1-27)
+ */
+export const CLEANING_AUDIT_COLUMNS: DataTableColumn[] = [
+  { key: 'source_row', header: 'Source Row', sortable: true, align: 'right', width: '110px' },
+  { key: 'field_name', header: 'Field Name', sortable: true, align: 'left', width: '160px' },
+  { key: 'original_value', header: 'Original Value', sortable: false, align: 'left', width: '220px' },
+  { key: 'cleaned_value', header: 'Cleaned Value', sortable: false, align: 'left', width: '220px' },
+  { key: 'rule_id', header: 'Cleaning Rule ID', sortable: true, align: 'left', width: '150px' },
+];
+
+/**
+ * Cleaning Rejection Columns (CRM1-27)
+ */
+export const CLEANING_REJECTS_COLUMNS: DataTableColumn[] = [
+  { key: 'source_row', header: 'Source Row', sortable: true, align: 'right', width: '110px' },
+  { key: 'field_name', header: 'Field Name', sortable: true, align: 'left', width: '160px' },
+  { key: 'reason_code', header: 'Reason Code', sortable: true, align: 'left', width: '200px' },
+  { key: 'reason', header: 'Rejection Description', sortable: false, align: 'left', width: '300px' },
+];

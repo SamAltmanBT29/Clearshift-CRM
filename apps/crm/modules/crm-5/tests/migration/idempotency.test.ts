@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { Roles, signAccessToken } from '@cs/identity';
 import { buildApp } from '../../src/app.js';
 import { Crm5TargetAdapter } from '../../src/migration/target-adapter.js';
 import { ControlCenterService } from '../../src/services/control-center.service.js';
@@ -8,11 +9,28 @@ describe('CRM-5 Target Adapter & Durable Import Receipts (KIT-08 & Decision C4)'
   let service: ControlCenterService;
   let adapter: Crm5TargetAdapter;
   let app: ReturnType<typeof buildApp>;
+  let adminToken: string;
 
-  beforeEach(() => {
+  beforeAll(async () => {
+    adminToken = await signAccessToken('synthetic-admin', [Roles.ADMIN, Roles.MIGRATION_RUNNER]);
+  });
+
+  beforeEach(async () => {
     service = new ControlCenterService();
     adapter = new Crm5TargetAdapter(service);
     app = buildApp({ service, adapter });
+    await app.ready();
+    const rawInject = app.inject.bind(app);
+    app.inject = ((opts: any) => {
+      const headers = {
+        authorization: `Bearer ${adminToken}`,
+        ...(opts?.headers || {}),
+      };
+      return rawInject({
+        ...opts,
+        headers,
+      });
+    }) as any;
   });
 
   describe('1. Public API Data Loading via Kit Target Adapter Contract', () => {

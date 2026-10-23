@@ -6,10 +6,10 @@ export interface SelectOption {
 }
 
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string;
+  label?: string | undefined;
   options: SelectOption[];
-  error?: string;
-  placeholder?: string;
+  error?: string | undefined;
+  placeholder?: string | undefined;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
