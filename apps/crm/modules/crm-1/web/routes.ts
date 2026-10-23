@@ -77,6 +77,21 @@ export const CRM1_ROUTES: Record<string, Crm1RouteDefinition> = {
   },
 };
 
+export const CRM1_MAPPING_ROUTE: Crm1RouteDefinition = {
+  id: 'crm1-mappings',
+  path: 'mappings',
+  fullPath: `${CRM1_BASE_PATH}/mappings`,
+  title: 'Field Mapping & Enum Translation',
+  navLabel: 'Field Mappings',
+  requiredCapability: Capabilities.MODULE_READ,
+  breadcrumbs: [
+    { label: 'ClearShift', href: '/' },
+    { label: 'CRM Modules', href: '/crm' },
+    { label: 'Contacts & Accounts', href: CRM1_BASE_PATH },
+    { label: 'Field Mappings' },
+  ],
+};
+
 export const CRM1_CLEANING_ROUTE: Crm1RouteDefinition = {
   id: 'crm1-cleaning',
   path: 'cleaning',
@@ -98,7 +113,8 @@ export function getAllCrm1Routes(): Crm1RouteDefinition[] {
 
 export function findRouteByPath(path: string): Crm1RouteDefinition | undefined {
   const normalized = path.replace(/\/+$/, '');
-  return getAllCrm1Routes().find(
+  const all = [...getAllCrm1Routes(), CRM1_CLEANING_ROUTE, CRM1_MAPPING_ROUTE];
+  return all.find(
     (r) => r.fullPath === normalized || `${CRM1_BASE_PATH}/${r.path}` === normalized
   );
 }
