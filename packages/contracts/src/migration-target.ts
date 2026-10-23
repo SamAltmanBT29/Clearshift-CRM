@@ -810,3 +810,177 @@ export const BatchCleanedPayloadSchema = z.object({
   ruleVersion: z.string().default('1.0.0'),
 });
 export type BatchCleanedPayload = z.infer<typeof BatchCleanedPayloadSchema>;
+
+/**
+ * Migration Kit Mapping & Value Conversion Contracts (KIT-05 / SDS §4.5 & §4.10)
+ */
+
+export const MappingTransformationSchema = z.enum([
+  'identity',
+  'trim',
+  'uppercase',
+  'lowercase',
+]);
+export type MappingTransformation = z.infer<typeof MappingTransformationSchema>;
+
+export const FieldMappingDefinitionSchema = z.object({
+  sourceColumn: z.string().min(1),
+  targetField: z.string().min(1),
+  required: z.boolean().default(false),
+  transformation: MappingTransformationSchema.default('identity'),
+  defaultValue: z.string().nullable().optional(),
+});
+export type FieldMappingDefinition = z.infer<typeof FieldMappingDefinitionSchema>;
+
+export const ValueConversionUnmappedActionSchema = z.enum([
+  'reject',
+  'flag_warning',
+  'use_default',
+  'pass_through',
+]);
+export type ValueConversionUnmappedAction = z.infer<typeof ValueConversionUnmappedActionSchema>;
+
+export const ValueConversionRuleSchema = z.object({
+  targetField: z.string().min(1),
+  mappings: z.record(z.string()),
+  unmappedAction: ValueConversionUnmappedActionSchema.default('reject'),
+  defaultValue: z.string().nullable().optional(),
+});
+export type ValueConversionRule = z.infer<typeof ValueConversionRuleSchema>;
+
+export const MappingTemplateSchema = z.object({
+  id: z.string().uuid().optional(),
+  module: z.string().min(1),
+  name: z.string().min(1),
+  version: z.string().min(1).default('1.0.0'),
+  targetEntity: z.string().min(1).default('contacts'),
+  fieldMappings: z.array(FieldMappingDefinitionSchema),
+  valueConversions: z.array(ValueConversionRuleSchema).default([]),
+  createdBy: z.string().min(1).default('system'),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+});
+export type MappingTemplate = z.infer<typeof MappingTemplateSchema>;
+
+export const CreateMappingTemplateInputSchema = z.object({
+  module: z.string().min(1),
+  name: z.string().min(1),
+  version: z.string().min(1).default('1.0.0'),
+  targetEntity: z.string().min(1).default('contacts'),
+  fieldMappings: z.array(FieldMappingDefinitionSchema),
+  valueConversions: z.array(ValueConversionRuleSchema).default([]),
+  createdBy: z.string().min(1).optional(),
+});
+export type CreateMappingTemplateInput = z.infer<typeof CreateMappingTemplateInputSchema>;
+
+export const UpdateMappingTemplateInputSchema = z.object({
+  name: z.string().min(1).optional(),
+  version: z.string().min(1).optional(),
+  targetEntity: z.string().min(1).optional(),
+  fieldMappings: z.array(FieldMappingDefinitionSchema).optional(),
+  valueConversions: z.array(ValueConversionRuleSchema).optional(),
+});
+export type UpdateMappingTemplateInput = z.infer<typeof UpdateMappingTemplateInputSchema>;
+
+export const TargetFieldDefinitionSchema = z.object({
+  name: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  dataType: z.enum(['string', 'email', 'phone', 'date', 'number', 'enum', 'uuid', 'boolean']),
+  allowedValues: z.array(z.string()).optional(),
+  description: z.string().optional(),
+});
+export type TargetFieldDefinition = z.infer<typeof TargetFieldDefinitionSchema>;
+
+export const TargetEntityDefinitionSchema = z.object({
+  entity: z.string().min(1),
+  module: z.string().min(1),
+  label: z.string().min(1),
+  fields: z.array(TargetFieldDefinitionSchema),
+});
+export type TargetEntityDefinition = z.infer<typeof TargetEntityDefinitionSchema>;
+
+export const MappingValidationResultSchema = z.object({
+  valid: z.boolean(),
+  missingRequiredFields: z.array(z.string()),
+  invalidEnumConversions: z.array(
+    z.object({
+      field: z.string(),
+      sourceValue: z.string(),
+      reason: z.string(),
+    })
+  ),
+  errors: z.array(z.string()),
+});
+export type MappingValidationResult = z.infer<typeof MappingValidationResultSchema>;
+
+export const CleanCrmRowSchema = z.object({
+  id: z.string().uuid().optional(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  payload: z.record(z.unknown()),
+  createdAt: z.coerce.date().optional(),
+});
+export type CleanCrmRow = z.infer<typeof CleanCrmRowSchema>;
+
+export const BatchMappedPayloadSchema = z.object({
+  batchId: z.string().uuid(),
+  module: z.string().min(1),
+  mappedRows: z.number().int().nonnegative(),
+  missingRequired: z.number().int().nonnegative(),
+  templateId: z.string().optional(),
+  templateName: z.string().optional(),
+  targetEntity: z.string().min(1),
+  totalRows: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative().optional(),
+});
+export type BatchMappedPayload = z.infer<typeof BatchMappedPayloadSchema>;
+
+/**
+ * Standard CRM Target Entity Registries
+ */
+export const CRM_CONTACTS_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'firstName', label: 'First Name', required: true, dataType: 'string' },
+  { name: 'lastName', label: 'Last Name', required: true, dataType: 'string' },
+  { name: 'email', label: 'Email Address', required: true, dataType: 'email' },
+  { name: 'phone', label: 'Phone Number', required: false, dataType: 'phone' },
+  { name: 'company', label: 'Company Name', required: false, dataType: 'string' },
+  { name: 'country', label: 'Country', required: false, dataType: 'string' },
+  {
+    name: 'leadStatus',
+    label: 'Lead Status',
+    required: false,
+    dataType: 'enum',
+    allowedValues: ['New', 'Working', 'Qualified', 'Closed'],
+  },
+];
+
+export const CRM_LEADS_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'firstName', label: 'First Name', required: true, dataType: 'string' },
+  { name: 'lastName', label: 'Last Name', required: true, dataType: 'string' },
+  { name: 'email', label: 'Email Address', required: true, dataType: 'email' },
+  { name: 'phone', label: 'Phone Number', required: false, dataType: 'phone' },
+  { name: 'company', label: 'Company Name', required: false, dataType: 'string' },
+  {
+    name: 'leadStatus',
+    label: 'Lead Status',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['New', 'Working', 'Qualified', 'Closed'],
+  },
+];
+
+export const CRM_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
+  contacts: {
+    entity: 'contacts',
+    module: 'crm',
+    label: 'CRM Contacts',
+    fields: CRM_CONTACTS_TARGET_FIELDS,
+  },
+  leads: {
+    entity: 'leads',
+    module: 'crm',
+    label: 'CRM Leads',
+    fields: CRM_LEADS_TARGET_FIELDS,
+  },
+};
