@@ -219,7 +219,10 @@ paths:
       operationId: addCRM3Note
       tags: [CRM-3]
       summary: Append a note to a ticket
-      description: Append a new note to a support ticket. Author and timestamp are preserved. Allowed roles - editor, admin.
+      description: >-
+        Append a new note to a support ticket. Author and timestamp are preserved. Allowed roles - editor, admin.
+        The author is the authenticated user (token sub). An authorId that names a different user
+        returns 403 AUTHOR_MISMATCH and no note is written.
       requestBody:
         required: true
         content:
@@ -389,6 +392,9 @@ components:
           minLength: 1
         authorId:
           type: string
+          description: >-
+            Optional. When authenticated, must equal the token subject or be omitted; the server
+            always records the authenticated user as author.
 
     TicketListResponse:
       type: object
