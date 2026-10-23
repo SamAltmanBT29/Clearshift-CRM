@@ -5,9 +5,15 @@ import {
   type QuotesQueryInput,
   type QuotesListResponse,
   type Deal,
+  type Quote,
+  type CreateDealInput,
+  type UpdateDealInput,
+  type CreateQuoteInput,
+  type UpdateQuoteInput,
   DealsListResponseSchema,
   StagesListResponseSchema,
   DealSchema,
+  QuoteSchema,
   QuotesListResponseSchema,
 } from '@clearshift/contracts';
 
@@ -29,7 +35,7 @@ export class Crm2ApiError extends Error {
 
 const API_BASE = '/api/v1/crm-deals';
 
-interface RequestOptions {
+export interface RequestOptions {
   signal?: AbortSignal;
   permissionHeader?: string;
   simulateError?: boolean;
@@ -42,7 +48,7 @@ async function request<T>(
 ): Promise<T> {
   const { signal, permissionHeader, simulateError, simulatePermissionDenied, ...init } = options;
 
-  const url = new URL(endpoint, window.location.origin);
+  const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
   if (simulateError) {
     url.searchParams.set('simulateError', 'true');
   }
@@ -131,6 +137,33 @@ export async function getDealById(
   return DealSchema.parse(data);
 }
 
+export async function createDeal(
+  input: CreateDealInput,
+  options?: RequestOptions
+): Promise<Deal> {
+  const data = await request<unknown>(`${API_BASE}/deals`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    ...options,
+  });
+
+  return DealSchema.parse(data);
+}
+
+export async function updateDeal(
+  id: string,
+  input: UpdateDealInput,
+  options?: RequestOptions
+): Promise<Deal> {
+  const data = await request<unknown>(`${API_BASE}/deals/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    ...options,
+  });
+
+  return DealSchema.parse(data);
+}
+
 export async function getStages(
   options?: RequestOptions
 ): Promise<StagesListResponse> {
@@ -157,4 +190,43 @@ export async function getQuotes(
   });
 
   return QuotesListResponseSchema.parse(data);
+}
+
+export async function getQuoteById(
+  id: string,
+  options?: RequestOptions
+): Promise<Quote> {
+  const data = await request<unknown>(`${API_BASE}/quotes/${id}`, {
+    method: 'GET',
+    ...options,
+  });
+
+  return QuoteSchema.parse(data);
+}
+
+export async function createQuote(
+  input: CreateQuoteInput,
+  options?: RequestOptions
+): Promise<Quote> {
+  const data = await request<unknown>(`${API_BASE}/quotes`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    ...options,
+  });
+
+  return QuoteSchema.parse(data);
+}
+
+export async function updateQuote(
+  id: string,
+  input: UpdateQuoteInput,
+  options?: RequestOptions
+): Promise<Quote> {
+  const data = await request<unknown>(`${API_BASE}/quotes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    ...options,
+  });
+
+  return QuoteSchema.parse(data);
 }
