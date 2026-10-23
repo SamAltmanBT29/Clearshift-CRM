@@ -936,6 +936,17 @@ export const CRM4_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'Batch Halt & Fault Threshold Policy',
     verificationEvidence: 'Rejection threshold triggers STOPPED_EXCESSIVE_FAILURES when rejects exceed 10%.',
   },
+  {
+    reqId: 'FR-CRM4-26',
+    requirement: 'Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.5, §4.7 & Issue #179 [CRM4-26]',
+    category: 'Migration',
+    testType: 'unit',
+    testFile: 'apps/crm/modules/crm-4/tests/kit/profiler.test.ts',
+    testSuite: 'CRM-4 Profiling Configuration & Manifest Assertions (#179 / [CRM4-26])',
+    verificationEvidence: 'profileCrm4Batch accurately computes total rows, null counts, distinct counts, invalid format rates, and 100% matches manifest defect numbers.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
