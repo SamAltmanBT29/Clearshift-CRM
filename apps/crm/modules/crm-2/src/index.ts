@@ -8,6 +8,7 @@ export const MODULE_NAME = "CRM-2 Deals, Pipeline and Quotes";
 export * from "./public.js";
 export * from "./domain/relationships.js";
 export * from "./domain/errors.js";
+export * from "./domain/duplicate-policy.js";
 export * from "./domain/qa-specs.js";
 export * from "./domain/batch-loader.js";
 export * from "./migration/target-adapter.js";

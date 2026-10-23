@@ -560,4 +560,6 @@ export const Crm2BatchExecutionReportSchema = z.object({
 });
 export type Crm2BatchExecutionReport = z.infer<typeof Crm2BatchExecutionReportSchema>;
 
+// CRM-2 Exact Duplicate Key Policy Contracts & Normalizers (CRM2-12)
+export * from './crm-2-duplicates.js';
 

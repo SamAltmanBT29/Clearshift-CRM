@@ -36,6 +36,10 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
       expect(crm2OpenApi).toContain('/batches/execute-load:');
       expect(crm2OpenApi).toContain('executeBatchLoad');
       expect(crm2OpenApi).toContain('getQuoteById');
+      expect(crm2OpenApi).toContain('/duplicates/detect:');
+      expect(crm2OpenApi).toContain('/duplicates/held:');
+      expect(crm2OpenApi).toContain('/duplicates/resolve:');
+      expect(crm2OpenApi).toContain('/duplicates/audit:');
       expect(crm2OpenApi).toContain('422');
       expect(crm2OpenApi).toContain('409');
     });

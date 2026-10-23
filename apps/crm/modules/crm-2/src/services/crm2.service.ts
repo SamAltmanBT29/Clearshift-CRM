@@ -28,6 +28,16 @@ import {
   DealsQuerySchema,
   QuotesQuerySchema,
   Crm2ImportRowSchema,
+  type Crm2DetectDuplicatesInput,
+  type Crm2ResolveDuplicateInput,
+  type Crm2DuplicateCandidate,
+  type Crm2DuplicateAuditLogEntry,
+  type DealCandidate,
+  type DealDuplicateEvaluationResult,
+  type QuoteCandidate,
+  type QuoteDuplicateEvaluationResult,
+  evaluateDealDuplicate,
+  evaluateQuoteDuplicate,
 } from '@clearshift/contracts';
 import type { ReferenceResolver } from '@cs/kernel';
 import {
@@ -35,6 +45,12 @@ import {
   type Crm2BatchLoaderOptions,
   type Crm2RowProcessorFn,
 } from '../domain/batch-loader.js';
+import {
+  ExactKeyRegistry,
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+  type DuplicateDetectionResult,
+} from '../domain/duplicate-policy.js';
 import {
   DealNotFoundError,
   QuoteNotFoundError,
@@ -127,6 +143,8 @@ export class Crm2Service {
   private importReceipts: Crm2ImportReceipt[] = [];
   private batchReports: Map<string, BatchExecutionReport> = new Map();
   private contactResolver: ReferenceResolver;
+  private duplicateQueue: DuplicateReviewQueue = new DuplicateReviewQueue();
+  private keyRegistry: ExactKeyRegistry = new ExactKeyRegistry();
 
   constructor(options: Crm2ServiceOptions = {}) {
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
@@ -144,6 +162,8 @@ export class Crm2Service {
   public resetStore(): void {
     this.importReceipts = [];
     this.batchReports.clear();
+    this.duplicateQueue.clear();
+    this.keyRegistry = new ExactKeyRegistry();
     this.seedSyntheticData();
   }
 
@@ -690,6 +710,7 @@ export class Crm2Service {
   }
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Chunked Batch Load Execution & Idempotent Retries (CRM2-13)
   // ---------------------------------------------------------------------------
 
@@ -739,6 +760,95 @@ export class Crm2Service {
 
   public getBatchReport(batchId: string): BatchExecutionReport | undefined {
     return this.batchReports.get(batchId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Exact Duplicate Key Policy & Human Review Audit (CRM2-12 / KIT-10)
+  // ---------------------------------------------------------------------------
+
+  public detectDuplicates(input: Crm2DetectDuplicatesInput): DuplicateDetectionResult {
+    const result = detectExactDuplicates(input.records, input.keyType, {
+      batchId: input.batchId,
+      entity: input.entity,
+      registry: this.keyRegistry,
+      autoMerge: input.autoMerge,
+    });
+    this.duplicateQueue.addCandidates(result.duplicateCandidates);
+    return result;
+  }
+
+  public getHeldDuplicates(query?: {
+    batchId?: string;
+    keyType?: string;
+    entity?: string;
+  }): Crm2DuplicateCandidate[] {
+    return this.duplicateQueue.listHeld(query);
+  }
+
+  public resolveDuplicate(input: Crm2ResolveDuplicateInput): Crm2DuplicateAuditLogEntry {
+    const audit = this.duplicateQueue.resolve(input);
+
+    // If decision is MERGE, handle target-side consolidation
+    if (input.decision === 'MERGE') {
+      const keptDeal = this.deals.find((d) => d.id === input.keptId);
+      const mergedDealIndex = this.deals.findIndex((d) => d.id === input.mergedId);
+      if (keptDeal && mergedDealIndex !== -1) {
+        // Reassign child quotes pointing to mergedId over to keptId
+        for (let i = 0; i < this.quotes.length; i++) {
+          if (this.quotes[i]!.deal_id === input.mergedId) {
+            this.quotes[i] = {
+              ...this.quotes[i]!,
+              deal_id: input.keptId,
+              updated_at: new Date().toISOString(),
+            };
+          }
+        }
+      }
+    }
+
+    return audit;
+  }
+
+  public getDuplicateAuditLogs(query?: {
+    candidateId?: string;
+    actorId?: string;
+    entity?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    return this.duplicateQueue.getAuditLogs(query);
+  }
+
+  public evaluateDealDuplicate(candidate: DealCandidate): DealDuplicateEvaluationResult {
+    const pool = this.deals.map((d) => ({
+      id: d.id,
+      name: d.name,
+      stageId: d.stage_id,
+      stageName: d.stage_name,
+      contactId: d.contact_id,
+      value: d.value,
+      currency: d.currency,
+    }));
+    return evaluateDealDuplicate(candidate, pool);
+  }
+
+  public evaluateQuoteDuplicate(candidate: QuoteCandidate): QuoteDuplicateEvaluationResult {
+    const pool = this.quotes.map((q) => ({
+      id: q.id,
+      quoteNumber: q.quote_number,
+      dealId: q.deal_id,
+      amount: q.amount,
+      currency: q.currency,
+    }));
+    return evaluateQuoteDuplicate(candidate, pool);
+  }
+
+  public getKeyRegistry(): ExactKeyRegistry {
+    return this.keyRegistry;
+  }
+
+  public getDuplicateQueue(): DuplicateReviewQueue {
+    return this.duplicateQueue;
   }
 }
 

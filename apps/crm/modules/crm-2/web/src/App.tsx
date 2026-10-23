@@ -4,6 +4,7 @@ import { DealDetailPage } from './pages/DealDetailPage.js';
 import { DealFormPage } from './pages/DealFormPage.js';
 import { QuoteFormPage } from './pages/QuoteFormPage.js';
 import { BatchLoaderPage } from './pages/BatchLoaderPage.js';
+import { DuplicateReviewPage } from './pages/DuplicateReviewPage.js';
 import type { Deal } from '@clearshift/contracts';
 import { Button } from '@clearshift/ui';
 
@@ -14,7 +15,8 @@ export type ViewState =
   | { type: 'edit-deal'; dealId: string }
   | { type: 'create-quote'; dealId: string; deal?: Deal | undefined }
   | { type: 'edit-quote'; dealId: string; quoteId: string }
-  | { type: 'batch-loader' };
+  | { type: 'batch-loader' }
+  | { type: 'duplicates' };
 
 export function App() {
   const [view, setView] = useState<ViewState>({ type: 'list' });
@@ -48,6 +50,14 @@ export function App() {
               className="text-xs bg-slate-800 border-slate-700 text-slate-200"
             >
               {view.type === 'batch-loader' ? 'Deals List' : 'Batch Loader'}
+            </Button>
+            <Button
+              variant={view.type === 'duplicates' ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setView((prev) => (prev.type === 'duplicates' ? { type: 'list' } : { type: 'duplicates' }))}
+              className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+            >
+              {view.type === 'duplicates' ? 'Deals List' : 'Duplicate Review'}
             </Button>
             <Button
               variant={simulateDenied ? 'danger' : 'outline'}
@@ -137,6 +147,10 @@ export function App() {
           <BatchLoaderPage
             onBackToList={() => setView({ type: 'list' })}
           />
+        )}
+
+        {view.type === 'duplicates' && (
+          <DuplicateReviewPage onBackToList={() => setView({ type: 'list' })} />
         )}
       </main>
     </div>
