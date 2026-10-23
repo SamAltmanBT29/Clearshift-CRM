@@ -1,7 +1,15 @@
 import React from 'react';
 import { DataTable } from '../components/DataTable.js';
+import { FilterToolbar } from '../components/FilterToolbar.js';
 import { COMPANIES_COLUMNS } from '../table/columns.js';
-import type { TableSortState, TablePaginationState } from '../table/types.js';
+import { CRM1_COMPANIES_FACETS } from '../table/facets.js';
+import type {
+  TableSortState,
+  TablePaginationState,
+  TableFilterState,
+  ActiveFilterPill,
+  FilterFacet,
+} from '../table/types.js';
 
 export interface CompaniesListPageProps {
   data?: Record<string, unknown>[];
@@ -12,11 +20,21 @@ export interface CompaniesListPageProps {
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
   onPageChange?: ((newPage: number) => void) | undefined;
+  search?: string;
+  onSearchChange?: ((term: string) => void) | undefined;
+  filters?: TableFilterState;
+  onFilterChange?: ((key: string, value: string) => void) | undefined;
+  onRemoveFilter?: ((key: string) => void) | undefined;
+  onClearAllFilters?: (() => void) | undefined;
+  activePills?: ActiveFilterPill[];
+  facets?: FilterFacet[];
+  hasActiveFilters?: boolean;
 }
 
 /**
  * Companies List Page Shell
- * Integrates with /api/v1/crm-contacts/companies and paginated DataTable
+ * Integrates with /api/v1/crm-contacts/companies, FilterToolbar, and paginated DataTable.
+ * Conforms to ClearShift V1 Issue #111 (CRM1-18).
  */
 export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
   data = [],
@@ -27,8 +45,22 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
   onSortChange,
   pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
   onPageChange,
+  search = '',
+  onSearchChange,
+  filters = {},
+  onFilterChange,
+  onRemoveFilter,
+  onClearAllFilters,
+  activePills = [],
+  facets = CRM1_COMPANIES_FACETS,
+  hasActiveFilters = false,
 }) => {
   const displayData = isEmpty ? [] : data;
+  const isFiltersActive =
+    hasActiveFilters ||
+    Boolean(search.trim().length > 0) ||
+    Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
+    activePills.length > 0;
 
   return (
     <div className="cs-page-container">
@@ -38,6 +70,20 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
           Browse and manage accounts, tax numbers, contact affiliations, and corporate addresses.
         </p>
       </div>
+
+      {onSearchChange && onFilterChange && (
+        <FilterToolbar
+          search={search}
+          onSearchChange={onSearchChange}
+          facets={facets}
+          filters={filters}
+          onFilterChange={onFilterChange}
+          activePills={activePills}
+          onRemoveFilter={onRemoveFilter ?? (() => {})}
+          onClearAll={onClearAllFilters ?? (() => {})}
+          searchPlaceholder="Search companies by name, tax ID, or domain..."
+        />
+      )}
 
       {isLoading && (
         <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading companies list">
@@ -59,8 +105,14 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
           columns={COMPANIES_COLUMNS}
           data={displayData}
           loading={false}
-          emptyTitle="No records found"
-          emptyDescription="No company records currently registered. Register an account or import accounts from source files."
+          emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
+          emptyDescription={
+            isFiltersActive
+              ? 'No companies match your search and filter criteria. Try adjusting your search term or clearing filters.'
+              : 'No company records currently registered. Register an account or import accounts from source files.'
+          }
+          hasActiveFilters={isFiltersActive}
+          onClearFilters={onClearAllFilters}
           sort={sort}
           onSortChange={onSortChange}
           pagination={pagination}

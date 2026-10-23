@@ -11,6 +11,8 @@ export interface DataTableProps<T = Record<string, unknown>> {
   loading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  hasActiveFilters?: boolean;
+  onClearFilters?: (() => void) | undefined;
   sort?: TableSortState | undefined;
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination: TablePaginationState;
@@ -23,6 +25,8 @@ export const DataTable = <T extends Record<string, unknown>>({
   loading = false,
   emptyTitle = 'No records found',
   emptyDescription = 'There are no records matching your current filter criteria.',
+  hasActiveFilters = false,
+  onClearFilters,
   sort,
   onSortChange,
   pagination,
@@ -44,6 +48,33 @@ export const DataTable = <T extends Record<string, unknown>>({
 
   // 2. Mandatory Empty State
   if (data.length === 0) {
+    if (hasActiveFilters) {
+      return (
+        <div className="cs-table-card" role="status">
+          <div className="cs-empty-state cs-empty-filter-state">
+            <div className="cs-empty-icon" aria-hidden="true">🔍</div>
+            <h3 className="cs-empty-title">
+              {emptyTitle === 'No records found' ? 'No matching records found' : emptyTitle}
+            </h3>
+            <p className="cs-empty-text">
+              {emptyDescription === 'There are no records matching your current filter criteria.'
+                ? 'No records matched your search and filter criteria. Try adjusting your search term or clearing filters.'
+                : emptyDescription}
+            </p>
+            {onClearFilters && (
+              <button
+                type="button"
+                className="cs-clear-all-filters-btn cs-empty-reset-btn"
+                onClick={onClearFilters}
+              >
+                Reset All Filters
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="cs-table-card" role="status">
         <div className="cs-empty-state">
