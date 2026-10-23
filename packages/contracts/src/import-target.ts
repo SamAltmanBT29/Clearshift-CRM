@@ -25,9 +25,26 @@ export const Crm1TargetEntitySchema = z.enum([
 ]);
 export type Crm1TargetEntity = z.infer<typeof Crm1TargetEntitySchema>;
 
+/**
+ * Target Entities owned by CRM-2 Deals, Pipeline and Quotes
+ */
+export const Crm2TargetEntitySchema = z.enum([
+  'deals',
+  'quotes',
+  'stages',
+  'quote_lines',
+  'quoteLines',
+  'deal',
+  'quote',
+  'stage',
+  'quote_line',
+]);
+export type Crm2TargetEntity = z.infer<typeof Crm2TargetEntitySchema>;
+
 export const GenericTargetEntitySchema = z.union([
   Crm5TargetEntitySchema,
   Crm1TargetEntitySchema,
+  Crm2TargetEntitySchema,
   z.string().min(1).max(64),
 ]);
 export type GenericTargetEntity = z.infer<typeof GenericTargetEntitySchema>;

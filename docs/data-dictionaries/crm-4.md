@@ -85,3 +85,38 @@
 3. **List Immutability:** Campaigns belong to one list throughout their lifecycle; reassignment is rejected.
 4. **Member Status Allowlist:** Only `sent`, `opened`, and `clicked` are valid statuses.
 5. **Security & RBAC:** All routes require `Capabilities.MODULE_READ`. Unauthenticated sessions are redirected to Hub login with returnUrl preservation.
+
+---
+
+## 4. Security, Authorization & Audit Architecture (Issue #44 / [CRM4-15])
+
+### 4.1 Hub Identity Authentication & Asymmetric Verification
+- EdDSA asymmetric token validation issued by `clearshift-hub` for audience `clearshift`.
+- Token expiration check and disabled account rejection (`disabled: true` returns HTTP 401).
+
+### 4.2 Endpoint Role Capability Matrix (SDS ClearShift CRM v2.0 §4 / §7.1)
+
+| Endpoint | Method | Allowed Roles | Prohibited Roles (HTTP 403) |
+|---|---|---|---|
+| `/api/v1/crm-marketing/lists` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/lists` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/lists/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/lists/:id` | `PATCH` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/campaigns` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id` | `PATCH` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id/members` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id/members` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/consents` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/consents/:contact` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id/export` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+
+### 4.3 Field-Level Protection & Masking
+- Bank details formatted as `XXXX-XXXX-7890` (preserving only last 4 digits).
+- Salary values formatted as `XX,XXX` or `salary hidden`.
+- Neutralization of CSV formula injection (`=`, `+`, `-`, `@`, `\t`, `\r` escaped with leading apostrophe `'`).
+- Sensitive object redaction and log sanitization preventing credentials, tokens, and raw rows from leaking into logs or audit records.
+
+### 4.4 Append-Only Audit Logging
+- Managed by `Crm4AuditService` recording actor, action, timestamp, entity, correlation, outcome, and pre-redacted diffs without plain secrets.
