@@ -553,4 +553,54 @@ Conforms to standard outbox event envelope mandated by PLT-04 & PLT-09:
 * **Status:** Approved & Frozen for V1
 * **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
 
+---
 
+## 16. Module Authorization Policy Integration & Multi-Tenant Boundary Controls (Gate G2 / CRM5-04 / Issue #188)
+
+### 16.1 Scope & Architecture Alignment
+In accordance with SDS ClearShift CRM v2.0 §4.8, PLT-05, and PLT-06, CRM-5 Migration Control Center and Reports strictly integrates with shared platform identity (`@cs/identity`) and capability-based authorization (`@cs/rbac`). The module exposes zero custom authentication utilities, consuming the shared EdDSA/JWKS token verification infrastructure.
+
+### 16.2 SDS Role Capability Matrix (V1 CRM-5 Endpoints)
+The 5 standard ClearShift roles map deterministically to CRM-5 operational endpoints:
+
+| Endpoint Path | HTTP Method | Allowed Roles | RBAC Capabilities | Description |
+| :--- | :---: | :--- | :--- | :--- |
+| `/health` | `GET` | *Public (Unauthenticated)* | None | Liveness & readiness container probe |
+| `/runs` | `GET` | Viewer, Analyst, Admin | `control.read`, `module.read` | Query migration execution projections |
+| `/scores` | `GET` | Analyst, Admin | `control.read` | Inspect 5-dimension quality scorecards |
+| `/rejects` | `GET` | Analyst, Admin | `control.read` | Filter row validation rejections |
+| `/reconciliation/:batch` | `GET` | Analyst, Admin | `control.read` | Inspect batch row conservation report |
+| `/batches/:batch` | `GET` | Viewer, Analyst, Admin | `control.read`, `module.read` | Aggregated batch summary telemetry |
+| `/runs` | `POST` | Migration Runner, Admin | `kit.run`, `hub.admin` | Ingest execution step run projection |
+| `/scores` | `POST` | Migration Runner, Admin | `kit.run`, `hub.admin` | Record computed quality scorecard |
+| `/reconciliation` | `POST` | Migration Runner, Admin | `kit.run`, `hub.admin` | Commit final reconciliation balance sheet |
+| `/rejects` | `POST` | Migration Runner, Admin | `kit.run`, `hub.admin` | Append rejected row audit entry |
+| `/duplicates/detect` | `POST` | Analyst, Migration Runner, Admin | `kit.run`, `control.read`, `kit.admin` | Run deterministic exact key duplicate check |
+| `/duplicates/held` | `GET` | Analyst, Admin | `control.read`, `kit.admin` | List candidates held for human review |
+| `/duplicates/resolve` | `POST` | Editor, Analyst, Admin | `kit.review`, `kit.admin` | Record explicit human review resolution |
+| `/duplicates/audit` | `GET` | Analyst, Admin | `control.read`, `kit.admin` | Audit log trail of duplicate decisions |
+| `/batches/execute-load`| `POST` | Migration Runner, Admin | `kit.run`, `kit.admin` | Trigger chunked target load execution |
+| `/import/row`, `/import`| `POST` | Migration Runner, Admin | `kit.run`, `kit.admin` | KIT target adapter single row ingestion |
+| `/import/receipts` | `GET` | Viewer, Analyst, Admin | `control.read`, `module.read` | Query durable target import receipts |
+
+### 16.3 PreHandler Authentication & RBAC Enforcement Hooks
+Every protected route registers `endpointPreHandlers(fastify, allowedRoles)` executing:
+1. `fastify.authenticate`: Validates incoming Bearer JWT signature against EdDSA/JWKS public keys, rejects expired tokens, and verifies user account status (`disabled: false`). Raises HTTP 401 Unauthorized upon failure.
+2. `requireRoles(allowedRoles)`: Enforces that `request.user.roles` intersects with the endpoint role matrix or contains `ADMIN`. Raises HTTP 403 Forbidden with standard ClearShift error envelope `{ error: { code: 'FORBIDDEN', message: 'Access denied...', details } }`.
+
+### 16.4 Object-Level Authorization & Multi-Tenant Boundary Guards
+1. **Multi-Tenant Boundary Isolation (`assertTenantIsolation`)**:
+   - Compares user's token tenant claims (`tenant_id`, `tenantId`, `org_id`, `organizationId`) against incoming request headers (`x-tenant-id`, `x-organization-id`, `x-org-id`).
+   - If a tenant header is provided that differs from the verified token tenant, the request is immediately rejected with HTTP 403 (`Multi-tenant boundary violation: token tenant '<token>' does not match request tenant header '<header>'`).
+   - Validates resource payload tenant attributes on mutation endpoints (`/runs`, `/import/row`) preventing cross-tenant data ingestion.
+2. **Record Ownership & Cross-User Mutation Prevention (`assertRecordOwnership`)**:
+   - In human review resolution workflows (`POST /duplicates/resolve`), validates that `actorId` in payload matches the authenticated caller's identity (`user.employee_id || user.sub`).
+   - Non-admin callers attempting to submit decisions on behalf of another user ID are rejected with HTTP 403 (`Access denied: unauthorized cross-user mutation for record owned by '<owner>'`).
+   - The `ADMIN` role retains universal override privilege across all tenant and ownership boundaries for disaster recovery and system maintenance.
+
+### 16.5 Versioned Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G2-001`
+* **Milestone:** Gate G2 — Architecture & Authorization Integration (Weeks 3–4)
+* **Date:** 2026-10-23
+* **Status:** Verified & Passing
+* **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)

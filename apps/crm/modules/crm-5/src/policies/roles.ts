@@ -1,4 +1,5 @@
 import { Roles, type RoleType } from '@cs/identity';
+import { Capabilities, type CapabilityType, hasCapability } from '@cs/rbac';
 
 /**
  * Exact Role Capability Matrix for CRM-5 Endpoints according to SDS ClearShift CRM v2.0 §4.8 & V1 Specs:
@@ -44,6 +45,31 @@ export const CRM5_ENDPOINT_ROLES = {
 export type Crm5EndpointKey = keyof typeof CRM5_ENDPOINT_ROLES;
 
 /**
+ * Corresponding RBAC Capabilities for CRM-5 Endpoints per SDS Section 4.3.
+ */
+export const CRM5_ENDPOINT_CAPABILITIES: Record<Crm5EndpointKey, CapabilityType[]> = {
+  RUNS_LIST: [Capabilities.CONTROL_READ, Capabilities.MODULE_READ],
+  SCORES_LIST: [Capabilities.CONTROL_READ],
+  REJECTS_LIST: [Capabilities.CONTROL_READ],
+  RECONCILIATION_READ: [Capabilities.CONTROL_READ],
+  BATCH_SUMMARY: [Capabilities.CONTROL_READ, Capabilities.MODULE_READ],
+
+  RUNS_CREATE: [Capabilities.KIT_RUN, Capabilities.HUB_ADMIN],
+  SCORES_CREATE: [Capabilities.KIT_RUN, Capabilities.HUB_ADMIN],
+  RECONCILIATION_CREATE: [Capabilities.KIT_RUN, Capabilities.HUB_ADMIN],
+  REJECTS_CREATE: [Capabilities.KIT_RUN, Capabilities.HUB_ADMIN],
+
+  DUPLICATES_DETECT: [Capabilities.KIT_RUN, Capabilities.CONTROL_READ, Capabilities.KIT_ADMIN],
+  DUPLICATES_HELD: [Capabilities.CONTROL_READ, Capabilities.KIT_ADMIN],
+  DUPLICATES_RESOLVE: [Capabilities.KIT_REVIEW, Capabilities.KIT_ADMIN],
+  DUPLICATES_AUDIT: [Capabilities.CONTROL_READ, Capabilities.KIT_ADMIN],
+
+  BATCH_EXECUTE_LOAD: [Capabilities.KIT_RUN, Capabilities.KIT_ADMIN],
+  IMPORT_ROW: [Capabilities.KIT_RUN, Capabilities.KIT_ADMIN],
+  IMPORT_RECEIPTS: [Capabilities.CONTROL_READ, Capabilities.MODULE_READ],
+};
+
+/**
  * Checks if the user roles contain at least one of the allowed roles.
  * Admin role is universally permitted across all administrative actions.
  */
@@ -55,4 +81,21 @@ export function isRoleAllowed(userRoles: RoleType[] | undefined, allowedRoles: r
     return true;
   }
   return userRoles.some((role) => allowedRoles.includes(role));
+}
+
+/**
+ * Checks if user roles satisfy the RBAC capability requirement for the given endpoint.
+ */
+export function isCapabilityAllowed(userRoles: RoleType[] | undefined, endpoint: Crm5EndpointKey): boolean {
+  if (!userRoles || userRoles.length === 0) {
+    return false;
+  }
+  if (userRoles.includes(Roles.ADMIN)) {
+    return true;
+  }
+  const requiredCaps = CRM5_ENDPOINT_CAPABILITIES[endpoint];
+  if (!requiredCaps || requiredCaps.length === 0) {
+    return false;
+  }
+  return requiredCaps.some((cap) => hasCapability(userRoles, cap));
 }

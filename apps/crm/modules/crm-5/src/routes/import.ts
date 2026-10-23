@@ -6,7 +6,7 @@ import {
 import type { RoleType } from '@cs/identity';
 import { Crm5TargetAdapter } from '../migration/target-adapter.js';
 import { CRM5_ENDPOINT_ROLES } from '../policies/roles.js';
-import { requireRoles } from '../plugins/auth.js';
+import { requireRoles, assertTenantIsolation, type AuthenticatedUser } from '../plugins/auth.js';
 import { redactSensitiveObject } from '../policies/masking.js';
 
 export interface ImportRouteOptions {
@@ -74,6 +74,12 @@ export const importRoutes: FastifyPluginAsync<ImportRouteOptions> = async (
     }
 
     const input: ImportRowInput = parsed.data;
+
+    // Multi-tenant boundary check
+    if (authEnabled && request.user) {
+      const payloadTenant = (input.data['tenant_id'] || input.data['tenantId']) as string | undefined;
+      assertTenantIsolation(request.user as AuthenticatedUser, payloadTenant, request);
+    }
 
     const alreadyExists = adapter.getReceiptByKey(input.idempotencyKey) !== undefined;
 
