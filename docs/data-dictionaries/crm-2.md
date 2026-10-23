@@ -53,7 +53,10 @@ Indexes support case-insensitive name search, contact lookup, stage filtering an
 
 Indexes support deal and quote-date lookups.
 
-### 1.4 `crm2.crm2_quote_lines`
+### 1.4 `crm2.crm2_quote_lines` (V2 Out-of-Scope)
+
+> [!NOTE]
+> **V2 Scope Traceability:** Per SDS ClearShift CRM v2.0 §5.3 ("Data model changes V2") and requirement `FR-CRM2-11`, quote line items belong to V2. This table is preserved in the database migration for forward compatibility, but is out-of-scope for ClearShift V1 core operational releases.
 
 | Field | Type | Nullability | Meaning | Constraints |
 |---|---|---|---|---|
