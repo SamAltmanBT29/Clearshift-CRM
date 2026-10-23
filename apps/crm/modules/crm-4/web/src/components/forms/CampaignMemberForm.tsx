@@ -20,7 +20,7 @@ import {
   Button,
   Alert,
   Select,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type { CRM4MemberCreate, CRM4Consent } from '@clearshift/contracts';
 import { CRM4_MEMBER_STATUSES } from '@clearshift/contracts';
 
