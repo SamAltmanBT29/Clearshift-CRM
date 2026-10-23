@@ -301,7 +301,7 @@ CRM-5 registers 5 primary sub-views under the common ClearShift layout shell:
 
 ---
 
-## 8. KIT-08 Target Adapter Contract & Durable Receipts (CRM5-11)
+## 8. KIT-08 Target Adapter Contract & Durable Receipts ([CRM5-07] — Issue #52)
 
 ### 8.1 Target Adapter Port Adherence
 CRM-5 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
