@@ -155,6 +155,31 @@
 - **Monotonic Opt-Out (BR-CRM4-01):** Known `unsubscribed` contacts cannot be reverted to `subscribed` via imports, API mutations, or forms; violations return HTTP `409 Conflict`. Adding an unsubscribed contact to a campaign immediately flags `unsubscribed = true`.
 - **Idempotency & Replay Semantics:** Mutation endpoints (`POST /lists`, `POST /campaigns`, `POST /campaigns/:id/members`, `POST /consents`) accept `Idempotency-Key` or `X-Idempotency-Key` headers (or payload keys). Replayed requests return cached receipts with `X-Idempotent-Replay: true` header without double-incrementing counters or creating duplicate entities.
 
+### 5.2 Migration Kit Target Adapter & Durable Import Receipts ([CRM4-11] — Issue #164)
+- **TargetAdapter Port Implementation:** `Crm4TargetAdapter` in [`apps/crm/modules/crm-4/src/migration/target-adapter.ts`](../../apps/crm/modules/crm-4/src/migration/target-adapter.ts) implements the `@cs/kit` `TargetAdapter` port for `crm4_records` (schema version 1).
+- **Atomic Transaction Commit:** Business record mutations and durable `ImportReceipt` records commit atomically in one local transaction. Failure of receipt commitment initiates a complete state rollback with zero orphaned mutations.
+- **Idempotency Guarantees:** Canonical payload SHA-256 hash matching on `idempotencyKey`. Exact replays return existing receipts without duplicating target rows or counters; key reuse with conflicting payloads returns `IDEMPOTENCY_CONFLICT`.
+- **Preflight Dry-Run:** `preflight(batchId, rows)` validates records and counts valid/reject rows with zero database or store mutations.
+- **Batch Loading:** `loadBatch(batchId, rows)` executes sequential type-safe loading, returning loaded receipts and structured rejection errors with standard error codes.
+- **Domain Invariant Assertions:** Strictly enforces monotonic opt-out rule (BR-CRM4-01) rejecting attempts to re-subscribe unsubscribed contacts, validates member status against `sent/opened/clicked`, and links existing members without duplicate entries.
+
+### 5.3 Relationships, State Transitions & Read-Model Consistency ([CRM4-06] — Issue #41)
+- **Cross-Module Referential Integrity Guard:** Contact references (`contactId`) are validated through the `ReferenceResolver` port (`assertContactExists`) without direct cross-module database writes or queries (satisfying Architecture Decision C7). If the referenced contact is missing in CRM-1, mutations fail immediately with HTTP `404 Not Found` (`NOT_FOUND`).
+- **Campaign Membership State Machine:**
+  - Allowed forward status transitions: `sent` -> `opened` -> `clicked` (or direct `sent` -> `clicked`).
+  - Terminal state: `clicked` permits no further transitions.
+  - Reversals (e.g. `clicked` -> `sent`, `opened` -> `sent`, `clicked` -> `opened`) and invalid status codes return HTTP `422 Unprocessable Entity` (`INVALID_STATE_TRANSITION`).
+  - Idempotent self-transitions (e.g. `opened` -> `opened`) succeed safely without state perturbation.
+- **Monotonic Opt-Out Invariant Enforcement (BR-CRM4-01):**
+  - Initial consent (`null` -> `subscribed` or `unsubscribed`) is permitted.
+  - Transition from `subscribed` to `unsubscribed` is permitted and immediately reflects in subsequent campaign memberships.
+  - Reversal from `unsubscribed` to `subscribed` is strictly rejected with HTTP `409 Conflict` (`CONFLICT`).
+- **Immediate Read-Model Consistency:**
+  - When a campaign is associated with a list, the list's `campaignCount` increments immediately.
+  - When a member is added to a campaign, both the campaign's `memberCount` and the parent list's `memberCount` reflect the updated count immediately without eventual-consistency lag.
+  - When a contact's consent changes to `unsubscribed`, new campaign membership records for that contact immediately reflect `unsubscribed = true`.
+- **Automated Verification:** Verified in domain unit and Fastify integration test suite [`apps/crm/modules/crm-4/tests/domain/relationships.test.ts`](../../apps/crm/modules/crm-4/tests/domain/relationships.test.ts).
+
 ---
 
 ## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
@@ -176,26 +201,63 @@ In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseli
 
 ---
 
-## 7. Frontend UI States Specification ([CRM4-19] — Issue #172)
+## 7. Search, Faceted Filters, and Active Filter Tags ([CRM4-18] — Issue #171)
+
+### 7.1 300ms Keystroke Debouncing Protocol
+- **Debounce Delay Window**: Free-text search inputs enforce an exact 300ms debounce interval (`SEARCH_DEBOUNCE_MS = 300`) to prevent API thrashing and unbounded server queries during rapid typing.
+- **Immediate Flush**: Pressing `Enter` or triggering explicit form submission flushes pending debounce timers immediately without waiting for the 300ms timer to expire.
+- **Instant Cancellation & Reset**: Clicking the clear icon (`×`) or pressing `Escape` clears search text, cancels pending timers, and triggers an immediate query update with an empty string.
+
+### 7.2 Faceted Filter Registry & Query Parameter Mapping
+CRM-4 collection views register structured facets mapped bi-directionally to API query parameters:
+
+| Collection / Entity | Facet Dimension | Query Key | Target Values / Options | API Mapping |
+| :--- | :--- | :--- | :--- | :--- |
+| **Marketing Lists** | **Audience Size** | `memberRange` | `empty` (0), `small` (1-50), `medium` (51-250), `large` (250+) | `memberRange=<Range>` |
+| **Marketing Lists** | **Campaign Activity** | `campaignActivity` | `active` (>0), `none` (0) | `campaignActivity=<Activity>` |
+| **Campaigns** | **Campaign Status** | `status` | `draft`, `scheduled`, `sent` | `status=<Status>` |
+| **Campaigns** | **Campaign Period** | `dateRange` | `2026`, `2025` | `dateRange=<Year>` |
+| **Campaign Members** | **Engagement Status** | `status` | `sent`, `opened`, `clicked` | `status=<MemberStatus>` |
+| **Campaign Members** | **Opt-Out Status** | `unsubscribed` | `false` (active), `true` (opted out) | `unsubscribed=<Boolean>` |
+| **Consent Records** | **Consent State** | `consentStatus` | `subscribed`, `unsubscribed` | `consentStatus=<ConsentStatus>` |
+| **Consent Records** | **Source Channel** | `source` | `web_form`, `email_unsubscribe`, `csv_import`, `manual` | `source=<Source>` |
+
+- **Pagination Reset Invariant**: Modifying any search query or faceted filter dimension immediately resets the active page to 1 (`page = 1`) to eliminate phantom pagination overflows.
+- **Bi-directional URL Synchronization**: All active filters serialize to standard URL query parameters (`toQueryParams()` / `toQueryString()`) and hydrate deterministically from `URLSearchParams` (`fromQueryParams()`).
+
+### 7.3 Active Filter Tag Lifecycle & 'Clear All' Action
+- **Active Filter Pill Tags**: When search text or any facet filter is applied, an active filter tag (`.cs-filter-pill`) is displayed containing the facet label and formatted display value (e.g. `Audience Size: 250+ Members` or `Search: "Enterprise"`).
+- **Individual Tag Dismissal**: Each pill tag features an accessible dismiss button (`.cs-filter-pill-remove`) with `aria-label="Remove filter: <Label> <Value>"`. Clicking dismiss clears only that specific filter without disturbing other active filters.
+- **Bulk 'Clear All' Reset**: When at least one filter or search is active, a 'Clear All' button (`.cs-clear-all-filters-btn`) is displayed. Activating it purges all filters and search state, resetting query parameters and table results in a single atomic transaction.
+
+### 7.4 Empty Search/Filter State Contract & Reset Recovery
+- **Dual Empty-State Contract**:
+  1. **System Empty State**: Rendered when zero data exists in the table and no filters/search are applied (e.g. *"No marketing lists recorded"*).
+  2. **Filtered Empty State (`.cs-empty-filter-state`)**: Rendered when data exists in the system but the current search and filter combination returns zero records (e.g. *"No matching marketing lists. No marketing lists match the active filter criteria. Try resetting your filters."*).
+- **Reset Recovery Button**: Filtered empty states prominently render a **"Reset All Filters"** action button (`.cs-empty-reset-btn`) that directly triggers `clearAll()`, providing immediate one-click recovery back to the unfiltered collection view.
+
+---
+
+## 8. Frontend UI States Specification ([CRM4-19] — Issue #172)
 
 Conforming to Gate G1 UI standards, ClearShift design tokens (`var(--cs-...)`), and accessibility guidelines (WCAG 2.1 AA / WAI-ARIA):
 
-### 7.1 Loading State (`TableSkeleton`)
+### 8.1 Loading State (`TableSkeleton`)
 - **Visual Presentation:** Renders table-structured shimmer placeholders with animated gradient background (`@keyframes cs-skeleton-shimmer`).
 - **Accessibility Attributes:** `role="status"`, `aria-busy="true"`, `aria-label="Loading marketing lists..."`, with `.cs-sr-only` announcement text.
 - **Configurability:** Supports configurable `rowCount`, `columnCount`, and `columnWidths`.
 
-### 7.2 Zero-Data Empty State (`EmptyState`)
+### 8.2 Zero-Data Empty State (`EmptyState`)
 - **Visual Presentation:** Clean card with contextual icon (`📁` / `🔍`), headline title, explanatory description, and action button(s).
 - **Interactive Call-to-Action:** Renders primary CTA button (e.g. `+ New List`) and optional secondary action (`Learn More`). When used after filtering, applies `.cs-empty-filter-state` with `Reset All Filters` action.
 - **Accessibility Attributes:** `role="status"`, `aria-label={title}`.
 
-### 7.3 Error Alert Banner (`ErrorAlert`)
+### 8.3 Error Alert Banner (`ErrorAlert`)
 - **Visual Presentation:** High-contrast alert banner (`#FEF2F2` background, `#FCA5A5` border, `#991B1B` typography).
 - **Security Invariant:** Internal stack traces, query syntax, node_modules, and system paths (`/Users/`, `/home/`) are strictly filtered via `sanitizeErrorMessage(rawError)` before rendering to the DOM.
 - **Accessibility & Recovery:** `role="alert"`, `aria-live="assertive"`, with keyboard-accessible `Retry` button and optional dismiss trigger.
 
-### 7.4 403 Forbidden Access-Denied View (`AccessDeniedView`)
+### 8.4 403 Forbidden Access-Denied View (`AccessDeniedView`)
 - **Visual Presentation:** Centered card with lock icon (`🔒`), `403 Forbidden` status badge, and descriptive rationale.
 - **Permission Details:** Explains missing capability (e.g. `module.read` / `marketing.view`), required role, and user's current role (`viewer`).
 - **Recovery Navigation:** Provides accessible `Return to Directory` link or custom `onBack` callback.

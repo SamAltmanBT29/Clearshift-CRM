@@ -5,5 +5,7 @@ export * from './shell/Crm4Shell.js';
 export * from './table/types.js';
 export * from './table/columns.js';
 export * from './table/DataTableController.js';
+export * from './table/facets.js';
+export * from './table/SearchFilterController.js';
 export * from './src/index.js';
 export * from './pages/MappingTemplatesPage.js';

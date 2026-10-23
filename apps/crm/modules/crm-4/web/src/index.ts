@@ -15,3 +15,7 @@ export * from './pages/ListFormPage.js';
 export * from './pages/CampaignFormPage.js';
 export * from './pages/CampaignDetailPage.js';
 export * from './pages/ConsentFormPage.js';
+export * from './components/SearchInput.js';
+export * from './components/ActiveFilterPills.js';
+export * from './components/FacetedFilterSidebar.js';
+export * from './components/FilterToolbar.js';
