@@ -7,6 +7,7 @@ import {
   Alert,
 } from '@cs/ui';
 import type { CRM4List } from '@clearshift/contracts';
+import type { TableSortState } from '../../table/types.js';
 import { getMarketingLists, Crm4ApiError } from '../api/crm-4.js';
 import { MarketingListsTable } from '../components/MarketingListsTable.js';
 
@@ -19,6 +20,8 @@ export interface MarketingListsPageProps {
   initialLists?: CRM4List[] | undefined;
   initialTotalCount?: number | undefined;
   initialTotalPages?: number | undefined;
+  initialSort?: TableSortState | undefined;
+  onSortChange?: ((sort: TableSortState) => void) | undefined;
   getMarketingListsFn?: typeof getMarketingLists | undefined;
   forceLoading?: boolean | undefined;
   forceError?: Error | Crm4ApiError | null | undefined;
@@ -34,6 +37,8 @@ export function MarketingListsPage({
   initialLists,
   initialTotalCount,
   initialTotalPages,
+  initialSort,
+  onSortChange: onSortChangeProp,
   getMarketingListsFn = getMarketingLists,
   forceLoading,
   forceError,
@@ -42,6 +47,7 @@ export function MarketingListsPage({
   // Query state
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort] = useState<TableSortState | undefined>(initialSort);
   const pageSize = 10;
 
   // Data state
@@ -122,6 +128,21 @@ export function MarketingListsPage({
       setSearch('');
       setCurrentPage(1);
     });
+  };
+
+  const handleSortChange = (columnKey: string) => {
+    let nextSort: TableSortState;
+    if (sort?.columnKey === columnKey) {
+      nextSort = {
+        columnKey,
+        direction: sort.direction === 'asc' ? 'desc' : 'asc',
+      };
+    } else {
+      nextSort = { columnKey, direction: 'asc' };
+    }
+    setSort(nextSort);
+    setCurrentPage(1);
+    onSortChangeProp?.(nextSort);
   };
 
   return (
@@ -252,6 +273,8 @@ export function MarketingListsPage({
             }
             onSelectList={onSelectList}
             onViewCampaigns={onViewCampaigns}
+            sort={sort}
+            onSortChange={handleSortChange}
           />
 
           {/* Bounded Server Pagination */}

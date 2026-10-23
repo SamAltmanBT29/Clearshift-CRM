@@ -95,7 +95,7 @@ export const crm3ImportBatches = crm3Schema.table(
     check("crm3_import_batches_source_system_nonempty_check", sql`length(btrim(${table.sourceSystem})) > 0`),
     check(
       "crm3_import_batches_status_check",
-      sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`
+      sql`${table.status} IN ('pending', 'processing', 'completed', 'failed', 'stopped_excessive_failures')`
     ),
     check("crm3_import_batches_loaded_count_check", sql`${table.loadedCount} >= 0`),
     check("crm3_import_batches_rejected_count_check", sql`${table.rejectedCount} >= 0`),
