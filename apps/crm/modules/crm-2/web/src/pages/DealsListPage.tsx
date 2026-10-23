@@ -20,6 +20,7 @@ import { DealsTable } from '../components/DealsTable.js';
 export interface DealsListPageProps {
   simulatePermissionDenied?: boolean;
   simulateError?: boolean;
+  onCreateDeal?: () => void;
   onSelectDeal?: (deal: Deal) => void;
   onViewQuotes?: (deal: Deal) => void;
 }
@@ -27,6 +28,7 @@ export interface DealsListPageProps {
 export function DealsListPage({
   simulatePermissionDenied = false,
   simulateError = false,
+  onCreateDeal,
   onSelectDeal,
   onViewQuotes,
 }: DealsListPageProps) {
@@ -157,6 +159,16 @@ export function DealsListPage({
           >
             Refresh
           </Button>
+          {onCreateDeal && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onCreateDeal}
+              aria-label="Create new deal opportunity"
+            >
+              + New Deal
+            </Button>
+          )}
         </div>
       </div>
 
