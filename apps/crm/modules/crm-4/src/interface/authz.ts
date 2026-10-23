@@ -33,6 +33,7 @@ export const CRM4_ENDPOINT_CAPABILITIES: Record<Crm4EndpointKey, CapabilityType>
 
   MEMBERS_LIST: Capabilities.MODULE_READ,
   MEMBERS_CREATE: Capabilities.MODULE_WRITE,
+  MEMBERS_UPDATE: Capabilities.MODULE_WRITE,
 
   CONSENTS_READ: Capabilities.MODULE_READ,
   CONSENTS_SET: Capabilities.MODULE_WRITE,
