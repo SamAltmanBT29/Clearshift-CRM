@@ -4,16 +4,20 @@ import {
   type Stage,
   type Quote,
   type DealsQuery,
+  type DealsQueryInput,
   type DealsListResponse,
   type CreateDealInput,
   type UpdateDealInput,
   type QuotesQuery,
+  type QuotesQueryInput,
   type QuotesListResponse,
   type CreateQuoteInput,
   type UpdateQuoteInput,
   type Crm2StageName,
   type Crm2ImportRow,
   type Crm2ImportReceipt,
+  type BatchExecutionReport,
+  type ExecuteBatchLoadInput,
   CRM2_STAGE_SEEDS,
   CRM2_STAGES,
   assertValidStageName,
@@ -36,6 +40,11 @@ import {
   evaluateQuoteDuplicate,
 } from '@clearshift/contracts';
 import type { ReferenceResolver } from '@cs/kernel';
+import {
+  executeCrm2ChunkedBatchLoad,
+  type Crm2BatchLoaderOptions,
+  type Crm2RowProcessorFn,
+} from '../domain/batch-loader.js';
 import {
   ExactKeyRegistry,
   DuplicateReviewQueue,
@@ -132,6 +141,7 @@ export class Crm2Service {
   private deals: Deal[] = [];
   private quotes: Quote[] = [];
   private importReceipts: Crm2ImportReceipt[] = [];
+  private batchReports: Map<string, BatchExecutionReport> = new Map();
   private contactResolver: ReferenceResolver;
   private duplicateQueue: DuplicateReviewQueue = new DuplicateReviewQueue();
   private keyRegistry: ExactKeyRegistry = new ExactKeyRegistry();
@@ -151,6 +161,7 @@ export class Crm2Service {
 
   public resetStore(): void {
     this.importReceipts = [];
+    this.batchReports.clear();
     this.duplicateQueue.clear();
     this.keyRegistry = new ExactKeyRegistry();
     this.seedSyntheticData();
@@ -317,7 +328,7 @@ export class Crm2Service {
   // Deals API & Business Logic
   // ---------------------------------------------------------------------------
 
-  public async getDeals(query: DealsQuery): Promise<DealsListResponse> {
+  public async getDeals(query: DealsQueryInput = {}): Promise<DealsListResponse> {
     const parsedQuery = DealsQuerySchema.parse(query);
     const { page, pageSize, search, stage } = parsedQuery;
 
@@ -477,7 +488,7 @@ export class Crm2Service {
   // Quotes API & Business Logic
   // ---------------------------------------------------------------------------
 
-  public async getQuotes(query: QuotesQuery): Promise<QuotesListResponse> {
+  public async getQuotes(query: QuotesQueryInput = {}): Promise<QuotesListResponse> {
     const parsedQuery = QuotesQuerySchema.parse(query);
     const { page, pageSize, deal_id } = parsedQuery;
 
@@ -696,6 +707,59 @@ export class Crm2Service {
 
   public getReceiptByKey(key: string): Crm2ImportReceipt | undefined {
     return this.importReceipts.find((r) => r.idempotencyKey === key);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Chunked Batch Load Execution & Idempotent Retries (CRM2-13)
+  // ---------------------------------------------------------------------------
+
+  public async executeBatchLoad(
+    input: ExecuteBatchLoadInput,
+    options?: Crm2BatchLoaderOptions
+  ): Promise<BatchExecutionReport> {
+    const defaultWorker: Crm2RowProcessorFn = async (record) => {
+      const data = record.data as Record<string, unknown>;
+      const isQuote = Boolean(
+        data['quote_number'] ||
+        data['quoteNumber'] ||
+        data['deal_id'] ||
+        data['dealId'] ||
+        data['entity'] === 'quote'
+      );
+      const entity = isQuote ? 'quote' : 'deal';
+
+      const importResult = await this.importRow(
+        {
+          batchId: input.batchId,
+          sourceRow: record.sourceRow,
+          sourceSystem: (data['sourceSystem'] as string) || (data['source_system'] as string) || 'crm2_batch_loader',
+          entity,
+          idempotencyKey: record.idempotencyKey,
+          data,
+        },
+        record.idempotencyKey
+      );
+
+      return {
+        targetId: importResult.targetId,
+        kind: importResult.isExisting ? 'linked' : 'created',
+      };
+    };
+
+    const loaderOptions: Crm2BatchLoaderOptions = {
+      baseBackoffMs: options?.baseBackoffMs,
+      sleepFn: options?.sleepFn,
+      worker: options?.worker ?? defaultWorker,
+    };
+
+    const report = await executeCrm2ChunkedBatchLoad(input, loaderOptions);
+    this.batchReports.set(input.batchId, report);
+    return report;
+  }
+
+  public getBatchReport(batchId: string): BatchExecutionReport | undefined {
+    return this.batchReports.get(batchId);
   }
 
   // ---------------------------------------------------------------------------

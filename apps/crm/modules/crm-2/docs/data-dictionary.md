@@ -164,3 +164,25 @@ To prevent data contamination and duplicate records during migration and ongoing
 - **Source System Pair Key (`source_key`)**: `${lower(source_system)}:${btrim(source_id)}`
 - **Shared Platform Keys**: `email` (`btrim(lower(email))`), `tax_id` (`upper(replace(nonAlphanumeric, ''))`), `sku` (`btrim(upper(sku))`).
 
+---
+
+## 4. Chunked Batch Ingestion & Partial-Load Stop Behavior (CRM2-13)
+
+### 4.1 500-Row Chunked Processing
+All load operations slice large input datasets into sequential chunks of 500 records (`CRM2_DEFAULT_CHUNK_SIZE = 500`). This bounds PostgreSQL transaction sizes, memory allocation, and connection lock retention.
+
+### 4.2 Idempotent Retry with Bounded Exponential Backoff
+Transient worker or infrastructure failures trigger bounded exponential backoff retries:
+$$\text{delay} = \text{baseBackoffMs} \times 2^{\text{attempt}}$$
+* **Maximum Retries:** Default 3 attempts (`CRM2_DEFAULT_MAX_RETRIES = 3`).
+* **Idempotency Protection:** The unique `idempotencyKey` passed per source row is strictly preserved across all retry attempts and never mutated or corrupted.
+
+### 4.3 10% Partial-Load Stop Policy (`STOPPED_EXCESSIVE_FAILURES`)
+To prevent cascading data corruption:
+$$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemptedRows}}$$
+* When `cumulativeAttemptedRows >= 50` and `failureRate > 0.10` (10%):
+  1. Batch execution ceases immediately.
+  2. Batch status transitions to `STOPPED_EXCESSIVE_FAILURES`.
+  3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
+  4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
+

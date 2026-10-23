@@ -9,6 +9,7 @@ import {
   UpdateQuoteInputSchema,
   Crm2ImportRowSchema,
   type Crm2ImportRow,
+  Crm2ExecuteBatchLoadInputSchema,
   Crm2DetectDuplicatesInputSchema,
   Crm2ResolveDuplicateInputSchema,
   Crm2EvaluateDealDuplicateInputSchema,
@@ -447,6 +448,69 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
     const receipts = service.getReceipts();
     return reply.status(200).send({
       items: receipts,
+      correlation_id: getCorrelationId(request),
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 11b. POST /batches/execute-load and POST /import/batch (CRM2-13 Batch Loading)
+  // ---------------------------------------------------------------------------
+  const handleExecuteBatchLoad = async (request: FastifyRequest, reply: any) => {
+    const correlation_id = getCorrelationId(request);
+    const body = (request.body && typeof request.body === 'object') ? (request.body as Record<string, unknown>) : {};
+
+    const parsed = Crm2ExecuteBatchLoadInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid batch load input',
+        details: parsed.error.issues,
+        correlation_id,
+      });
+    }
+
+    try {
+      const report = await service.executeBatchLoad(parsed.data);
+      return reply.status(200).send({
+        ...report,
+        correlation_id,
+      });
+    } catch (err: any) {
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({
+          code: err.code,
+          message: err.message,
+          details: err.details,
+          correlation_id,
+        });
+      }
+      throw err;
+    }
+  };
+
+  fastify.post('/batches/execute-load', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.IMPORT_WRITE, authEnabled),
+  }, handleExecuteBatchLoad);
+
+  fastify.post('/import/batch', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.IMPORT_WRITE, authEnabled),
+  }, handleExecuteBatchLoad);
+
+  fastify.get<{ Params: { batchId: string } }>('/batches/:batchId/report', {
+    preHandler: endpointPreHandlers(fastify, CRM2_ENDPOINT_ROLES.IMPORT_RECEIPTS, authEnabled),
+  }, async (request, reply) => {
+    const report = service.getBatchReport(request.params.batchId);
+    if (!report) {
+      return reply.status(404).send({
+        code: 'NOT_FOUND',
+        message: `Batch report for batch '${request.params.batchId}' not found`,
+        details: [],
+        correlation_id: getCorrelationId(request),
+      });
+    }
+
+    return reply.status(200).send({
+      ...report,
       correlation_id: getCorrelationId(request),
     });
   });
