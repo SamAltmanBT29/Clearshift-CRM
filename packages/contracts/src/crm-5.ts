@@ -328,6 +328,38 @@ export const UpdateRunInputSchema = z.object({
 });
 export type UpdateRunInput = z.infer<typeof UpdateRunInputSchema>;
 
+export const RunFormInputSchema = z
+  .object({
+    batchId: z
+      .string()
+      .min(1, 'Batch ID is required')
+      .max(128, 'Batch ID cannot exceed 128 characters'),
+    module: CrmModuleSchema,
+    step: MigrationStepSchema,
+    status: MigrationRunStatusSchema,
+    recordsIn: z.coerce
+      .number({ invalid_type_error: 'Records In must be a number' })
+      .int('Records In must be an integer')
+      .nonnegative('Records In cannot be negative'),
+    recordsOut: z.coerce
+      .number({ invalid_type_error: 'Records Out must be a number' })
+      .int('Records Out must be an integer')
+      .nonnegative('Records Out cannot be negative'),
+    recordsRejected: z.coerce
+      .number({ invalid_type_error: 'Records Rejected must be a number' })
+      .int('Records Rejected must be an integer')
+      .nonnegative('Records Rejected cannot be negative'),
+    notes: z.string().max(500, 'Notes cannot exceed 500 characters').optional(),
+  })
+  .refine(
+    (data) => data.recordsOut + data.recordsRejected <= data.recordsIn,
+    {
+      message: 'Invariant violation: sum of Records Out and Records Rejected cannot exceed Records In',
+      path: ['recordsOut'],
+    }
+  );
+export type RunFormInput = z.infer<typeof RunFormInputSchema>;
+
 export const CreateScoreInputSchema = z.object({
   batchId: z.string().min(1, 'batchId is required').max(128),
   module: CrmModuleSchema,

@@ -137,6 +137,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /runs/{id}:
+    get:
+      summary: Get migration run projection by ID
+      description: Returns single migration run projection record.
+      operationId: getMigrationRunById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Migration run projection found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '404':
+          description: Migration run projection not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    patch:
+      summary: Update migration run projection
+      description: Updates status or record telemetry with state transition guards and optimistic concurrency control.
+      operationId: patchMigrationRun
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRunInput'
+      responses:
+        '200':
+          description: Migration run updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Conflict (illegal state transition or concurrent modification)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   /scores:
 
     get:
@@ -975,6 +1043,32 @@ components:
           nullable: true
         idempotencyKey:
           type: string
+
+    UpdateRunInput:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, running, completed, failed, halted]
+        recordsIn:
+          type: integer
+          minimum: 0
+        recordsOut:
+          type: integer
+          minimum: 0
+        recordsRejected:
+          type: integer
+          minimum: 0
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        expectedUpdatedAt:
+          type: string
+          format: date-time
 
     CreateScoreInput:
       type: object
