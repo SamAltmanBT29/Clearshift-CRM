@@ -19,7 +19,14 @@ import { CRM1_ENDPOINT_ROLES } from '../policies/roles.js';
 import { redactSensitiveObject } from '../policies/masking.js';
 import { Crm1Service } from '../services/crm1.service.js';
 import { Crm1AuditService, crm1Audit } from '../services/audit.js';
+import { crm1CleaningService } from '../services/crm1-cleaning.service.js';
 import { DomainValidationError } from '../domain/errors.js';
+import {
+  createEndpointAuthPreHandlers,
+  assertObjectMutationAllowed,
+  assertTenantIsolation,
+  type Crm1TokenClaims,
+} from '../interface/authz.js';
 
 const UuidSchema = z.string().uuid();
 
@@ -30,9 +37,16 @@ export interface Crm1RouteOptions {
 
 function endpointPreHandlers(
   fastify: FastifyInstance,
-  allowedRoles: readonly RoleType[]
+  allowedRolesOrKey: readonly RoleType[] | keyof typeof CRM1_ENDPOINT_ROLES,
+  requireObjectGuard = false
 ) {
-  return [fastify.authenticate, requireRoles(allowedRoles)];
+  if (typeof allowedRolesOrKey === 'string') {
+    return createEndpointAuthPreHandlers(fastify, {
+      endpointKey: allowedRolesOrKey,
+      requireObjectGuard,
+    });
+  }
+  return [fastify.authenticate, requireRoles(allowedRolesOrKey)];
 }
 
 /**
@@ -62,7 +76,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.get('/contacts', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_LIST),
+    preHandler: endpointPreHandlers(fastify, 'CONTACTS_LIST'),
   }, async (request, reply) => {
     const parsed = ContactsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -80,7 +94,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.get<{ Params: { id: string } }>('/contacts/:id', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_READ),
+    preHandler: endpointPreHandlers(fastify, 'CONTACTS_READ'),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -103,12 +117,28 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
+    assertTenantIsolation(
+      request.user as Crm1TokenClaims,
+      (contact as any).tenantId || (contact as any).tenant_id,
+      request
+    );
+
     return reply.status(200).send(redactSensitiveObject(contact));
   });
 
   fastify.post('/contacts', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_CREATE),
+    preHandler: endpointPreHandlers(fastify, 'CONTACTS_CREATE'),
   }, async (request, reply) => {
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'contact',
+        payload: request.body as Record<string, unknown>,
+        isUpdate: false,
+      },
+      request
+    );
+
     const parsed = CreateContactInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -118,6 +148,17 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
           details: parsed.error.issues,
         },
       });
+    }
+
+    if (parsed.data.companyId) {
+      const company = await service.getCompanyById(parsed.data.companyId);
+      if (company) {
+        assertTenantIsolation(
+          request.user as Crm1TokenClaims,
+          (company as any).tenantId || (company as any).tenant_id,
+          request
+        );
+      }
     }
 
     try {
@@ -154,7 +195,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.patch<{ Params: { id: string } }>('/contacts/:id', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_UPDATE),
+    preHandler: endpointPreHandlers(fastify, 'CONTACTS_UPDATE', true),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -167,6 +208,29 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
+    const existing = await service.getContactById(id);
+    if (!existing) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Contact with ID '${id}' not found`,
+        },
+      });
+    }
+
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'contact',
+        resourceId: id,
+        resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
+        resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
+        payload: request.body as Record<string, unknown>,
+        isUpdate: true,
+      },
+      request
+    );
+
     const parsed = UpdateContactInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -176,6 +240,17 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
           details: parsed.error.issues,
         },
       });
+    }
+
+    if (parsed.data.companyId) {
+      const company = await service.getCompanyById(parsed.data.companyId);
+      if (company) {
+        assertTenantIsolation(
+          request.user as Crm1TokenClaims,
+          (company as any).tenantId || (company as any).tenant_id,
+          request
+        );
+      }
     }
 
     try {
@@ -218,7 +293,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.get('/companies', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_LIST),
+    preHandler: endpointPreHandlers(fastify, 'COMPANIES_LIST'),
   }, async (request, reply) => {
     const parsed = CompaniesQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -236,7 +311,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.get<{ Params: { id: string } }>('/companies/:id', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_READ),
+    preHandler: endpointPreHandlers(fastify, 'COMPANIES_READ'),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -259,12 +334,28 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
+    assertTenantIsolation(
+      request.user as Crm1TokenClaims,
+      (company as any).tenantId || (company as any).tenant_id,
+      request
+    );
+
     return reply.status(200).send(redactSensitiveObject(company));
   });
 
   fastify.post('/companies', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_CREATE),
+    preHandler: endpointPreHandlers(fastify, 'COMPANIES_CREATE'),
   }, async (request, reply) => {
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'company',
+        payload: request.body as Record<string, unknown>,
+        isUpdate: false,
+      },
+      request
+    );
+
     const parsed = CreateCompanyInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -295,7 +386,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.patch<{ Params: { id: string } }>('/companies/:id', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_UPDATE),
+    preHandler: endpointPreHandlers(fastify, 'COMPANIES_UPDATE', true),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -307,6 +398,29 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
         },
       });
     }
+
+    const existing = await service.getCompanyById(id);
+    if (!existing) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Company with ID '${id}' not found`,
+        },
+      });
+    }
+
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'company',
+        resourceId: id,
+        resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
+        resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
+        payload: request.body as Record<string, unknown>,
+        isUpdate: true,
+      },
+      request
+    );
 
     const parsed = UpdateCompanyInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -346,7 +460,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.get('/leads', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_LIST),
+    preHandler: endpointPreHandlers(fastify, 'LEADS_LIST'),
   }, async (request, reply) => {
     const parsed = LeadsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -364,7 +478,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.get<{ Params: { id: string } }>('/leads/:id', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_READ),
+    preHandler: endpointPreHandlers(fastify, 'LEADS_READ'),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -387,12 +501,28 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       });
     }
 
+    assertTenantIsolation(
+      request.user as Crm1TokenClaims,
+      (lead as any).tenantId || (lead as any).tenant_id,
+      request
+    );
+
     return reply.status(200).send(redactSensitiveObject(lead));
   });
 
   fastify.post('/leads', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_CREATE),
+    preHandler: endpointPreHandlers(fastify, 'LEADS_CREATE'),
   }, async (request, reply) => {
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'lead',
+        payload: request.body as Record<string, unknown>,
+        isUpdate: false,
+      },
+      request
+    );
+
     const parsed = CreateLeadInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -402,6 +532,17 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
           details: parsed.error.issues,
         },
       });
+    }
+
+    if (parsed.data.contactId) {
+      const contact = await service.getContactById(parsed.data.contactId);
+      if (contact) {
+        assertTenantIsolation(
+          request.user as Crm1TokenClaims,
+          (contact as any).tenantId || (contact as any).tenant_id,
+          request
+        );
+      }
     }
 
     try {
@@ -435,7 +576,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.patch<{ Params: { id: string } }>('/leads/:id', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_UPDATE),
+    preHandler: endpointPreHandlers(fastify, 'LEADS_UPDATE', true),
   }, async (request, reply) => {
     const { id } = request.params;
     const validUuid = UuidSchema.safeParse(id);
@@ -447,6 +588,29 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
         },
       });
     }
+
+    const existing = await service.getLeadById(id);
+    if (!existing) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Lead with ID '${id}' not found`,
+        },
+      });
+    }
+
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'lead',
+        resourceId: id,
+        resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
+        resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
+        payload: request.body as Record<string, unknown>,
+        isUpdate: true,
+      },
+      request
+    );
 
     const parsed = UpdateLeadInputSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -499,8 +663,18 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   // ---------------------------------------------------------------------------
 
   fastify.post('/imports', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_START),
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
   }, async (request, reply) => {
+    assertObjectMutationAllowed(
+      request.user as Crm1TokenClaims,
+      {
+        resourceType: 'import_batch',
+        payload: request.body as Record<string, unknown>,
+        isUpdate: false,
+      },
+      request
+    );
+
     const parsed = CreateCrm1ImportInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -530,7 +704,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.get<{ Params: { batch: string } }>('/imports/:batch', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_STATUS),
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_STATUS'),
   }, async (request, reply) => {
     const { batch } = request.params;
     if (!batch || batch.trim().length === 0) {
@@ -556,7 +730,7 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
   });
 
   fastify.get<{ Params: { batch: string } }>('/imports/:batch/rejects', {
-    preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_REJECTS),
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_REJECTS'),
   }, async (request, reply) => {
     const { batch } = request.params;
     if (!batch || batch.trim().length === 0) {
@@ -586,5 +760,40 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
 
     const result = await service.getRejects(parsed.data);
     return reply.status(200).send(redactSensitiveObject(result));
+  });
+
+  // ---------------------------------------------------------------------------
+  // 5. Cleaning Rules & Field Audit Endpoints
+  // ---------------------------------------------------------------------------
+
+  fastify.post('/cleaning/clean', {
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
+  }, async (request, reply) => {
+    const CleanRequestSchema = z.object({
+      rows: z.array(z.record(z.string())),
+      options: z.object({
+        dateFormat: z.enum(['YYYY-MM-DD', 'DD-MM-YYYY', 'DD/MM/YYYY', 'MM/DD/YYYY']).optional(),
+        phoneCountry: z.string().optional(),
+        disabledRules: z.array(z.string()).optional(),
+        requiredFields: z.array(z.string()).optional(),
+        entity: z.enum(['contact', 'company', 'lead', 'auto']).optional(),
+      }).optional(),
+      batchId: z.string().optional(),
+    });
+
+    const parsed = CleanRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid cleaning request payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const { rows, options, batchId } = parsed.data;
+    const result = crm1CleaningService.processBatchCleaning(rows, batchId, options);
+    return reply.status(200).send(result);
   });
 };

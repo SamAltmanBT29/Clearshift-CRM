@@ -7,6 +7,16 @@ export const MODULE_NAME = 'CRM-1 Contacts, Companies and Leads';
 
 export * from './domain/errors.js';
 export * from './domain/qa-specs.js';
+export * from './services/crm1.service.js';
+export * from './services/crm1-mutation.service.js';
+export * from './services/audit.js';
+export * from './kit/cleaner.js';
+export * from './services/crm1-cleaning.service.js';
+export * from './policies/index.js';
+export * from './plugins/auth.js';
+export * from './interface/authz.js';
+export * from './routes/crm1.routes.js';
+export * from './app.js';
 export * from './public.js';
 
 export interface ModuleDefinition {

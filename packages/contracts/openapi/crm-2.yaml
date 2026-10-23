@@ -96,6 +96,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Referential integrity error (contact not found)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /deals/{id}:
     get:
@@ -153,6 +159,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid state transition or referential integrity error
           content:
             application/json:
               schema:
@@ -220,13 +232,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/Quote'
         '400':
-          description: Invalid input or duplicate quote number
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate quote number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Referential integrity error (deal not found)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /quotes/{id}:
+    get:
+      summary: Retrieve a single quote by ID
+      operationId: getQuoteById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Quote details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '404':
+          description: Quote not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     patch:
       summary: Update a quote
       operationId: updateQuote
@@ -250,8 +298,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Quote'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Quote not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate quote number
           content:
             application/json:
               schema:
@@ -557,5 +617,9 @@ components:
         message:
           type: string
         details:
-          type: object
+          oneOf:
+            - type: array
+              items:
+                type: object
+            - type: object
           nullable: true

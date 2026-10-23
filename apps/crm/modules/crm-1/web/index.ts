@@ -21,3 +21,4 @@ export * from './pages/CompaniesListPage.js';
 export * from './pages/LeadsPipelinePage.js';
 export * from './pages/DuplicateReviewPage.js';
 export * from './pages/ImportsOverviewPage.js';
+export * from './pages/CleaningAuditPage.js';

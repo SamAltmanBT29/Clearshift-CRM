@@ -455,6 +455,83 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
+  /api/v1/crm-contacts/import/row:
+    post:
+      operationId: importCRM1Row
+      tags: [CRM-1]
+      summary: Import mapped row via Target Adapter (KIT-08)
+      description: Safely loads a mapped V1 record through the public API. Commits target mutation and durable receipt atomically.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: X-Correlation-ID
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: X-Simulate-503
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchId, sourceRow, entity, data, idempotencyKey]
+              properties:
+                batchId: { type: string }
+                sourceRow: { type: integer, minimum: 1 }
+                sourceSystem: { type: string }
+                sourceId: { type: string }
+                entity: { type: string, enum: [contacts, companies, leads, contact, company, lead] }
+                data: { type: object }
+                idempotencyKey: { type: string }
+                correlationId: { type: string }
+                schemaVersion: { type: integer, default: 1 }
+      responses:
+        "201":
+          description: Row created and durable receipt committed.
+        "200":
+          description: Idempotent replay of previously committed row.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Temporary infrastructure error. Retryable.
+  /api/v1/crm-contacts/import/receipts:
+    get:
+      operationId: listCRM1ImportReceipts
+      tags: [CRM-1]
+      summary: List durable import receipts
+      description: Retrieve audit receipts committed by the Target Adapter.
+      responses:
+        "200":
+          description: List of import receipts.
+  /api/v1/crm-contacts/import/receipts/{idempotencyKey}:
+    get:
+      operationId: getCRM1ImportReceiptByKey
+      tags: [CRM-1]
+      summary: Get durable import receipt by idempotency key
+      parameters:
+        - name: idempotencyKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Durable import receipt.
+        "404":
+          $ref: "#/components/responses/NotFoundError"
 components:
   parameters:
     PathId:

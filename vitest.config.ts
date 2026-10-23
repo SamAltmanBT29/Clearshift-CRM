@@ -32,6 +32,7 @@ export default defineConfig({
       { find: /^@clearshift\/contracts\/events$/, replacement: resolve(__dirname, './packages/contracts/src/events.ts') },
       { find: /^@clearshift\/contracts\/crm-1$/, replacement: resolve(__dirname, './packages/contracts/src/crm-1.ts') },
       { find: /^@clearshift\/contracts\/crm-2$/, replacement: resolve(__dirname, './packages/contracts/src/crm-2.ts') },
+      { find: /^@clearshift\/contracts\/crm-3$/, replacement: resolve(__dirname, './packages/contracts/src/crm-3.ts') },
       { find: /^@clearshift\/database$/, replacement: resolve(__dirname, './packages/database/src/index.ts') },
       { find: /^@clearshift\/contracts$/, replacement: resolve(__dirname, './packages/contracts/src/index.ts') },
       { find: /^@clearshift\/ui$/, replacement: resolve(__dirname, './packages/ui/src/index.ts') },
@@ -44,6 +45,7 @@ export default defineConfig({
       { find: /^@cs\/ui$/, replacement: resolve(__dirname, './packages/ui/src/index.ts') },
       { find: /^@cs\/mod-crm1$/, replacement: resolve(__dirname, './apps/crm/modules/crm-1/src/index.ts') },
       { find: /^@cs\/mod-crm2$/, replacement: resolve(__dirname, './apps/crm/modules/crm-2/src/index.ts') },
+      { find: /^@cs\/mod-crm3$/, replacement: resolve(__dirname, './apps/crm/modules/crm-3/src/index.ts') },
       { find: /^@cs\/mod-crm5$/, replacement: resolve(__dirname, './apps/crm/modules/crm-5/src/index.ts') }
     ]
   },
