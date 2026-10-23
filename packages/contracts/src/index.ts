@@ -15,4 +15,5 @@ export * from './import-target.js';
 export * from './golden-id.js';
 export * from './migration-target.js';
 export * from './roles.js';
+export * from './crm-2.js';
 

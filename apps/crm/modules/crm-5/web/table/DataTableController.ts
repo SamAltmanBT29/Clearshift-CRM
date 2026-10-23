@@ -5,6 +5,7 @@ import type {
   TableFilterState,
   SortDirection,
 } from './types.js';
+import { sanitizeErrorMessage } from '../components/ErrorAlert.js';
 
 export interface DataTableControllerOptions<T = Record<string, unknown>> {
   columns: DataTableColumn<T>[];
@@ -244,63 +245,72 @@ export class DataTableController<T = Record<string, unknown>> {
 
   /**
    * Generates accessible WAI-ARIA table markup with sortable headers,
-   * skeleton loading state, empty state, and pagination toolbar.
+   * skeleton loading state, empty state, error alert banner, and access-denied view.
    */
   public renderHtml(
     data: T[],
     options?: {
-      loading?: boolean;
-      emptyTitle?: string;
-      emptyDescription?: string;
-      hasActiveFilters?: boolean;
+      loading?: boolean | undefined;
+      loadingRowCount?: number | undefined;
+      error?: unknown | undefined;
+      onRetryAction?: string | undefined;
+      emptyTitle?: string | undefined;
+      emptyDescription?: string | undefined;
+      emptyActionLabel?: string | undefined;
+      emptyActionName?: string | undefined;
+      hasActiveFilters?: boolean | undefined;
+      httpStatus?: number | undefined;
+      isAccessDenied?: boolean | undefined;
+      requiredCapability?: string | undefined;
+      requiredRole?: string | undefined;
+      currentRole?: string | undefined;
+      resourceName?: string | undefined;
     }
   ): string {
-    const loading = options?.loading ?? false;
-    const pagination = this.getPagination();
-
-    // 1. Loading Skeleton
-    if (loading) {
-      return `
-<div class="cs-table-card">
-  <div class="cs-skeleton-container" role="status" aria-label="Loading table data">
-    <div class="cs-skeleton-line" style="width: 100%; height: 44px;"></div>
-    <div class="cs-skeleton-line" style="width: 100%; height: 44px;"></div>
-    <div class="cs-skeleton-line" style="width: 100%; height: 44px;"></div>
-    <div class="cs-skeleton-line" style="width: 100%; height: 44px;"></div>
-  </div>
-</div>`;
+    // 0. Access Denied (403 Forbidden)
+    if (options?.isAccessDenied || options?.httpStatus === 403) {
+      return this.renderAccessDeniedHtml({
+        requiredCapability: options?.requiredCapability,
+        requiredRole: options?.requiredRole,
+        currentRole: options?.currentRole,
+        resourceName: options?.resourceName,
+      });
     }
 
-    // 2. Empty State
+    // 1. API Error Banner
+    if (options?.error) {
+      return this.renderErrorAlertHtml(options.error, {
+        onRetryAction: options?.onRetryAction,
+      });
+    }
+
+    // 2. Loading Skeleton Table
+    if (options?.loading) {
+      return this.renderTableSkeletonHtml(options?.loadingRowCount ?? 5);
+    }
+
+    // 3. Empty State
     if (data.length === 0) {
       const activeFilters = options?.hasActiveFilters ?? this.hasActiveFilters();
       if (activeFilters) {
-        const emptyTitle = options?.emptyTitle ?? 'No matching records found';
-        const emptyDesc =
-          options?.emptyDescription ??
-          'No records matched your search and filter criteria. Try adjusting your search term or clearing filters.';
-        return `
-<div class="cs-table-card">
-  <div class="cs-empty-state cs-empty-filter-state" role="status">
-    <div class="cs-empty-icon" aria-hidden="true">🔍</div>
-    <h3 class="cs-empty-title">${emptyTitle}</h3>
-    <p class="cs-empty-text">${emptyDesc}</p>
-    <button type="button" class="cs-clear-all-filters-btn cs-empty-reset-btn" data-action="clear-all-filters">Reset All Filters</button>
-  </div>
-</div>`;
+        return this.renderEmptyStateHtml({
+          title: options?.emptyTitle ?? 'No matching records found',
+          description:
+            options?.emptyDescription ??
+            'No records matched your search and filter criteria. Try adjusting your search term or clearing filters.',
+          actionLabel: 'Reset All Filters',
+          isFilterReset: true,
+        });
       }
 
-      const emptyTitle = options?.emptyTitle ?? 'No records found';
-      const emptyDesc =
-        options?.emptyDescription ??
-        'There are no records matching your current filter criteria.';
-      return `
-<div class="cs-table-card">
-  <div class="cs-empty-state" role="status">
-    <h3 class="cs-empty-title">${emptyTitle}</h3>
-    <p class="cs-empty-text">${emptyDesc}</p>
-  </div>
-</div>`;
+      return this.renderEmptyStateHtml({
+        title: options?.emptyTitle ?? 'No records found',
+        description:
+          options?.emptyDescription ??
+          'There are no records matching your current filter criteria.',
+        actionLabel: options?.emptyActionLabel,
+        actionName: options?.emptyActionName,
+      });
     }
 
     // 3. Header Rows with WAI-ARIA aria-sort
@@ -358,6 +368,7 @@ export class DataTableController<T = Record<string, unknown>> {
       .join('');
 
     // 5. Pagination Toolbar
+    const pagination = this.getPagination();
     const startRecord = this.total === 0 ? 0 : (this.page - 1) * this.pageSize + 1;
     const endRecord = Math.min(this.page * this.pageSize, this.total);
     const isFirstDisabled = this.page <= 1;
@@ -390,6 +401,177 @@ export class DataTableController<T = Record<string, unknown>> {
     </table>
   </div>
   ${paginationToolbarHtml}
+</div>`;
+  }
+
+  /**
+   * Renders loading skeleton table placeholder markup with shimmer effect.
+   */
+  public renderTableSkeletonHtml(rowCount: number = 5): string {
+    const cols = this.columns;
+    const headerCols = cols
+      .map(
+        (col, i) =>
+          `<th class="cs-th" scope="col"><div class="cs-skeleton-line cs-skeleton-header-cell" style="width: ${
+            60 + (i % 3) * 15
+          }%"></div></th>`
+      )
+      .join('');
+
+    const bodyRows = Array.from({ length: Math.max(1, rowCount) }, (_, r) => {
+      const cells = cols
+        .map((_, c) => {
+          const variance = ((r + c) % 4) * 10;
+          const cellWidth = Math.min(95, Math.max(45, 75 - variance));
+          return `<td class="cs-td"><div class="cs-skeleton-line cs-skeleton-cell" style="width: ${cellWidth}%"></div></td>`;
+        })
+        .join('');
+      return `<tr class="cs-tr cs-skeleton-row">${cells}</tr>`;
+    }).join('');
+
+    return `
+<div class="cs-skeleton-container" aria-busy="true" aria-label="Loading table data" role="status">
+  <div class="cs-table-card cs-skeleton-card">
+    <span class="cs-sr-only">Loading table data</span>
+    <div class="cs-table-responsive">
+      <table class="cs-table cs-skeleton-table" role="table">
+        <thead class="cs-thead">
+          <tr class="cs-tr">${headerCols}</tr>
+        </thead>
+        <tbody class="cs-tbody">
+          ${bodyRows}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>`;
+  }
+
+  /**
+   * Renders empty zero-data state markup with call-to-action button.
+   */
+  public renderEmptyStateHtml(options?: {
+    title?: string | undefined;
+    description?: string | undefined;
+    actionLabel?: string | undefined;
+    actionName?: string | undefined;
+    isFilterReset?: boolean | undefined;
+  }): string {
+    const title = options?.title ?? 'No records found';
+    const description =
+      options?.description ??
+      'There are no records matching your current filter criteria.';
+    const isFilterReset = options?.isFilterReset ?? false;
+    const actionLabel = options?.actionLabel;
+    const actionName =
+      options?.actionName ?? (isFilterReset ? 'clear-all-filters' : 'primary-action');
+
+    const buttonClass = `cs-empty-cta-btn cs-btn-primary${
+      isFilterReset ? ' cs-clear-all-filters-btn cs-empty-reset-btn' : ''
+    }`;
+
+    const actionHtml = actionLabel
+      ? `<div class="cs-empty-actions">
+    <button type="button" class="${buttonClass}" data-action="${actionName}">
+      ${actionLabel}
+    </button>
+  </div>`
+      : '';
+
+    return `
+<div class="cs-empty-state${isFilterReset ? ' cs-empty-filter-state' : ''}" role="status" aria-label="${title}">
+  <div class="cs-empty-icon" aria-hidden="true">📁</div>
+  <h3 class="cs-empty-title">${title}</h3>
+  <p class="cs-empty-text">${description}</p>
+  ${actionHtml}
+</div>`;
+  }
+
+  /**
+   * Renders sanitized error banner markup with retry button.
+   */
+  public renderErrorAlertHtml(
+    error: unknown,
+    options?: {
+      title?: string | undefined;
+      onRetryAction?: string | undefined;
+      retryLabel?: string | undefined;
+    }
+  ): string {
+    const title = options?.title ?? 'Failed to load data';
+    const retryLabel = options?.retryLabel ?? 'Retry';
+    const message = sanitizeErrorMessage(error);
+    const retryBtn = options?.onRetryAction
+      ? `<div class="cs-error-banner-actions">
+    <button type="button" class="cs-error-retry-btn" data-action="${options.onRetryAction}" aria-label="${retryLabel} failed operation">
+      ${retryLabel}
+    </button>
+  </div>`
+      : '';
+
+    return `
+<div class="cs-error-banner" role="alert" aria-live="assertive">
+  <div class="cs-error-banner-content">
+    <span class="cs-error-icon" aria-hidden="true">⚠️</span>
+    <div class="cs-error-text-block">
+      <h4 class="cs-error-title">${title}</h4>
+      <p class="cs-error-message">${message}</p>
+    </div>
+  </div>
+  ${retryBtn}
+</div>`;
+  }
+
+  /**
+   * Renders 403 Forbidden access-denied view markup explaining missing role/capability.
+   */
+  public renderAccessDeniedHtml(options?: {
+    requiredCapability?: string | undefined;
+    requiredRole?: string | undefined;
+    currentRole?: string | undefined;
+    resourceName?: string | undefined;
+    message?: string | undefined;
+    backHref?: string | undefined;
+  }): string {
+    const requiredCapability = options?.requiredCapability ?? 'control:read';
+    const currentRole = options?.currentRole ?? 'viewer';
+    const resourceName = options?.resourceName ?? 'Migration Control Center';
+    const backHref = options?.backHref ?? '/crm-5';
+    const message =
+      options?.message ??
+      `You do not have the required permissions to view ${resourceName}. An authorized role with capability '${requiredCapability}' is required.`;
+
+    const requiredRoleHtml = options?.requiredRole
+      ? `
+      <div class="cs-access-denied-meta-item">
+        <span class="cs-meta-label">Required Role:</span>
+        <code class="cs-meta-code">${options.requiredRole}</code>
+      </div>`
+      : '';
+
+    return `
+<div id="cs-access-denied-view" class="cs-access-denied-card" role="region" aria-labelledby="cs-access-denied-title">
+  <div class="cs-access-denied-icon-wrapper" aria-hidden="true">
+    <span class="cs-access-denied-icon">🔒</span>
+  </div>
+  <div class="cs-access-denied-content">
+    <span class="cs-access-denied-badge">403 Forbidden</span>
+    <h2 id="cs-access-denied-title" class="cs-access-denied-title">Access Denied</h2>
+    <p class="cs-access-denied-desc">${message}</p>
+    <div class="cs-access-denied-meta" role="note" aria-label="Permission details">
+      <div class="cs-access-denied-meta-item">
+        <span class="cs-meta-label">Required Capability:</span>
+        <code class="cs-meta-code">${requiredCapability}</code>
+      </div>${requiredRoleHtml}
+      <div class="cs-access-denied-meta-item">
+        <span class="cs-meta-label">Current Role:</span>
+        <code class="cs-meta-code cs-current-role">${currentRole}</code>
+      </div>
+    </div>
+    <div class="cs-access-denied-actions">
+      <a href="${backHref}" class="cs-access-back-btn cs-btn-primary">Return to Control Center</a>
+    </div>
+  </div>
 </div>`;
   }
 }
