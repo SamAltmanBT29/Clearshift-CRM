@@ -432,3 +432,19 @@ Available in `@clearshift/contracts` for downstream module development and contr
 | **Group 1 Role 4** (Data Reliability & QA Lead) | Data / QA Lead | **APPROVED** | 2026-10-23 |
 | **Group 5 Peer Review** (CRM-5 Migration Control) | Peer Review Lead | **APPROVED** | 2026-10-23 |
 | **Workstream 12 PMO** (Architecture Baseline) | PMO Lead | **VERIFIED** | 2026-10-23 |
+
+---
+
+## 16. Target Adapter & Migration Kit Integration ([CRM1-07] — Issue #12 / KIT-08)
+
+### Target Adapter Architecture
+CRM-1 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
+* **Class**: `Crm1TargetAdapter` (`apps/crm/modules/crm-1/src/migration/target-adapter.ts`)
+* **Supported Entities**: `contacts` / `contact`, `companies` / `company`, `leads` / `lead`.
+* **Atomic Local Transaction**: Domain mutation (contact/company/lead) and durable import receipt (`crm1_import_receipts`) commit atomically in one PostgreSQL transaction.
+* **Idempotency Key Protocol**: Stable composite SHA-256 hash over `batchId + sourceRow + entity + canonicalPayload`.
+  - Replay of identical key + payload returns HTTP 200 with `isExisting: true` and prior target ID.
+  - Replay of identical key with altered payload/entity returns HTTP 409 Conflict.
+* **Transient Infrastructure Failures**: Simulated or transient 503 failures are retryable and never recorded as rejected rows or receipts.
+* **Consent Preservation**: Existing consent and unsubscribe suppression state is protected; older import timestamps or false states never overwrite newer consent records.
+* **HTTP Endpoints**: Exposed under `/api/v1/crm-contacts/import/row` and `/api/v1/crm-contacts/import/receipts`.
