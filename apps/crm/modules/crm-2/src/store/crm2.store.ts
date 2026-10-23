@@ -282,7 +282,7 @@ export class Crm2Store {
   }
 
   // Deals
-  public getDeals(query: DealsQuery): { items: Deal[]; totalCount: number; totalPages: number } {
+  public getDeals(query: Partial<DealsQuery> = {}): { items: Deal[]; totalCount: number; totalPages: number } {
     let filtered = [...this.deals];
 
     if (query.stage) {
@@ -381,7 +381,7 @@ export class Crm2Store {
   }
 
   // Quotes
-  public getQuotes(query: QuotesQuery): { items: Quote[]; totalCount: number; totalPages: number } {
+  public getQuotes(query: Partial<QuotesQuery> = {}): { items: Quote[]; totalCount: number; totalPages: number } {
     let filtered = [...this.quotes];
 
     if (query.deal_id) {

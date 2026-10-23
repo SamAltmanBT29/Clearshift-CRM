@@ -5,6 +5,8 @@ import { z } from 'zod';
  * SDS ClearShift CRM v2.0, V1: FR-CRM2-01..05
  */
 
+export const CRM2_API_PREFIX = '/api/v1/crm-deals';
+
 // Domain Invariant: Stage set is exactly New, Qualified, Proposal, Negotiation, Won, Lost
 export const CRM2_STAGES = [
   'New',
@@ -31,6 +33,119 @@ export function assertValidStageName(stage: string): asserts stage is Crm2StageN
     );
   }
 }
+
+/**
+ * Deal Stage Transition Matrix (FR-CRM2-03 & CRM2-06)
+ * Forward-only pipeline lifecycle with immediate Lost transitions.
+ * Terminal stages ('Won', 'Lost') cannot transition to any other stage.
+ */
+export const CRM2_DEAL_STAGE_TRANSITIONS: Readonly<
+  Record<Crm2StageName, readonly Crm2StageName[]>
+> = {
+  New: ['Qualified', 'Lost'],
+  Qualified: ['Proposal', 'Lost'],
+  Proposal: ['Negotiation', 'Lost'],
+  Negotiation: ['Won', 'Lost'],
+  Won: [],
+  Lost: [],
+};
+
+/**
+ * Checks whether a transition between two deal stages is permitted.
+ * Idempotent updates (current === next) are permitted.
+ */
+export function isDealStageTransitionAllowed(
+  current: Crm2StageName,
+  next: Crm2StageName
+): boolean {
+  if (current === next) {
+    return true;
+  }
+  const allowed = CRM2_DEAL_STAGE_TRANSITIONS[current];
+  return allowed ? allowed.includes(next) : false;
+}
+
+/**
+ * Asserts that a deal stage transition is valid, throwing an AppError (422) if forbidden.
+ */
+export function assertDealStageTransition(
+  current: Crm2StageName,
+  next: Crm2StageName,
+  field = 'stage_name'
+): void {
+  if (!isDealStageTransitionAllowed(current, next)) {
+    const error = new Error(
+      `Deal stage cannot transition from ${current} to ${next}`
+    ) as Error & { code: string; statusCode: number; details: unknown };
+    error.name = 'AppError';
+    error.code = 'INVALID_DEAL_STAGE_TRANSITION';
+    error.statusCode = 422;
+    error.details = [
+      {
+        field,
+        message: 'Move the deal to an allowed pipeline stage',
+        code: 'invalid_transition',
+      },
+    ];
+    throw error;
+  }
+}
+
+/**
+ * Canonical Seeded Stage Records (crm2.crm2_stages)
+ */
+export interface StageSeed {
+  id: string;
+  name: Crm2StageName;
+  order: number;
+  is_closed_won: boolean;
+  is_closed_lost: boolean;
+}
+
+export const CRM2_STAGE_SEEDS: readonly StageSeed[] = [
+  {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'New',
+    order: 1,
+    is_closed_won: false,
+    is_closed_lost: false,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000002',
+    name: 'Qualified',
+    order: 2,
+    is_closed_won: false,
+    is_closed_lost: false,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000003',
+    name: 'Proposal',
+    order: 3,
+    is_closed_won: false,
+    is_closed_lost: false,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000004',
+    name: 'Negotiation',
+    order: 4,
+    is_closed_won: false,
+    is_closed_lost: false,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000005',
+    name: 'Won',
+    order: 5,
+    is_closed_won: true,
+    is_closed_lost: false,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000006',
+    name: 'Lost',
+    order: 6,
+    is_closed_won: false,
+    is_closed_lost: true,
+  },
+] as const;
 
 /**
  * ISO 4217 Currency Code pattern (3 uppercase letters)
