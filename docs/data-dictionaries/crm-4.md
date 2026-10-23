@@ -140,7 +140,14 @@
   - `POST /api/v1/crm-marketing/campaigns/{id}/members`: Add contact member to campaign
   - `POST /api/v1/crm-marketing/consents`: Set or update contact consent status (enforces BR-CRM4-01)
   - `GET  /api/v1/crm-marketing/consents/{contact}`: Fetch contact consent record by contact UUID
-* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), and `409` (Conflict / Monotonic Opt-Out Invariant Violation).
+* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), `409` (Conflict / Monotonic Opt-Out Invariant Violation), and `422` (Unprocessable Entity).
+
+### 5.1 Mutation API & Domain Invariant Guarantees (Issue #38 / [CRM4-03])
+- **System-Maintained Field Protection:** User/client mutations attempting to modify read-only or computed fields (`id`, `createdAt`, `updatedAt`, `campaignCount`, `memberCount`) are strictly rejected with HTTP `403 Forbidden`.
+- **List Parent Immutability:** Campaign parent `listId` is permanently immutable after creation. Attempting to modify `listId` on `PATCH /campaigns/:id` is strictly rejected with HTTP `403 Forbidden`.
+- **Campaign Membership Invariant:** Member status is strictly restricted to `sent`, `opened`, or `clicked`. Unrecognized statuses return HTTP `400 Bad Request`. Duplicate `(campaignId, contactId)` pairs return HTTP `409 Conflict`.
+- **Monotonic Opt-Out (BR-CRM4-01):** Known `unsubscribed` contacts cannot be reverted to `subscribed` via imports, API mutations, or forms; violations return HTTP `409 Conflict`. Adding an unsubscribed contact to a campaign immediately flags `unsubscribed = true`.
+- **Idempotency & Replay Semantics:** Mutation endpoints (`POST /lists`, `POST /campaigns`, `POST /campaigns/:id/members`, `POST /consents`) accept `Idempotency-Key` or `X-Idempotency-Key` headers (or payload keys). Replayed requests return cached receipts with `X-Idempotent-Replay: true` header without double-incrementing counters or creating duplicate entities.
 
 ---
 

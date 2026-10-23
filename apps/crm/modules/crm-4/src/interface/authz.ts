@@ -47,6 +47,12 @@ export const IMMUTABLE_MUTATION_FIELDS = [
   'list_id',
   'createdAt',
   'created_at',
+  'updatedAt',
+  'updated_at',
+  'campaignCount',
+  'campaign_count',
+  'memberCount',
+  'member_count',
   'id',
 ] as const;
 
