@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "module": "crm-2",
+  "fixture": {
+    "file": "dirty-data-v1.csv",
+    "rows": 100
+  },
+  "accountingBalance": {
+    "sourceCount": 100,
+    "loadedCount": 75,
+    "rejectedCount": 17,
+    "mergedCount": 8,
+    "skippedCount": 0,
+    "unaccountedCount": 0,
+    "isBalanced": true
+  },
+  "byCategory": {
+    "CAT-01": { "name": "Clean Golden Records (Standard Deals)", "count": 55, "outcome": "loaded" },
+    "CAT-02": { "name": "Clean Golden Records (Orphan Deals)", "count": 10, "outcome": "loaded" },
+    "CAT-03": { "name": "Clean Golden Records (Quotes)", "count": 10, "outcome": "loaded" },
+    "CAT-04": { "name": "Exact Duplicate Deals", "count": 4, "outcome": "merged", "reasonCode": "EXACT_DEAL_DUPLICATE" },
+    "CAT-05": { "name": "Exact Duplicate Quote Numbers", "count": 4, "outcome": "merged", "reasonCode": "EXACT_QUOTE_NUMBER_MATCH" },
+    "CAT-06": { "name": "Negative Monetary Deal Value", "count": 3, "outcome": "rejected", "reasonCode": "NEGATIVE_VALUE" },
+    "CAT-07": { "name": "Invalid ISO Currency Code", "count": 3, "outcome": "rejected", "reasonCode": "INVALID_CURRENCY" },
+    "CAT-08": { "name": "Omitted Mandatory Deal Name", "count": 3, "outcome": "rejected", "reasonCode": "EMPTY_MANDATORY_FIELD" },
+    "CAT-09": { "name": "Invalid / Unknown Pipeline Stage", "count": 3, "outcome": "rejected", "reasonCode": "INVALID_STAGE" },
+    "CAT-10": { "name": "Malformed Close Date Format", "count": 3, "outcome": "rejected", "reasonCode": "INVALID_DATE_FORMAT" },
+    "CAT-11": { "name": "Missing Parent Deal Link", "count": 2, "outcome": "rejected", "reasonCode": "PARENT_DEAL_NOT_FOUND" }
+  }
+}

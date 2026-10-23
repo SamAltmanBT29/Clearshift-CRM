@@ -1,0 +1,101 @@
+source_row,entity,source_id,name,contact_id,value,currency,stage_name,close_date,deal_id,quote_number,quote_date,amount,note
+1,deal,SRC-DEAL-0001,Enterprise Cloud Migration Package 1,90000000-0000-4000-8000-000000000002,26500.00,USD,New,2026-02-15,,,,,Standard opportunity package tier 1
+2,deal,SRC-DEAL-0002,Enterprise Cloud Migration Package 2,90000000-0000-4000-8000-000000000001,28000.00,USD,Qualified,2026-03-15,,,,,Standard opportunity package tier 2
+3,deal,SRC-DEAL-0003,Enterprise Cloud Migration Package 3,90000000-0000-4000-8000-000000000002,29500.00,USD,Proposal,2026-04-15,,,,,Standard opportunity package tier 3
+4,deal,SRC-DEAL-0004,Enterprise Cloud Migration Package 4,90000000-0000-4000-8000-000000000001,31000.00,USD,Negotiation,2026-05-15,,,,,Standard opportunity package tier 4
+5,deal,SRC-DEAL-0005,Enterprise Cloud Migration Package 5,90000000-0000-4000-8000-000000000002,32500.00,USD,New,2026-06-15,,,,,Standard opportunity package tier 5
+6,deal,SRC-DEAL-0006,Enterprise Cloud Migration Package 6,90000000-0000-4000-8000-000000000001,34000.00,USD,Qualified,2026-07-15,,,,,Standard opportunity package tier 6
+7,deal,SRC-DEAL-0007,Enterprise Cloud Migration Package 7,90000000-0000-4000-8000-000000000002,35500.00,USD,Proposal,2026-08-15,,,,,Standard opportunity package tier 7
+8,deal,SRC-DEAL-0008,Enterprise Cloud Migration Package 8,90000000-0000-4000-8000-000000000001,37000.00,USD,Negotiation,2026-09-15,,,,,Standard opportunity package tier 8
+9,deal,SRC-DEAL-0009,Enterprise Cloud Migration Package 9,90000000-0000-4000-8000-000000000002,38500.00,USD,New,2026-10-15,,,,,Standard opportunity package tier 9
+10,deal,SRC-DEAL-0010,Enterprise Cloud Migration Package 10,90000000-0000-4000-8000-000000000001,40000.00,USD,Qualified,2026-11-15,,,,,Standard opportunity package tier 10
+11,deal,SRC-DEAL-0011,Enterprise Cloud Migration Package 11,90000000-0000-4000-8000-000000000002,41500.00,USD,Proposal,2026-12-15,,,,,Standard opportunity package tier 11
+12,deal,SRC-DEAL-0012,Enterprise Cloud Migration Package 12,90000000-0000-4000-8000-000000000001,43000.00,USD,Negotiation,2026-01-15,,,,,Standard opportunity package tier 12
+13,deal,SRC-DEAL-0013,Enterprise Cloud Migration Package 13,90000000-0000-4000-8000-000000000002,44500.00,USD,New,2026-02-15,,,,,Standard opportunity package tier 13
+14,deal,SRC-DEAL-0014,Enterprise Cloud Migration Package 14,90000000-0000-4000-8000-000000000001,46000.00,USD,Qualified,2026-03-15,,,,,Standard opportunity package tier 14
+15,deal,SRC-DEAL-0015,Enterprise Cloud Migration Package 15,90000000-0000-4000-8000-000000000002,47500.00,USD,Proposal,2026-04-15,,,,,Standard opportunity package tier 15
+16,deal,SRC-DEAL-0016,Enterprise Cloud Migration Package 16,90000000-0000-4000-8000-000000000001,49000.00,USD,Negotiation,2026-05-15,,,,,Standard opportunity package tier 16
+17,deal,SRC-DEAL-0017,Enterprise Cloud Migration Package 17,90000000-0000-4000-8000-000000000002,50500.00,USD,New,2026-06-15,,,,,Standard opportunity package tier 17
+18,deal,SRC-DEAL-0018,Enterprise Cloud Migration Package 18,90000000-0000-4000-8000-000000000001,52000.00,USD,Qualified,2026-07-15,,,,,Standard opportunity package tier 18
+19,deal,SRC-DEAL-0019,Enterprise Cloud Migration Package 19,90000000-0000-4000-8000-000000000002,53500.00,USD,Proposal,2026-08-15,,,,,Standard opportunity package tier 19
+20,deal,SRC-DEAL-0020,Enterprise Cloud Migration Package 20,90000000-0000-4000-8000-000000000001,55000.00,USD,Negotiation,2026-09-15,,,,,Standard opportunity package tier 20
+21,deal,SRC-DEAL-0021,Enterprise Cloud Migration Package 21,90000000-0000-4000-8000-000000000002,56500.00,USD,New,2026-10-15,,,,,Standard opportunity package tier 21
+22,deal,SRC-DEAL-0022,Enterprise Cloud Migration Package 22,90000000-0000-4000-8000-000000000001,58000.00,USD,Qualified,2026-11-15,,,,,Standard opportunity package tier 22
+23,deal,SRC-DEAL-0023,Enterprise Cloud Migration Package 23,90000000-0000-4000-8000-000000000002,59500.00,USD,Proposal,2026-12-15,,,,,Standard opportunity package tier 23
+24,deal,SRC-DEAL-0024,Enterprise Cloud Migration Package 24,90000000-0000-4000-8000-000000000001,61000.00,USD,Negotiation,2026-01-15,,,,,Standard opportunity package tier 24
+25,deal,SRC-DEAL-0025,Enterprise Cloud Migration Package 25,90000000-0000-4000-8000-000000000002,62500.00,USD,New,2026-02-15,,,,,Standard opportunity package tier 25
+26,deal,SRC-DEAL-0026,Enterprise Cloud Migration Package 26,90000000-0000-4000-8000-000000000001,64000.00,USD,Qualified,2026-03-15,,,,,Standard opportunity package tier 26
+27,deal,SRC-DEAL-0027,Enterprise Cloud Migration Package 27,90000000-0000-4000-8000-000000000002,65500.00,USD,Proposal,2026-04-15,,,,,Standard opportunity package tier 27
+28,deal,SRC-DEAL-0028,Enterprise Cloud Migration Package 28,90000000-0000-4000-8000-000000000001,67000.00,USD,Negotiation,2026-05-15,,,,,Standard opportunity package tier 28
+29,deal,SRC-DEAL-0029,Enterprise Cloud Migration Package 29,90000000-0000-4000-8000-000000000002,68500.00,USD,New,2026-06-15,,,,,Standard opportunity package tier 29
+30,deal,SRC-DEAL-0030,Enterprise Cloud Migration Package 30,90000000-0000-4000-8000-000000000001,70000.00,USD,Qualified,2026-07-15,,,,,Standard opportunity package tier 30
+31,deal,SRC-DEAL-0031,Enterprise Cloud Migration Package 31,90000000-0000-4000-8000-000000000002,71500.00,USD,Proposal,2026-08-15,,,,,Standard opportunity package tier 31
+32,deal,SRC-DEAL-0032,Enterprise Cloud Migration Package 32,90000000-0000-4000-8000-000000000001,73000.00,USD,Negotiation,2026-09-15,,,,,Standard opportunity package tier 32
+33,deal,SRC-DEAL-0033,Enterprise Cloud Migration Package 33,90000000-0000-4000-8000-000000000002,74500.00,USD,New,2026-10-15,,,,,Standard opportunity package tier 33
+34,deal,SRC-DEAL-0034,Enterprise Cloud Migration Package 34,90000000-0000-4000-8000-000000000001,76000.00,USD,Qualified,2026-11-15,,,,,Standard opportunity package tier 34
+35,deal,SRC-DEAL-0035,Enterprise Cloud Migration Package 35,90000000-0000-4000-8000-000000000002,77500.00,USD,Proposal,2026-12-15,,,,,Standard opportunity package tier 35
+36,deal,SRC-DEAL-0036,Enterprise Cloud Migration Package 36,90000000-0000-4000-8000-000000000001,79000.00,USD,Negotiation,2026-01-15,,,,,Standard opportunity package tier 36
+37,deal,SRC-DEAL-0037,Enterprise Cloud Migration Package 37,90000000-0000-4000-8000-000000000002,80500.00,USD,New,2026-02-15,,,,,Standard opportunity package tier 37
+38,deal,SRC-DEAL-0038,Enterprise Cloud Migration Package 38,90000000-0000-4000-8000-000000000001,82000.00,USD,Qualified,2026-03-15,,,,,Standard opportunity package tier 38
+39,deal,SRC-DEAL-0039,Enterprise Cloud Migration Package 39,90000000-0000-4000-8000-000000000002,83500.00,USD,Proposal,2026-04-15,,,,,Standard opportunity package tier 39
+40,deal,SRC-DEAL-0040,Enterprise Cloud Migration Package 40,90000000-0000-4000-8000-000000000001,85000.00,USD,Negotiation,2026-05-15,,,,,Standard opportunity package tier 40
+41,deal,SRC-DEAL-0041,Enterprise Cloud Migration Package 41,90000000-0000-4000-8000-000000000002,86500.00,USD,New,2026-06-15,,,,,Standard opportunity package tier 41
+42,deal,SRC-DEAL-0042,Enterprise Cloud Migration Package 42,90000000-0000-4000-8000-000000000001,88000.00,USD,Qualified,2026-07-15,,,,,Standard opportunity package tier 42
+43,deal,SRC-DEAL-0043,Enterprise Cloud Migration Package 43,90000000-0000-4000-8000-000000000002,89500.00,USD,Proposal,2026-08-15,,,,,Standard opportunity package tier 43
+44,deal,SRC-DEAL-0044,Enterprise Cloud Migration Package 44,90000000-0000-4000-8000-000000000001,91000.00,USD,Negotiation,2026-09-15,,,,,Standard opportunity package tier 44
+45,deal,SRC-DEAL-0045,Enterprise Cloud Migration Package 45,90000000-0000-4000-8000-000000000002,92500.00,USD,New,2026-10-15,,,,,Standard opportunity package tier 45
+46,deal,SRC-DEAL-0046,Enterprise Cloud Migration Package 46,90000000-0000-4000-8000-000000000001,94000.00,USD,Qualified,2026-11-15,,,,,Standard opportunity package tier 46
+47,deal,SRC-DEAL-0047,Enterprise Cloud Migration Package 47,90000000-0000-4000-8000-000000000002,95500.00,USD,Proposal,2026-12-15,,,,,Standard opportunity package tier 47
+48,deal,SRC-DEAL-0048,Enterprise Cloud Migration Package 48,90000000-0000-4000-8000-000000000001,97000.00,USD,Negotiation,2026-01-15,,,,,Standard opportunity package tier 48
+49,deal,SRC-DEAL-0049,Enterprise Cloud Migration Package 49,90000000-0000-4000-8000-000000000002,98500.00,USD,New,2026-02-15,,,,,Standard opportunity package tier 49
+50,deal,SRC-DEAL-0050,Enterprise Cloud Migration Package 50,90000000-0000-4000-8000-000000000001,100000.00,USD,Qualified,2026-03-15,,,,,Standard opportunity package tier 50
+51,deal,SRC-DEAL-0051,Enterprise Cloud Migration Package 51,90000000-0000-4000-8000-000000000002,101500.00,USD,Proposal,2026-04-15,,,,,Standard opportunity package tier 51
+52,deal,SRC-DEAL-0052,Enterprise Cloud Migration Package 52,90000000-0000-4000-8000-000000000001,103000.00,USD,Negotiation,2026-05-15,,,,,Standard opportunity package tier 52
+53,deal,SRC-DEAL-0053,Enterprise Cloud Migration Package 53,90000000-0000-4000-8000-000000000002,104500.00,USD,New,2026-06-15,,,,,Standard opportunity package tier 53
+54,deal,SRC-DEAL-0054,Enterprise Cloud Migration Package 54,90000000-0000-4000-8000-000000000001,106000.00,USD,Qualified,2026-07-15,,,,,Standard opportunity package tier 54
+55,deal,SRC-DEAL-0055,Enterprise Cloud Migration Package 55,90000000-0000-4000-8000-000000000002,107500.00,USD,Proposal,2026-08-15,,,,,Standard opportunity package tier 55
+56,deal,SRC-ORPHAN-0056,Inbound Web Opportunity (Unassigned) 1,,12000.00,EUR,New,2026-11-30,,,,,Orphan deal generated from marketing landing page
+57,deal,SRC-ORPHAN-0057,Inbound Web Opportunity (Unassigned) 2,,14000.00,EUR,Qualified,2026-11-30,,,,,Orphan deal generated from marketing landing page
+58,deal,SRC-ORPHAN-0058,Inbound Web Opportunity (Unassigned) 3,,16000.00,EUR,New,2026-11-30,,,,,Orphan deal generated from marketing landing page
+59,deal,SRC-ORPHAN-0059,Inbound Web Opportunity (Unassigned) 4,,18000.00,EUR,Qualified,2026-11-30,,,,,Orphan deal generated from marketing landing page
+60,deal,SRC-ORPHAN-0060,Inbound Web Opportunity (Unassigned) 5,,20000.00,EUR,New,2026-11-30,,,,,Orphan deal generated from marketing landing page
+61,deal,SRC-ORPHAN-0061,Inbound Web Opportunity (Unassigned) 6,,22000.00,EUR,Qualified,2026-11-30,,,,,Orphan deal generated from marketing landing page
+62,deal,SRC-ORPHAN-0062,Inbound Web Opportunity (Unassigned) 7,,24000.00,EUR,New,2026-11-30,,,,,Orphan deal generated from marketing landing page
+63,deal,SRC-ORPHAN-0063,Inbound Web Opportunity (Unassigned) 8,,26000.00,EUR,Qualified,2026-11-30,,,,,Orphan deal generated from marketing landing page
+64,deal,SRC-ORPHAN-0064,Inbound Web Opportunity (Unassigned) 9,,28000.00,EUR,New,2026-11-30,,,,,Orphan deal generated from marketing landing page
+65,deal,SRC-ORPHAN-0065,Inbound Web Opportunity (Unassigned) 10,,30000.00,EUR,Qualified,2026-11-30,,,,,Orphan deal generated from marketing landing page
+66,quote,SRC-QUOTE-0066,,,,USD,,,20000000-0000-4000-8000-000000000001,Q-2026-8866,2026-10-23,26500.00,Standard commercial quote with 30-day price validity.
+67,quote,SRC-QUOTE-0067,,,,USD,,,20000000-0000-4000-8000-000000000002,Q-2026-8867,2026-10-23,28000.00,Standard commercial quote with 30-day price validity.
+68,quote,SRC-QUOTE-0068,,,,USD,,,20000000-0000-4000-8000-000000000003,Q-2026-8868,2026-10-23,29500.00,Standard commercial quote with 30-day price validity.
+69,quote,SRC-QUOTE-0069,,,,USD,,,20000000-0000-4000-8000-000000000004,Q-2026-8869,2026-10-23,31000.00,Standard commercial quote with 30-day price validity.
+70,quote,SRC-QUOTE-0070,,,,USD,,,20000000-0000-4000-8000-000000000005,Q-2026-8870,2026-10-23,32500.00,Standard commercial quote with 30-day price validity.
+71,quote,SRC-QUOTE-0071,,,,USD,,,20000000-0000-4000-8000-000000000006,Q-2026-8871,2026-10-23,34000.00,Standard commercial quote with 30-day price validity.
+72,quote,SRC-QUOTE-0072,,,,USD,,,20000000-0000-4000-8000-000000000007,Q-2026-8872,2026-10-23,35500.00,Standard commercial quote with 30-day price validity.
+73,quote,SRC-QUOTE-0073,,,,USD,,,20000000-0000-4000-8000-000000000008,Q-2026-8873,2026-10-23,37000.00,Standard commercial quote with 30-day price validity.
+74,quote,SRC-QUOTE-0074,,,,USD,,,20000000-0000-4000-8000-000000000009,Q-2026-8874,2026-10-23,38500.00,Standard commercial quote with 30-day price validity.
+75,quote,SRC-QUOTE-0075,,,,USD,,,20000000-0000-4000-8000-000000000010,Q-2026-8875,2026-10-23,40000.00,Standard commercial quote with 30-day price validity.
+76,deal,SRC-DUP-DEAL-01,Enterprise Cloud Migration Package 1,90000000-0000-4000-8000-000000000002,26500.00,USD,New,2026-02-15,,,,,Duplicate A of deal 1
+77,deal,SRC-DUP-DEAL-02,Enterprise Cloud Migration Package 1,90000000-0000-4000-8000-000000000002,26500.00,USD,New,2026-02-15,,,,,Duplicate B of deal 1
+78,deal,SRC-DUP-DEAL-03,Enterprise Cloud Migration Package 2,90000000-0000-4000-8000-000000000001,28000.00,USD,Qualified,2026-03-15,,,,,Duplicate A of deal 2
+79,deal,SRC-DUP-DEAL-04,Enterprise Cloud Migration Package 2,90000000-0000-4000-8000-000000000001,28000.00,USD,Qualified,2026-03-15,,,,,Duplicate B of deal 2
+80,quote,SRC-DUP-QUOTE-01,,,,USD,,,20000000-0000-4000-8000-000000000001,Q-2026-8866,2026-10-23,26500.00,Duplicate quote number A
+81,quote,SRC-DUP-QUOTE-02,,,,USD,,,20000000-0000-4000-8000-000000000001,Q-2026-8866,2026-10-23,26500.00,Duplicate quote number B
+82,quote,SRC-DUP-QUOTE-03,,,,USD,,,20000000-0000-4000-8000-000000000002,Q-2026-8867,2026-10-23,28000.00,Duplicate quote number C
+83,quote,SRC-DUP-QUOTE-04,,,,USD,,,20000000-0000-4000-8000-000000000002,Q-2026-8867,2026-10-23,28000.00,Duplicate quote number D
+84,deal,SRC-NEG-01,Negative Deal Alpha,,-500.00,USD,New,2026-12-01,,,,,Invalid negative value
+85,deal,SRC-NEG-02,Negative Deal Beta,,-1250.50,USD,Qualified,2026-12-01,,,,,Invalid negative value
+86,deal,SRC-NEG-03,Negative Deal Gamma,,-9999.00,USD,Proposal,2026-12-01,,,,,Invalid negative value
+87,deal,SRC-CURR-01,Invalid Currency Deal 1,,15000.00,US,New,2026-12-01,,,,,Invalid 2-letter currency
+88,deal,SRC-CURR-02,Invalid Currency Deal 2,,20000.00,123,New,2026-12-01,,,,,Numeric currency string
+89,deal,SRC-CURR-03,Invalid Currency Deal 3,,35000.00,dollars,New,2026-12-01,,,,,Non-ISO word currency
+90,deal,SRC-NAME-01,,,10000.00,USD,New,2026-12-01,,,,,Blank name
+91,deal,SRC-NAME-02,   ,,15000.00,USD,New,2026-12-01,,,,,Whitespace-only name
+92,deal,SRC-NAME-03,,,20000.00,USD,New,2026-12-01,,,,,Omitted name
+93,deal,SRC-STAGE-01,Stage Violation Deal 1,,10000.00,USD,Draft,2026-12-01,,,,,Non-standard stage Draft
+94,deal,SRC-STAGE-02,Stage Violation Deal 2,,15000.00,USD,Review,2026-12-01,,,,,Non-standard stage Review
+95,deal,SRC-STAGE-03,Stage Violation Deal 3,,20000.00,USD,Cancelled,2026-12-01,,,,,Non-standard stage Cancelled
+96,deal,SRC-DATE-01,Broken Date Deal 1,,10000.00,USD,New,31/12/2026,,,,,Non-ISO DD/MM/YYYY
+97,deal,SRC-DATE-02,Broken Date Deal 2,,15000.00,USD,New,2026.11.30,,,,,Dot-delimited date
+98,deal,SRC-DATE-03,Broken Date Deal 3,,20000.00,USD,New,asap,,,,,Arbitrary text date
+99,quote,SRC-NO-DEAL-01,,,,USD,,,00000000-0000-0000-0000-000000000000,Q-2026-9991,2026-10-23,10000.00,Missing parent deal
+100,quote,SRC-NO-DEAL-02,,,,USD,,,ffffffff-ffff-4fff-bfff-ffffffffffff,Q-2026-9992,2026-10-23,15000.00,Non-existent parent deal
