@@ -6,6 +6,7 @@
  * API base: /api/v1/crm-marketing
  */
 import { z } from 'zod';
+import { ClearShiftRoles, type RoleType } from './roles.js';
 
 // ---------------------------------------------------------------------------
 // 1. Enums & Domain Invariants (FR-CRM4-01..05, BR-CRM4-01)
@@ -204,3 +205,29 @@ export const CRM4MemberListResponseSchema = z.object({
   pagination: CRM4PaginationSchema,
 });
 export type CRM4MemberListResponse = z.infer<typeof CRM4MemberListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// 5. Route Prefix and Role Capability Matrix (SDS v2.0 §4 / §7.1)
+// ---------------------------------------------------------------------------
+
+export const CRM4_API_PREFIX = '/api/v1/crm-marketing' as const;
+
+export const CRM4_ENDPOINT_ROLES = {
+  LISTS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  LISTS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  LISTS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+  LISTS_UPDATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  CAMPAIGNS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  CAMPAIGNS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  CAMPAIGNS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+  CAMPAIGNS_UPDATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  MEMBERS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  MEMBERS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  CONSENTS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
+  CONSENTS_SET: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+} as const;
+
+export type CRM4EndpointKey = keyof typeof CRM4_ENDPOINT_ROLES;
