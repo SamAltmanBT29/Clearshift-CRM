@@ -241,3 +241,100 @@ The pipeline enforces hard boundary limits before and during parsing. Exceeding 
 - The batch transitions to `failed` with the exact error code (e.g. `MAX_COLUMNS`, `INVALID_ENCODING`, `SECURITY_REJECTED`).
 - **Zero Row Fabrication:** The engine never fabricates partial row rejection outcomes or skipped records for file-level ingest failures.
 
+---
+
+## 8. Column Profiling, Data Health Report & Stable Export (KIT-03)
+
+### 8.1 Non-Destructive Profiling Architecture
+
+Step 2 (Profile) inspects the extracted raw rows without mutating `public.raw_rows`. It computes column health metrics, data type conformances, value distributions, and exact duplicate candidate clusters:
+
+```
+[ Immutable Raw Rows (public.raw_rows) ]
+                  │
+                  ▼
+   ┌──────────────────────────────┐
+   │       Column Profiler        │
+   │  - Null / Empty Counts       │
+   │  - Inferred Data Types       │
+   │  - Format Violation Rates    │
+   │  - Top 5 Frequency Analysis  │
+   │  - Min / Max Extrema         │
+   └──────────────┬───────────────┘
+                  │
+                  ▼
+   ┌──────────────────────────────┐
+   │   Exact Duplicate Detector   │
+   │  - Declared Key Fields       │
+   │  - Exact Normalized Matching │
+   │  - Group & Row Candidate Idx │
+   └──────────────┬───────────────┘
+                  │
+                  ├──────────────────────────────┐
+                  ▼                              ▼
+     [ public.kit_profile_reports ]   [ public.outbox ]
+       Persistent Metric Table          'batch.profiled' Event
+                  │
+                  ▼
+     [ Formula-Safe CSV Export ]
+       Spreadsheet Safe (' Prefix)
+```
+
+### 8.2 Computed Column Metrics
+
+For every column in the dataset, the profiler generates deterministic statistics:
+- **`totalRows`**: Total row count across the file.
+- **`emptyCount`**: Count of blank or whitespace-only cells.
+- **`distinctCount`**: Count of unique non-empty values.
+- **`inferredType`**: Detected dominant data type (`uuid`, `email`, `phone`, `integer`, `decimal`, `date`, `boolean`, `json`, or `string`).
+- **`invalidCount`**: Count of non-empty values that violate the inferred or declared type pattern.
+- **`topValues`**: Up to 5 most frequent values with their absolute count and percentage, sorted descending by count, with alphabetical tie-breaking for determinism.
+- **`minValue` / `maxValue`**: Extrema across non-empty values.
+
+### 8.3 Exact-Duplicate Candidate Detection
+
+- **Declared Keys:** Evaluates one or more declared key fields (e.g. `email` for contacts, `sku` for products, `tax_number` or `id` for companies).
+- **Normalized Exact Matching:** Trims whitespace and normalizes email casing to lowercase. Does not perform fuzzy auto-merge (strict V1 boundary).
+- **Cluster Accounting:** Accurately reports `totalDuplicates` (total rows participating in duplicate candidate groups) and `uniqueDuplicateKeys`.
+
+### 8.4 Canonical 1,000-Row Fixture & Manifest
+
+ClearShift V1 provides a canonical 1,000-row integration Dirty Data Pack under `sample-data/dirty-data-pack/`:
+- **`dirty-data-v1.csv`**: Exactly 1,000 rows verified against committed SHA-256 digest `63db7e77a072fb9fda42ad6d3a9132c455a0a11de2f7f618e774577b89179362`.
+- **`expected-profile.json`**: Pre-calculated problem manifest matching SDS §4.14 TS-02:
+  - **80 Duplicates:** 40 primary rows and 40 exact duplicate copies sharing identical email keys (rows 111–190).
+  - **60 Format Errors:** 25 invalid emails, 20 malformed phone numbers, 15 non-numeric revenues (rows 51–110).
+  - **50 Empty Required Fields:** 30 empty `first_name` and 20 empty `company` fields (rows 1–50).
+  - **810 Clean Records:** Valid distinct baseline rows (rows 191–1000).
+
+### 8.5 Formula-Safe CSV Export
+
+When exporting the profile data health report to CSV for operator review:
+- **Formula Neutralization:** Cells beginning with formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) are automatically prepended with a single quote (`'`), neutralizing spreadsheet formula injection exploits.
+- **Deterministic Formatting:** Output sections, columns, and top value distributions are sorted deterministically, guaranteeing byte-for-byte reproducibility across runs.
+
+### 8.6 Step Completion & Outbox Event Emission
+
+Upon completing profiling:
+1. Column profile records persist into `public.kit_profile_reports`.
+2. The batch registry transitions batch status to `profiled` and records step execution in `public.kit_batch_steps`.
+3. A standardized outbox event `batch.profiled` conforming to `EventEnvelopeSchema` is written to `public.outbox`:
+   ```json
+   {
+     "eventType": "batch.profiled",
+     "aggregateType": "kit_batch",
+     "aggregateId": "BATCH_UUID",
+     "payload": {
+       "batchId": "BATCH_UUID",
+       "module": "crm",
+       "emptyCount": 50,
+       "invalidCount": 60,
+       "duplicateCount": 80,
+       "totalRows": 1000,
+       "columnsCount": 8,
+       "rulesetVersion": 1
+     }
+   }
+   ```
+
+
