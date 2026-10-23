@@ -25,6 +25,15 @@ const TICKET_CREATE_ROLES = ['editor', 'migration_runner', 'admin'] as const;
 const TICKET_UPDATE_ROLES = ['editor', 'admin'] as const;
 const NOTE_ROLES = ['editor', 'admin'] as const;
 
+/**
+ * Correlation id for error envelopes: the caller's x-correlation-id header, else one derived
+ * from the Fastify request id.
+ */
+function correlationIdOf(request: FastifyRequest): string {
+  const header = request.headers['x-correlation-id'];
+  return typeof header === 'string' && header.length > 0 ? header : `corr-${request.id}`;
+}
+
 function getPreHandlers(
   fastify: FastifyInstance,
   roles: readonly string[],
@@ -59,6 +68,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const parseResult = CRM3TicketListQuerySchema.safeParse(request.query);
       if (!parseResult.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'INVALID_QUERY',
           message: 'Invalid query parameters',
           details: parseResult.error.issues,
@@ -82,6 +92,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const paramResult = UuidParamSchema.safeParse(request.params);
       if (!paramResult.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid ticket UUID',
           details: paramResult.error.issues,
@@ -91,6 +102,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const ticket = await service.getTicketById(paramResult.data.id);
       if (!ticket) {
         return reply.status(404).send({
+          correlation_id: correlationIdOf(request),
           code: 'NOT_FOUND',
           message: `Ticket with ID '${paramResult.data.id}' not found`,
           details: [
@@ -119,6 +131,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const parse = CRM3TicketCreateSchema.safeParse(request.body);
       if (!parse.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid ticket input',
           details: parse.error.issues,
@@ -132,6 +145,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
           return reply.status(err.statusCode || 400).send({
+            correlation_id: correlationIdOf(request),
             code: err.code || 'VALIDATION_ERROR',
             message: err.message,
             details: err.details || [],
@@ -154,6 +168,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const paramResult = UuidParamSchema.safeParse(request.params);
       if (!paramResult.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid ticket UUID',
           details: paramResult.error.issues,
@@ -163,6 +178,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const parse = CRM3TicketPatchSchema.safeParse(request.body);
       if (!parse.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid ticket update input',
           details: parse.error.issues,
@@ -175,6 +191,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
           return reply.status(err.statusCode || 400).send({
+            correlation_id: correlationIdOf(request),
             code: err.code || 'VALIDATION_ERROR',
             message: err.message,
             details: err.details || [],
@@ -197,6 +214,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const paramResult = UuidParamSchema.safeParse(request.params);
       if (!paramResult.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid ticket UUID',
           details: paramResult.error.issues,
@@ -206,6 +224,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const queryResult = CRM3NoteListQuerySchema.safeParse(request.query);
       if (!queryResult.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'INVALID_QUERY',
           message: 'Invalid query parameters',
           details: queryResult.error.issues,
@@ -218,6 +237,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
           return reply.status(err.statusCode || 400).send({
+            correlation_id: correlationIdOf(request),
             code: err.code || 'VALIDATION_ERROR',
             message: err.message,
             details: err.details || [],
@@ -240,6 +260,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const parse = CRM3NoteCreateSchema.safeParse(request.body);
       if (!parse.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid note input',
           details: parse.error.issues,
@@ -258,6 +279,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
           return reply.status(err.statusCode || 400).send({
+            correlation_id: correlationIdOf(request),
             code: err.code || 'VALIDATION_ERROR',
             message: err.message,
             details: err.details || [],
@@ -280,6 +302,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const paramResult = UuidParamSchema.safeParse(request.params);
       if (!paramResult.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid ticket UUID',
           details: paramResult.error.issues,
@@ -296,6 +319,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       const parse = NoteBodySchema.safeParse(request.body);
       if (!parse.success) {
         return reply.status(400).send({
+          correlation_id: correlationIdOf(request),
           code: 'VALIDATION_ERROR',
           message: 'Invalid note input',
           details: parse.error.issues,
@@ -314,6 +338,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
           return reply.status(err.statusCode || 400).send({
+            correlation_id: correlationIdOf(request),
             code: err.code || 'VALIDATION_ERROR',
             message: err.message,
             details: err.details || [],
