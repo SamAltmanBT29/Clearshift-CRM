@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "rulesetVersion": 1,
+  "fixture": {
+    "file": "dirty-data-v1.csv",
+    "module": "crm-4",
+    "description": "Synthetic dirty marketing data containing valid rows, formula injection, invalid member states, opt-out reversals, and missing references",
+    "rows": 50
+  },
+  "outcomes": {
+    "accept": 30,
+    "normalize": 5,
+    "reject": 15
+  },
+  "knownProblems": {
+    "invalidMemberStatusCount": 5,
+    "optOutReversalCount": 5,
+    "missingOrInvalidFieldCount": 5,
+    "formulaInjectionCount": 5,
+    "totalProblemCount": 20
+  },
+  "rejectionRules": {
+    "CRM4-RULE-001": "Member status must strictly be one of sent, opened, clicked",
+    "CRM4-RULE-002": "BR-CRM4-01 Monotonic opt-out violation (cannot revert unsubscribed to subscribed)",
+    "CRM4-RULE-003": "List or campaign name cannot be empty or whitespace-only",
+    "CRM4-RULE-004": "Referenced campaign or contact ID must be a valid non-empty UUID"
+  }
+}
