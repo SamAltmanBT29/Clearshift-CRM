@@ -384,3 +384,29 @@ CRM-5 primary views register structured facets mapped bi-directionally to API qu
 | `defectsByCategory` | 11 categories, 1-based `recordIndices`, asserted against `tests/fixtures/manifest.json` |
 | `exactDuplicateCount` | repeated `id` or repeated `(batch_id, step)` |
 | `qualityMetrics` | 5 fractions + `overallScore` via `calculateQualityScore`; `null` (N/A) if unavailable |
+
+---
+
+## 12. UI Loading, Empty, Error, and 403 Access-Denied States (CRM5-19)
+
+### 12.1 Animated Table Skeleton Shimmer Loader (`TableSkeleton`)
+* **Visual Shimmer Feedback:** Displays structured placeholder table rows matching the column structure of the target entity collection with smooth shimmer animations (`@keyframes cs-shimmer`).
+* **WAI-ARIA Accessibility:** Conforms strictly to WAI-ARIA status semantics with `role="status"`, `aria-busy="true"`, and an informative screen-reader announcement (`.cs-sr-only`) declaring that table data is actively loading.
+* **Bounded Layout Ceilings:** Supports configurable `rowCount` (default: 5) and `columnCount` (default: 6) with optional column width overrides to prevent layout shifts during initial data fetching.
+
+### 12.2 Zero-Data Condition & Actionable Call-to-Action (`EmptyState`)
+* **Informative Zero-Data State:** Rendered whenever an entity collection or query result contains zero records, providing clear visual iconography, a descriptive heading, and explanatory subtext.
+* **Contextual Call-to-Action:** Features a primary CTA button (`.cs-empty-cta-btn`) allowing operators to immediately initiate data migration, upload synthetic files, or create batches.
+* **Secondary Action Support:** Optionally renders a secondary link or action button (`.cs-empty-secondary-btn`) for documentation or navigation.
+* **Filter Reset Integration:** When zero records result from restrictive filters, renders in filter-reset mode (`.cs-empty-filter-state`) with a dedicated "Reset All Filters" button (`.cs-clear-all-filters-btn`).
+
+### 12.3 API Error Alert Banner & Stack Trace Sanitization (`ErrorAlert`)
+* **Accessible Alert Banner:** Renders with `role="alert"` and `aria-live="assertive"`, ensuring screen readers immediately announce upstream service or network failures.
+* **Security & Sanitization Invariant (`sanitizeErrorMessage`):** Client-side error messages strictly sanitize raw server responses, stripping Node.js / V8 stack traces (`at Function...`), internal filesystem paths (`/Users/`, `/home/`, `/var/`), and SQL syntax error strings to prevent leaking system topology or sensitive internals.
+* **Message Length Ceiling:** Sanitized messages are capped at a maximum of 240 characters to protect page layout integrity.
+* **Interactive Recovery Action:** Provides a keyboard-accessible **Retry** button (`.cs-error-retry-btn`) that allows operators to re-trigger the failed query without reloading the page.
+
+### 12.4 403 Forbidden Access-Denied View (`AccessDeniedView`)
+* **Authorization Failure Handling:** Rendered whenever an endpoint returns HTTP 403 Forbidden or the client-side route guard detects insufficient permissions.
+* **Clear Role & Capability Transparency:** Distinctly displays a `403 Forbidden` status badge, details the required capability (e.g. `control:read`), specifies any required role, and announces the current user's role.
+* **Safe Return Path:** Features an accessible return button (`.cs-access-back-btn`) directing users back to the Migration Control Center home view (`/crm-5`).
