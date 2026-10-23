@@ -548,7 +548,6 @@ describe('CRM-3 Support Tickets & Activities: List/Read API & Contracts (Issue #
         payload: {
           ticketId,
           noteText: 'Investigated log files: confirmed payment gateway timeout.',
-          authorId: 'senior-engineer',
         },
       });
 
@@ -557,7 +556,8 @@ describe('CRM-3 Support Tickets & Activities: List/Read API & Contracts (Issue #
       const parsed = CRM3NoteSchema.safeParse(note);
       expect(parsed.success).toBe(true);
       expect(note.ticketId).toBe(ticketId);
-      expect(note.authorId).toBe('senior-engineer');
+      // Author comes from the authenticated token subject (CRM3-15 / #148).
+      expect(note.authorId).toBe('synthetic-editor');
       expect(note.noteText).toBe(
         'Investigated log files: confirmed payment gateway timeout.'
       );
