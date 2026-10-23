@@ -9,7 +9,8 @@ import {
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
 import { crm3Service, Crm3Service } from '../services/crm3.service.js';
-import { requireRoles } from '../plugins/auth.js';
+import { requireRoles, resolveNoteAuthor } from '../plugins/auth.js';
+import { CRM3_ENDPOINT_ROLES } from '../policies/roles.js';
 
 export interface Crm3RoutesOptions {
   service?: Crm3Service;
@@ -19,11 +20,6 @@ export interface Crm3RoutesOptions {
 const UuidParamSchema = z.object({
   id: z.string().uuid('Ticket ID must be a valid UUID'),
 });
-
-const READ_ROLES = ['viewer', 'editor', 'analyst', 'admin'] as const;
-const TICKET_CREATE_ROLES = ['editor', 'migration_runner', 'admin'] as const;
-const TICKET_UPDATE_ROLES = ['editor', 'admin'] as const;
-const NOTE_ROLES = ['editor', 'admin'] as const;
 
 /**
  * Correlation id for error envelopes: the caller's x-correlation-id header, else one derived
@@ -39,8 +35,14 @@ function getPreHandlers(
   roles: readonly string[],
   enforceAuth = true
 ) {
-  if (!enforceAuth || !fastify.authenticate) {
+  if (!enforceAuth) {
     return [];
+  }
+  // Fail closed: never expose routes unauthenticated because the Hub JWT plugin is missing.
+  if (!fastify.authenticate) {
+    throw new Error(
+      'CRM-3 routes require the @cs/identity jwtPlugin to be registered (or enforceAuth: false for tests)'
+    );
   }
   return [fastify.authenticate, requireRoles(roles)];
 }
@@ -62,7 +64,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.get(
     '/tickets',
     {
-      preHandler: getPreHandlers(fastify, READ_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.TICKETS_LIST, enforceAuth),
     },
     async (request, reply) => {
       const parseResult = CRM3TicketListQuerySchema.safeParse(request.query);
@@ -86,7 +88,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.get(
     '/tickets/:id',
     {
-      preHandler: getPreHandlers(fastify, READ_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.TICKETS_READ, enforceAuth),
     },
     async (request, reply) => {
       const paramResult = UuidParamSchema.safeParse(request.params);
@@ -125,7 +127,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.post(
     '/tickets',
     {
-      preHandler: getPreHandlers(fastify, TICKET_CREATE_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.TICKETS_CREATE, enforceAuth),
     },
     async (request: FastifyRequest, reply) => {
       const parse = CRM3TicketCreateSchema.safeParse(request.body);
@@ -162,7 +164,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.patch(
     '/tickets/:id',
     {
-      preHandler: getPreHandlers(fastify, TICKET_UPDATE_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.TICKETS_UPDATE, enforceAuth),
     },
     async (request, reply) => {
       const paramResult = UuidParamSchema.safeParse(request.params);
@@ -208,7 +210,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.get(
     '/tickets/:id/notes',
     {
-      preHandler: getPreHandlers(fastify, READ_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.NOTES_LIST, enforceAuth),
     },
     async (request, reply) => {
       const paramResult = UuidParamSchema.safeParse(request.params);
@@ -254,7 +256,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.post(
     '/notes',
     {
-      preHandler: getPreHandlers(fastify, NOTE_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.NOTES_CREATE, enforceAuth),
     },
     async (request: FastifyRequest, reply) => {
       const parse = CRM3NoteCreateSchema.safeParse(request.body);
@@ -268,8 +270,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       }
 
       try {
-        const authorId =
-          parse.data.authorId || request.user?.sub || 'authenticated-user';
+        const authorId = resolveNoteAuthor(request, parse.data.authorId);
         const created = await service.addNote(
           parse.data.ticketId,
           parse.data.noteText,
@@ -296,7 +297,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   fastify.post(
     '/tickets/:id/notes',
     {
-      preHandler: getPreHandlers(fastify, NOTE_ROLES, enforceAuth),
+      preHandler: getPreHandlers(fastify, CRM3_ENDPOINT_ROLES.NOTES_CREATE, enforceAuth),
     },
     async (request: FastifyRequest, reply) => {
       const paramResult = UuidParamSchema.safeParse(request.params);
@@ -327,8 +328,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       }
 
       try {
-        const authorId =
-          parse.data.authorId || request.user?.sub || 'authenticated-user';
+        const authorId = resolveNoteAuthor(request, parse.data.authorId);
         const created = await service.addNote(
           paramResult.data.id,
           parse.data.noteText,

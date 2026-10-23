@@ -12,6 +12,9 @@ import {
   type CRM3NoteListResponse,
   type CRM3TicketStatus,
   type CRM3TicketPriority,
+  type CRM3ImportBatch,
+  type CRM3ImportReceipt,
+  type CRM3EntityType,
   assertValidTicketStatus,
   assertValidTicketPriority,
 } from '@clearshift/contracts';
@@ -28,7 +31,46 @@ import {
 
 export interface Crm3ServiceOptions {
   contactResolver?: ReferenceResolver;
+  /**
+   * Test hook called inside the atomic import commit after the ticket and note are staged and
+   * before receipts are recorded. Throwing from it simulates a failed receipt write.
+   */
+  onBeforeImportReceiptCommit?: () => void;
 }
+
+/** Import receipt as stored by CRM-3, plus the canonical payload hash used for replay checks. */
+export interface Crm3StoredImportReceipt extends CRM3ImportReceipt {
+  payloadHash: string;
+}
+
+export interface Crm3TicketImportCommand {
+  batchId: string;
+  sourceRow: number;
+  sourceSystem: string;
+  sourceId: string;
+  ticketIdempotencyKey: string;
+  noteIdempotencyKey: string;
+  payloadHash: string;
+  subject: string;
+  status: CRM3TicketStatus;
+  priority: CRM3TicketPriority;
+  contactId: string;
+  orderRef: string | null;
+  noteText: string | null;
+  noteAuthorId: string;
+}
+
+export type Crm3TicketImportCommit =
+  | { kind: 'created'; ticket: CRM3Ticket; receipts: Crm3StoredImportReceipt[] }
+  | { kind: 'existing_receipt'; receipt: Crm3StoredImportReceipt }
+  | { kind: 'duplicate_source_key'; existingTicketId: string };
+
+/**
+ * ReferenceResolver entity type for looking up a CRM-1 contact by normalized email
+ * (`get(CONTACT_BY_EMAIL_ENTITY, email)` returns `{ id, email }` or null). Used by the
+ * migration import path to turn the source "customer email" into a contact id.
+ */
+export const CONTACT_BY_EMAIL_ENTITY = 'contact_by_email';
 
 /**
  * Synthetic CRM-1 contact resolver for standalone operation and testing.
@@ -68,6 +110,15 @@ export class DefaultSyntheticContactResolver implements ReferenceResolver {
         } as unknown as T;
       }
     }
+    if (entityType === CONTACT_BY_EMAIL_ENTITY) {
+      // Exact match on the normalized email (no fuzzy matching in V1).
+      const email = id.trim().toLowerCase();
+      for (const [contactId, c] of this.contacts) {
+        if (c.email.toLowerCase() === email) {
+          return { id: contactId, email: c.email } as unknown as T;
+        }
+      }
+    }
     return null;
   }
 
@@ -84,11 +135,15 @@ export class DefaultSyntheticContactResolver implements ReferenceResolver {
 export class Crm3Service {
   private tickets: CRM3Ticket[] = [];
   private notes: CRM3Note[] = [];
+  private importBatches: CRM3ImportBatch[] = [];
+  private importReceipts: Crm3StoredImportReceipt[] = [];
   private contactResolver: ReferenceResolver;
   private ticketLocks = new Map<string, Promise<void>>();
+  private onBeforeImportReceiptCommit: (() => void) | undefined;
 
   constructor(options: Crm3ServiceOptions = {}) {
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
+    this.onBeforeImportReceiptCommit = options.onBeforeImportReceiptCommit;
     this.seedSyntheticData();
   }
 
@@ -103,6 +158,8 @@ export class Crm3Service {
   public resetStore(): void {
     this.tickets = [];
     this.notes = [];
+    this.importBatches = [];
+    this.importReceipts = [];
     this.seedSyntheticData();
   }
 
@@ -393,6 +450,153 @@ export class Crm3Service {
 
     this.notes.push(note);
     return note;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Migration import support (used in-process by the CRM-3 target adapter, decision C4)
+  // ---------------------------------------------------------------------------
+
+  public findBySourceKey(sourceSystem: string, sourceId: string): CRM3Ticket | null {
+    return (
+      this.tickets.find((t) => t.sourceSystem === sourceSystem && t.sourceId === sourceId) ?? null
+    );
+  }
+
+  public getImportReceiptByKey(idempotencyKey: string): Crm3StoredImportReceipt | null {
+    return this.importReceipts.find((r) => r.idempotencyKey === idempotencyKey) ?? null;
+  }
+
+  public getImportReceiptByRow(
+    batchId: string,
+    sourceRow: number,
+    entity: CRM3EntityType
+  ): Crm3StoredImportReceipt | null {
+    return (
+      this.importReceipts.find(
+        (r) => r.batchId === batchId && r.sourceRow === sourceRow && r.entity === entity
+      ) ?? null
+    );
+  }
+
+  public listImportReceipts(batchId: string): Crm3StoredImportReceipt[] {
+    return this.importReceipts
+      .filter((r) => r.batchId === batchId)
+      .sort((a, b) => a.sourceRow - b.sourceRow || a.entity.localeCompare(b.entity));
+  }
+
+  public getImportBatch(batchId: string): CRM3ImportBatch | null {
+    return this.importBatches.find((b) => b.id === batchId) ?? null;
+  }
+
+  /**
+   * Writes an imported ticket, its optional first note and their import receipts as one atomic
+   * unit (create-only, decision C8). The method is synchronous, so no other operation can
+   * interleave between the duplicate checks and the writes; on any failure every staged change
+   * is rolled back and nothing is kept.
+   */
+  public commitTicketImport(command: Crm3TicketImportCommand): Crm3TicketImportCommit {
+    const existingReceipt =
+      this.getImportReceiptByKey(command.ticketIdempotencyKey) ??
+      this.getImportReceiptByRow(command.batchId, command.sourceRow, 'ticket');
+    if (existingReceipt) {
+      return { kind: 'existing_receipt', receipt: existingReceipt };
+    }
+
+    const duplicate = this.findBySourceKey(command.sourceSystem, command.sourceId);
+    if (duplicate) {
+      return { kind: 'duplicate_source_key', existingTicketId: duplicate.id };
+    }
+
+    const snapshot = {
+      tickets: [...this.tickets],
+      notes: [...this.notes],
+      importBatches: [...this.importBatches],
+      importReceipts: [...this.importReceipts],
+    };
+
+    try {
+      const now = new Date().toISOString();
+      this.ensureImportBatch(command.batchId, command.sourceSystem, now);
+
+      const ticket: CRM3Ticket = {
+        id: randomUUID(),
+        subject: command.subject,
+        status: command.status,
+        priority: command.priority,
+        contactId: command.contactId,
+        orderRef: command.orderRef,
+        sourceSystem: command.sourceSystem,
+        sourceId: command.sourceId,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.tickets.push(ticket);
+
+      const receipts: Crm3StoredImportReceipt[] = [
+        {
+          id: randomUUID(),
+          batchId: command.batchId,
+          sourceRow: command.sourceRow,
+          entity: 'ticket',
+          sourceSystem: command.sourceSystem,
+          sourceId: command.sourceId,
+          targetId: ticket.id,
+          idempotencyKey: command.ticketIdempotencyKey,
+          payloadHash: command.payloadHash,
+          createdAt: now,
+        },
+      ];
+
+      if (command.noteText) {
+        const note: CRM3Note = {
+          id: randomUUID(),
+          ticketId: ticket.id,
+          authorId: command.noteAuthorId,
+          noteText: command.noteText,
+          createdAt: now,
+        };
+        this.notes.push(note);
+        receipts.push({
+          id: randomUUID(),
+          batchId: command.batchId,
+          sourceRow: command.sourceRow,
+          entity: 'note',
+          sourceSystem: command.sourceSystem,
+          sourceId: command.sourceId,
+          targetId: note.id,
+          idempotencyKey: command.noteIdempotencyKey,
+          payloadHash: command.payloadHash,
+          createdAt: now,
+        });
+      }
+
+      this.onBeforeImportReceiptCommit?.();
+      this.importReceipts.push(...receipts);
+
+      return { kind: 'created', ticket, receipts };
+    } catch (error) {
+      this.tickets = snapshot.tickets;
+      this.notes = snapshot.notes;
+      this.importBatches = snapshot.importBatches;
+      this.importReceipts = snapshot.importReceipts;
+      throw error;
+    }
+  }
+
+  private ensureImportBatch(batchId: string, sourceSystem: string, now: string): void {
+    if (this.getImportBatch(batchId)) return;
+    this.importBatches.push({
+      id: batchId,
+      sourceSystem,
+      status: 'processing',
+      idempotencyKey: null,
+      requestHash: null,
+      loadedCount: 0,
+      rejectedCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+    });
   }
 
   public ticketExists(id: string): boolean {

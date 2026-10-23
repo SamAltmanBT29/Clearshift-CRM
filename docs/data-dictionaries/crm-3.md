@@ -153,3 +153,60 @@ Source of truth: `CRM3_TICKET_STATUS_TRANSITIONS` in `packages/contracts/src/crm
 - `GET /tickets/{id}` and the module's public `Crm3ReferenceResolver` read the same authoritative store, so status, contact link and order reference agree immediately after a successful write.
 - A contact that can no longer be resolved is shown with `contactName`/`contactEmail` = `null`; the ticket is still returned.
 - The public resolver projects only `id, subject, status, priority, contactId` (no note text, no contact PII).
+
+## 6. Authorization Policy (CRM3-15 / #148)
+
+Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/roles.ts`. Every route runs the shared Hub `jwtPlugin` (`@cs/identity`): EdDSA signature, `exp`, issuer `clearshift-hub` and audience `clearshift` are verified. `admin` passes every check.
+
+| Route | viewer | editor | migration_runner | analyst | admin | no token |
+|---|---|---|---|---|---|---|
+| `GET /tickets` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}/notes` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `POST /tickets` | 403 | 201 | 201 | 403 | 201 | 401 |
+| `PATCH /tickets/{id}` | 403 | 200 | 403 | 403 | 200 | 401 |
+| `POST /notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+| `POST /tickets/{id}/notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+
+- 401 `UNAUTHORIZED` and 403 `FORBIDDEN` use the standard envelope `{ code, message, details, correlation_id }`.
+- Roles, not `@cs/rbac` capabilities, decide access: the SDS lets `migration_runner` create tickets although that role has no `module.write` capability.
+- **Fail closed:** registering the routes with auth enabled but without the Hub `jwtPlugin` throws at startup instead of serving unauthenticated routes. `enforceAuth: false` exists only for isolated tests.
+- **Note author:** always the authenticated user (`sub`). A body `authorId` naming someone else returns 403 `AUTHOR_MISMATCH` (detail code `author_mismatch`) and nothing is written.
+- **Protected fields:** `PATCH /tickets/{id}` rejects `id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId` with 400 (strict schema); nothing is written.
+- **Multi-tenancy:** V1 has no tenant or owner column on tickets, so there is no tenant isolation rule to enforce.
+
+## 7. Migration Kit Target Adapter & Import Receipts (CRM3-11 / #144)
+
+`Crm3TargetAdapter` (`apps/crm/modules/crm-3/src/migration/target-adapter.ts`) implements the shared Kit `TargetAdapter` port (module `crm-3`, entity `ticket`, schema version 1). It runs in-process and calls the CRM-3 service directly (decision C4); there is no HTTP import route.
+
+### Clean row (input)
+| Field | Required | Rule |
+|---|---|---|
+| `subject` | yes | Non-empty after trim |
+| `status` | yes | Exactly one of `New, Open, Waiting, Solved, Closed` (any status may be imported; the transition map applies to edits only). Variants such as `open`/`NEW` must be normalized by the cleaner first. |
+| `priority` | yes | Exactly one of `Low, Normal, High, Urgent` |
+| `customerEmail` | yes | Valid email; normalized (trim + lowercase) and resolved to a CRM-1 contact through `ReferenceResolver.get('contact_by_email', email)` (decisions C6/C7) |
+| `text` | no | Becomes the ticket's first note, author `kit-import` |
+| `orderRef` | no | Plain text |
+| `sourceSystem`, `sourceId` | no | Default `legacy-csv` and `<batchId>:<sourceRow>` |
+
+### Behaviour
+- **Create-only (decision C8):** a row whose `(sourceSystem, sourceId)` already exists is rejected, never updated.
+- **Atomic:** the ticket, its first note, the batch record (created as `processing` on first load) and the receipts commit together; if any part fails nothing is kept.
+- **Receipts:** one `ticket` receipt (key supplied by the Kit) and, when `text` is present, one `note` receipt (key `computeIdempotencyKey(batchId, sourceRow, 'note', '1')`). Each stores `batch_id, source_row, entity, source_system, source_id, target_id, idempotency_key, created_at`.
+- **Idempotency key:** `computeIdempotencyKey(batchId, sourceRow, entity, schemaVersion)` from `@cs/core` (`buildCrm3IdempotencyKey`). A replay with the same key and the same canonical payload returns the existing receipt and creates nothing; the same key, or the same batch row under another key, with a different payload is rejected.
+- **Dry run (`preflight` / `assessRows`):** validates and resolves customers read-only; writes no tickets, notes, batches or receipts. Also flags a source key repeated within the batch.
+- **One outcome per row:** every call returns either a load (`created`) or a reject with a reason code; nothing is dropped silently.
+
+### Reason codes
+| Code | Kind | Meaning |
+|---|---|---|
+| `EMPTY_SUBJECT` | reject | Subject missing or blank |
+| `INVALID_STATUS` | reject | Status not an exact V1 value |
+| `INVALID_PRIORITY` | reject | Priority not an exact V1 value |
+| `INVALID_EMAIL` | reject | Customer email missing or malformed |
+| `CUSTOMER_UNRESOLVED` | reject | Email does not resolve to a CRM-1 contact (orphan ticket) |
+| `DUPLICATE_SOURCE_KEY` | reject | `(sourceSystem, sourceId)` already exists (or repeats in the batch during dry run) |
+| `IDEMPOTENCY_CONFLICT` | reject | Key or batch row reused with a different payload |
+| `INVALID_ROW`, `INVALID_BATCH_ID`, `INVALID_SOURCE_ROW`, `INVALID_IDEMPOTENCY_KEY` | reject | Caller supplied a malformed row, non-UUID batch id, non-positive row number or empty key |
+| `TARGET_UNAVAILABLE` | **retryable** | Infrastructure failure (e.g. contact resolver down, receipt write failed); nothing was written, retry with the same key |
