@@ -301,7 +301,7 @@ CRM-5 registers 5 primary sub-views under the common ClearShift layout shell:
 
 ---
 
-## 8. KIT-08 Target Adapter Contract & Durable Receipts (CRM5-11)
+## 8. KIT-08 Target Adapter Contract & Durable Receipts ([CRM5-07] — Issue #52)
 
 ### 8.1 Target Adapter Port Adherence
 CRM-5 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
@@ -340,3 +340,73 @@ The CRM-5 primary collection table renders structured data matching the entity d
 * **Deterministic Toggle Cycle:** Clicking a sortable column header cycles through `asc` ↔ `desc`.
 * **WAI-ARIA Accessibility:** Headers announce sort direction via `aria-sort="ascending" | "descending" | "none"` and keyboard-accessible buttons (`<button class="cs-th-sort-btn">`).
 * **Query Serialization:** Binds to standard API parameters `sort=<columnKey>&order=asc|desc&page=<N>&pageSize=<N>&limit=<N>`.
+
+---
+
+## 10. Search, Faceted Filters, and Active Filter Tags (CRM5-18)
+
+### 10.1 300ms Keystroke Debouncing Protocol
+* **Debounce Delay Window:** Free-text searches enforce an exact 300ms debounce interval (`SEARCH_DEBOUNCE_MS = 300`) to prevent API thrashing and unbounded server queries during fast typing.
+* **Immediate Flush:** Pressing the `Enter` key or triggering explicit submission flushes pending timers immediately without waiting for the 300ms timer to expire.
+* **Instant Cancellation & Reset:** Clicking the clear icon (`×`) or pressing `Escape` clears search text, cancels pending timers, and triggers an immediate query update with an empty string.
+
+### 10.2 Faceted Filter Registry & Query Parameter Mapping
+CRM-5 primary views register structured facets mapped bi-directionally to API query parameters:
+
+| Facet Dimension | Query Key | Target Values / Options | API Mapping |
+| :--- | :--- | :--- | :--- |
+| **Search Query** | `search` | String (case-insensitive substring) | Mapped to `batchId` substring filter for server compatibility |
+| **Source Module** | `module` | `crm-1`, `crm-2`, `crm-3`, `crm-4`, `crm-5` | `module=<CrmModule>` |
+| **Run Status** | `status` | `pending`, `running`, `completed`, `failed`, `halted` | `status=<MigrationRunStatus>` |
+| **Migration Step**| `step` | `extract`, `profile`, `clean`, `map`, `load`, `validate`, `reconcile` | `step=<MigrationStep>` |
+
+* **Pagination Reset Invariant:** Modifying any search query or faceted filter dimension immediately resets the active page to 1 (`page = 1`) to eliminate phantom pagination overflows.
+* **Bi-directional URL Synchronization:** All active filters serialize to standard URL query parameters (`toQueryParams()` / `toQueryString()`) and hydrate deterministically from `URLSearchParams` (`fromQueryParams()`).
+
+### 10.3 Active Filter Tag Lifecycle & 'Clear All' Action
+* **Active Filter Pill Tags:** When search text or any facet filter is applied, an active filter tag (`.cs-filter-pill`) is displayed containing the facet label and formatted display value (e.g. `Module: CRM-1 (Contacts & Accounts)`).
+* **Individual Tag Dismissal:** Each pill tag features an accessible dismiss button (`.cs-filter-pill-remove`) with `aria-label="Remove filter: <Label> <Value>"`. Clicking dismiss clears only that specific filter without disturbing other active filters.
+* **Bulk 'Clear All' Reset:** When at least one filter or search is active, a 'Clear All' button (`.cs-clear-all-filters-btn`) is displayed. Activating it purges all filters and search state, resetting query parameters and table results in a single atomic transaction.
+
+### 10.4 Empty Search/Filter State Contract & Reset Recovery
+* **Dual Empty-State Contract:**
+  1. **System Empty State:** Rendered when zero data exists in the table and no filters/search are applied (e.g. *"No migration run projections currently recorded."*).
+  2. **Filtered Empty State (`.cs-empty-filter-state`):** Rendered when data exists in the system but the current search and filter combination returns zero records (e.g. *"No records matched your search and filter criteria. Try adjusting your search term or clearing filters."*).
+* **Reset Recovery Button:** Filtered empty states prominently render a **"Reset All Filters"** action button (`.cs-empty-reset-btn`) that directly triggers `clearAll()`, providing immediate one-click recovery back to the unfiltered collection view.
+
+## 11. Profiler (CRM5-26)
+
+`apps/crm/modules/crm-5/src/kit/profiler.ts` — `profileCrm5Batch(rows)`; read-only, never mutates input.
+
+| Output | Meaning |
+|---|---|
+| `columnStats[col]` | `totalValues`, `nullCount/Rate`, `distinctCount`, `invalidFormatCount/Rate` |
+| `defectsByCategory` | 11 categories, 1-based `recordIndices`, asserted against `tests/fixtures/manifest.json` |
+| `exactDuplicateCount` | repeated `id` or repeated `(batch_id, step)` |
+| `qualityMetrics` | 5 fractions + `overallScore` via `calculateQualityScore`; `null` (N/A) if unavailable |
+
+---
+
+## 12. UI Loading, Empty, Error, and 403 Access-Denied States (CRM5-19)
+
+### 12.1 Animated Table Skeleton Shimmer Loader (`TableSkeleton`)
+* **Visual Shimmer Feedback:** Displays structured placeholder table rows matching the column structure of the target entity collection with smooth shimmer animations (`@keyframes cs-shimmer`).
+* **WAI-ARIA Accessibility:** Conforms strictly to WAI-ARIA status semantics with `role="status"`, `aria-busy="true"`, and an informative screen-reader announcement (`.cs-sr-only`) declaring that table data is actively loading.
+* **Bounded Layout Ceilings:** Supports configurable `rowCount` (default: 5) and `columnCount` (default: 6) with optional column width overrides to prevent layout shifts during initial data fetching.
+
+### 12.2 Zero-Data Condition & Actionable Call-to-Action (`EmptyState`)
+* **Informative Zero-Data State:** Rendered whenever an entity collection or query result contains zero records, providing clear visual iconography, a descriptive heading, and explanatory subtext.
+* **Contextual Call-to-Action:** Features a primary CTA button (`.cs-empty-cta-btn`) allowing operators to immediately initiate data migration, upload synthetic files, or create batches.
+* **Secondary Action Support:** Optionally renders a secondary link or action button (`.cs-empty-secondary-btn`) for documentation or navigation.
+* **Filter Reset Integration:** When zero records result from restrictive filters, renders in filter-reset mode (`.cs-empty-filter-state`) with a dedicated "Reset All Filters" button (`.cs-clear-all-filters-btn`).
+
+### 12.3 API Error Alert Banner & Stack Trace Sanitization (`ErrorAlert`)
+* **Accessible Alert Banner:** Renders with `role="alert"` and `aria-live="assertive"`, ensuring screen readers immediately announce upstream service or network failures.
+* **Security & Sanitization Invariant (`sanitizeErrorMessage`):** Client-side error messages strictly sanitize raw server responses, stripping Node.js / V8 stack traces (`at Function...`), internal filesystem paths (`/Users/`, `/home/`, `/var/`), and SQL syntax error strings to prevent leaking system topology or sensitive internals.
+* **Message Length Ceiling:** Sanitized messages are capped at a maximum of 240 characters to protect page layout integrity.
+* **Interactive Recovery Action:** Provides a keyboard-accessible **Retry** button (`.cs-error-retry-btn`) that allows operators to re-trigger the failed query without reloading the page.
+
+### 12.4 403 Forbidden Access-Denied View (`AccessDeniedView`)
+* **Authorization Failure Handling:** Rendered whenever an endpoint returns HTTP 403 Forbidden or the client-side route guard detects insufficient permissions.
+* **Clear Role & Capability Transparency:** Distinctly displays a `403 Forbidden` status badge, details the required capability (e.g. `control:read`), specifies any required role, and announces the current user's role.
+* **Safe Return Path:** Features an accessible return button (`.cs-access-back-btn`) directing users back to the Migration Control Center home view (`/crm-5`).

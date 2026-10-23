@@ -6,6 +6,7 @@ export const MODULE_ID = 'crm-1';
 export const MODULE_NAME = 'CRM-1 Contacts, Companies and Leads';
 
 export * from './domain/errors.js';
+export * from './domain/qa-specs.js';
 export * from './services/crm1.service.js';
 export * from './services/crm1-mutation.service.js';
 export * from './services/audit.js';

@@ -20,6 +20,12 @@ import {
   crm1ImportRejects,
   crm1Leads
 } from "../../db/schema.js";
+import {
+  assertCompanyExists,
+  assertContactExists,
+  assertLeadStatusTransition,
+  parseStoredLeadStatus
+} from "../domain/relationships.js";
 
 type Transaction = Parameters<Parameters<NodePgDatabase["transaction"]>[0]>[0];
 
@@ -35,38 +41,6 @@ function validateLeadStatus(status: string | null | undefined, field = "status")
   if (status !== undefined && status !== null && !leadStatuses.has(status)) {
     throw new AppError("INVALID_LEAD_STATUS", "Lead status must be New, Working, Qualified, or Closed", 422, [
       { field, message: "Choose a supported lead status", code: "invalid_enum" }
-    ]);
-  }
-}
-
-async function assertCompanyExists(
-  tx: Transaction,
-  companyId: string | null | undefined
-): Promise<void> {
-  if (companyId == null) {
-    return;
-  }
-  const [company] = await tx.select({ id: crm1Companies.id }).from(crm1Companies)
-    .where(eq(crm1Companies.id, companyId)).limit(1);
-  if (!company) {
-    throw new AppError("REFERENCE_NOT_FOUND", "The selected company does not exist", 422, [
-      { field: "companyId", message: "Choose an existing company", code: "invalid_reference" }
-    ]);
-  }
-}
-
-async function assertContactExists(
-  tx: Transaction,
-  contactId: string | null | undefined
-): Promise<void> {
-  if (contactId == null) {
-    return;
-  }
-  const [contact] = await tx.select({ id: crm1Contacts.id }).from(crm1Contacts)
-    .where(eq(crm1Contacts.id, contactId)).limit(1);
-  if (!contact) {
-    throw new AppError("REFERENCE_NOT_FOUND", "The selected contact does not exist", 422, [
-      { field: "contactId", message: "Choose an existing contact", code: "invalid_reference" }
     ]);
   }
 }
@@ -320,7 +294,21 @@ export class Crm1MutationService {
     validateLeadStatus(input.status);
     try {
       return await this.db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(crm1Leads)
+          .where(eq(crm1Leads.id, id)).for("update");
+        if (!existing) {
+          throw new AppError("NOT_FOUND", "Lead not found", 404);
+        }
         await assertContactExists(tx, input.contactId);
+        if (input.status !== undefined) {
+          assertLeadStatusTransition(parseStoredLeadStatus(existing.status), input.status);
+        }
+        if (
+          (input.contactId === undefined || input.contactId === existing.contactId) &&
+          (input.status === undefined || input.status === existing.status)
+        ) {
+          return existing;
+        }
         const [row] = await tx.update(crm1Leads)
           .set(omitUndefined({ ...input, updatedAt: new Date() }))
           .where(eq(crm1Leads.id, id))

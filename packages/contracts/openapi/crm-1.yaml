@@ -53,19 +53,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Contact"
+                $ref: "#/components/schemas/ContactRead"
         "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
-        "404":
-          $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
-        "422":
-          $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/contacts/{id}:
@@ -82,7 +80,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Contact"
+                $ref: "#/components/schemas/ContactRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -110,7 +108,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Contact"
+                $ref: "#/components/schemas/ContactRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -170,14 +168,14 @@ paths:
                 $ref: "#/components/schemas/Company"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "409":
           $ref: "#/components/responses/ConflictError"
-        "422":
-          $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/companies/{id}:
@@ -279,8 +277,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadRead"
         "400":
+          $ref: "#/components/responses/ValidationError"
+        "422":
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
@@ -308,7 +308,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -336,7 +336,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadRead"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -348,7 +348,13 @@ paths:
         "409":
           $ref: "#/components/responses/ConflictError"
         "422":
-          $ref: "#/components/responses/ValidationError"
+          description: >
+            Invalid input or forbidden lead status transition. A forbidden
+            transition returns code INVALID_LEAD_STATUS_TRANSITION.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
@@ -385,14 +391,14 @@ paths:
                 $ref: "#/components/schemas/ImportBatchDetail"
         "400":
           $ref: "#/components/responses/ValidationError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
-        "409":
-          $ref: "#/components/responses/ConflictError"
-        "422":
-          $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/imports/{batch}:
@@ -479,6 +485,7 @@ components:
       schema:
         type: integer
         minimum: 1
+        maximum: 100
         default: 25
   responses:
     ValidationError:
@@ -551,6 +558,13 @@ components:
         unsubscribedUpdatedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ContactRead:
+      allOf:
+        - $ref: "#/components/schemas/Contact"
+        - type: object
+          required: [companyName]
+          properties:
+            companyName: { type: [string, "null"] }
     ContactCreate:
       type: object
       additionalProperties: false
@@ -581,7 +595,7 @@ components:
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/Contact" }
+          items: { $ref: "#/components/schemas/ContactRead" }
     Company:
       type: object
       required: [id, name, taxNumber, email, phone, address, sourceSystem, sourceId, createdAt, updatedAt]
@@ -644,6 +658,14 @@ components:
         sourceId: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    LeadRead:
+      allOf:
+        - $ref: "#/components/schemas/Lead"
+        - type: object
+          required: [contactName, contactEmail]
+          properties:
+            contactName: { type: string, minLength: 1 }
+            contactEmail: { type: [string, "null"], format: email }
     LeadCreate:
       type: object
       additionalProperties: false
@@ -655,6 +677,9 @@ components:
       type: object
       additionalProperties: false
       minProperties: 1
+      description: >
+        Lead status changes may only advance New to Working, Working to Qualified,
+        and Qualified to Closed. Unchanged status is an idempotent update.
       properties:
         contactId: { type: string, format: uuid }
         status: { $ref: "#/components/schemas/LeadStatus" }
@@ -664,7 +689,7 @@ components:
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/Lead" }
+          items: { $ref: "#/components/schemas/LeadRead" }
     ImportCreate:
       type: object
       additionalProperties: false
@@ -798,8 +823,77 @@ components:
               field: { type: string }
               message: { type: string }
               code: { type: string }
+    DomainEventEnvelope:
+      type: object
+      required: [id, eventType, aggregateType, aggregateId, timestamp, version, producer, payload]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string }
+        aggregateType: { type: string }
+        aggregateId: { type: string }
+        timestamp: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+        producer: { type: string, default: "crm-1" }
+        correlationId: { type: string }
+        causationId: { type: string }
+        payload: { type: object }
+    EventContactCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.created" }
+        aggregateType: { type: string, const: "Contact" }
+    EventContactUpdated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.updated" }
+        aggregateType: { type: string, const: "Contact" }
+    EventContactMerged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.merged" }
+        aggregateType: { type: string, const: "Contact" }
+    EventCompanyCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.company.created" }
+        aggregateType: { type: string, const: "Company" }
+    EventCompanyUpdated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.company.updated" }
+        aggregateType: { type: string, const: "Company" }
+    EventLeadCreated:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.lead.created" }
+        aggregateType: { type: string, const: "Lead" }
+    EventLeadStatusChanged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.lead.status_changed" }
+        aggregateType: { type: string, const: "Lead" }
+    EventContactConsentChanged:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.contact.consent_changed" }
+        aggregateType: { type: string, const: "Contact" }
+    EventImportBatchLoaded:
+      allOf:
+        - $ref: "#/components/schemas/DomainEventEnvelope"
+      properties:
+        eventType: { type: string, const: "crm.import.batch_loaded" }
+        aggregateType: { type: string, const: "ImportBatch" }
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+

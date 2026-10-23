@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   CRM1ContactCreateSchema,
   CRM1ContactPatchSchema,
+  CRM1ContactReadSchema,
+  CRM1ConsentStatusSchema,
   CRM1ImportCreateSchema,
+  CRM1ImportStatusSchema,
+  CRM1EntityTypeSchema,
   CRM1LeadStatusSchema,
   CRM1ListQuerySchema
 } from "../src/crm-1.js";
@@ -44,6 +48,10 @@ describe("CRM-1 public contracts", () => {
     expect(CRM1ListQuerySchema.parse({})).toEqual({ page: 1, pageSize: 25 });
   });
 
+  it("bounds server page size to 100", () => {
+    expect(CRM1ListQuerySchema.safeParse({ pageSize: "101" }).success).toBe(false);
+  });
+
   it("accepts name/email search and numeric query-string pagination", () => {
     expect(CRM1ListQuerySchema.parse({ search: "Alex", page: "2", pageSize: "15" })).toEqual({
       search: "Alex",
@@ -58,6 +66,17 @@ describe("CRM-1 public contracts", () => {
 
   it("rejects unsupported lead statuses", () => {
     expect(CRM1LeadStatusSchema.safeParse("Prospect").success).toBe(false);
+  });
+
+  it.each([
+    [CRM1ConsentStatusSchema, ["unknown", "granted", "withdrawn"], "pending"],
+    [CRM1ImportStatusSchema, ["pending", "processing", "completed", "failed"], "cancelled"],
+    [CRM1EntityTypeSchema, ["contact", "company", "lead"], "user"]
+  ] as const)("rejects unknown enum values", (schema, allowed, invalid) => {
+    for (const value of allowed) {
+      expect(schema.safeParse(value).success).toBe(true);
+    }
+    expect(schema.safeParse(invalid).success).toBe(false);
   });
 
   it("rejects protected source and Golden ID fields in user contact mutations", () => {
@@ -79,6 +98,34 @@ describe("CRM-1 public contracts", () => {
       firstName: "Synthetic",
       lastName: "Contact",
       email: "not-an-email"
+    }).success).toBe(false);
+  });
+
+  it("requires the company display name to match the optional company link", () => {
+    const contact = {
+      id: "00000000-0000-4000-8000-000000000001",
+      firstName: "Synthetic",
+      lastName: "Contact",
+      email: null,
+      phone: null,
+      address: null,
+      companyId: null,
+      companyName: null,
+      leadStatus: null,
+      goldenId: "synthetic-contact-1",
+      sourceSystem: null,
+      sourceId: null,
+      consentStatus: "unknown",
+      consentUpdatedAt: null,
+      unsubscribed: false,
+      unsubscribedUpdatedAt: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    };
+    expect(CRM1ContactReadSchema.safeParse(contact).success).toBe(true);
+    expect(CRM1ContactReadSchema.safeParse({
+      ...contact,
+      companyId: "00000000-0000-4000-8000-000000000002"
     }).success).toBe(false);
   });
 
@@ -177,6 +224,41 @@ describe("CRM-1 public contracts", () => {
   it("documents the correlation-aware API error envelope", () => {
     expect(crm1OpenApi).toContain("required: [code, message, details, correlation_id]");
     expect(crm1OpenApi).toContain("correlation_id: { type: string }");
+    expect(operationBlock("/api/v1/crm-contacts/leads/{id}", "patch"))
+      .toContain("INVALID_LEAD_STATUS_TRANSITION");
+  });
+
+  it.each([
+    ["/api/v1/crm-contacts/contacts", "get", "ContactList"],
+    ["/api/v1/crm-contacts/contacts", "post", "ContactRead"],
+    ["/api/v1/crm-contacts/contacts/{id}", "get", "ContactRead"],
+    ["/api/v1/crm-contacts/contacts/{id}", "patch", "ContactRead"],
+    ["/api/v1/crm-contacts/leads", "get", "LeadList"],
+    ["/api/v1/crm-contacts/leads", "post", "LeadRead"],
+    ["/api/v1/crm-contacts/leads/{id}", "get", "LeadRead"],
+    ["/api/v1/crm-contacts/leads/{id}", "patch", "LeadRead"]
+  ])("documents read projections for %s %s", (path, method, schema) => {
+    expect(operationBlock(path, method)).toContain(
+      `#/components/schemas/${schema}`
+    );
+  });
+
+  it("documents all 9 CRM-1 domain event schemas in OpenAPI components", () => {
+    const eventSchemas = [
+      "DomainEventEnvelope",
+      "EventContactCreated",
+      "EventContactUpdated",
+      "EventContactMerged",
+      "EventCompanyCreated",
+      "EventCompanyUpdated",
+      "EventLeadCreated",
+      "EventLeadStatusChanged",
+      "EventContactConsentChanged",
+      "EventImportBatchLoaded",
+    ];
+    for (const schemaName of eventSchemas) {
+      expect(crm1OpenApi).toContain(`${schemaName}:`);
+    }
   });
 
   it("documents the required import idempotency key and replay result", () => {

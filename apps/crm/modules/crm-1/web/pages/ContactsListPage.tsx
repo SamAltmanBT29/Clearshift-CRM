@@ -1,20 +1,67 @@
 import React from 'react';
+import { DataTable } from '../components/DataTable.js';
+import { FilterToolbar } from '../components/FilterToolbar.js';
+import { CONTACTS_COLUMNS } from '../table/columns.js';
+import { CRM1_CONTACTS_FACETS } from '../table/facets.js';
+import type {
+  TableSortState,
+  TablePaginationState,
+  TableFilterState,
+  ActiveFilterPill,
+  FilterFacet,
+} from '../table/types.js';
 
 export interface ContactsListPageProps {
+  data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | null;
+  sort?: TableSortState | undefined;
+  onSortChange?: ((columnKey: string) => void) | undefined;
+  pagination?: TablePaginationState | undefined;
+  onPageChange?: ((newPage: number) => void) | undefined;
+  search?: string;
+  onSearchChange?: ((term: string) => void) | undefined;
+  filters?: TableFilterState;
+  onFilterChange?: ((key: string, value: string) => void) | undefined;
+  onRemoveFilter?: ((key: string) => void) | undefined;
+  onClearAllFilters?: (() => void) | undefined;
+  activePills?: ActiveFilterPill[];
+  facets?: FilterFacet[];
+  hasActiveFilters?: boolean;
 }
 
 /**
  * Contacts List Page Shell
- * Integrates with /api/v1/crm-contacts/contacts
+ * Integrates with /api/v1/crm-contacts/contacts, FilterToolbar, and paginated DataTable.
+ * Conforms to ClearShift V1 Issue #111 (CRM1-18).
  */
 export const ContactsListPage: React.FC<ContactsListPageProps> = ({
+  data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  sort,
+  onSortChange,
+  pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
+  onPageChange,
+  search = '',
+  onSearchChange,
+  filters = {},
+  onFilterChange,
+  onRemoveFilter,
+  onClearAllFilters,
+  activePills = [],
+  facets = CRM1_CONTACTS_FACETS,
+  hasActiveFilters = false,
 }) => {
+  const displayData = isEmpty ? [] : data;
+  const isFiltersActive =
+    hasActiveFilters ||
+    Boolean(search.trim().length > 0) ||
+    Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
+    activePills.length > 0;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -24,10 +71,25 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
         </p>
       </div>
 
+      {onSearchChange && onFilterChange && (
+        <FilterToolbar
+          search={search}
+          onSearchChange={onSearchChange}
+          facets={facets}
+          filters={filters}
+          onFilterChange={onFilterChange}
+          activePills={activePills}
+          onRemoveFilter={onRemoveFilter ?? (() => {})}
+          onClearAll={onClearAllFilters ?? (() => {})}
+          searchPlaceholder="Search contacts by name, email, or key..."
+        />
+      )}
+
       {isLoading && (
         <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading contacts list">
-          <div className="cs-skeleton-line" style={{ width: '100%' }} />
-          <div className="cs-skeleton-line" style={{ width: '90%' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
           <p className="cs-loading-text">Loading contacts from server...</p>
         </div>
       )}
@@ -38,19 +100,24 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
         </div>
       )}
 
-      {!isLoading && !error && isEmpty && (
-        <div className="cs-empty-state" role="status">
-          <h3 className="cs-empty-title">No records found</h3>
-          <p className="cs-empty-text">
-            No contact records currently exist. Add a contact or import via Migration Kit.
-          </p>
-        </div>
-      )}
-
-      {!isLoading && !error && !isEmpty && (
-        <div className="cs-content-placeholder" id="contacts-container">
-          <p className="cs-ready-notice">Ready for contacts data table integration.</p>
-        </div>
+      {!isLoading && !error && (
+        <DataTable
+          columns={CONTACTS_COLUMNS}
+          data={displayData}
+          loading={false}
+          emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
+          emptyDescription={
+            isFiltersActive
+              ? 'No contacts match your search and filter criteria. Try adjusting your search term or clearing filters.'
+              : 'No contact records currently exist. Add a contact or import via Migration Kit.'
+          }
+          hasActiveFilters={isFiltersActive}
+          onClearFilters={onClearAllFilters}
+          sort={sort}
+          onSortChange={onSortChange}
+          pagination={pagination}
+          onPageChange={onPageChange}
+        />
       )}
     </div>
   );
