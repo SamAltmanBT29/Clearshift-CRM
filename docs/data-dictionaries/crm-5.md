@@ -604,3 +604,69 @@ Every protected route registers `endpointPreHandlers(fastify, allowedRoles)` exe
 * **Date:** 2026-10-23
 * **Status:** Verified & Passing
 * **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
+
+---
+
+## 17. Migration Control Center Runs List Screen, Search/Filter & Stable UI States (Gate G2 / CRM5-04 / Issue #49)
+
+### 17.1 Scope & Architecture Alignment
+Conforming to ClearShift CRM SDS v2.0 §4.8, FR-CRM5-01..07, and Issue #49 (`[CRM5-04]`), the primary Migration Control Center run list screen (`RunsListPage`) provides real-time, read-only observability of migration run projections across all CRM modules. The implementation strictly consumes public contracts (`@clearshift/contracts`), shared platform primitives (`@cs/ui`), and the dedicated type-safe API client (`apps/crm/modules/crm-5/web/src/api/crm-5.ts`).
+
+### 17.2 Component Hierarchy & Contract Adherence
+* **`RunsListPage` (`apps/crm/modules/crm-5/web/src/pages/RunsListPage.tsx`)**:
+  - Serves as the primary vertical slice container for `/crm-5/runs`.
+  - Connects to `/api/v1/crm-control/runs` via `getRuns(query, options)`.
+  - Validates all server responses using `PaginatedRunsResponseSchema` with zero hard-coded demo data in the production rendering path.
+  - Exposes controlled props and simulation options (`options.simulateError`, `options.simulatePermissionDenied`) for deterministic automated testing.
+* **`RunsTable` (`apps/crm/modules/crm-5/web/src/components/RunsTable.tsx`)**:
+  - Direct implementation using `@cs/ui` accessible table primitives (`Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell`, `Badge`).
+  - Displays all 9 SDS-mandated columns: `Batch ID`, `Module`, `Step`, `Status`, `Records In`, `Records Out`, `Rejected`, `Started At`, and `Completed At`.
+  - Formats numbers with locale string, dates as readable ISO timestamps, and statuses to semantic `@cs/ui` Badge variants (`completed` -> `success`, `running` -> `info`, `pending` -> `neutral`, `failed` -> `danger`, `halted` -> `warning`).
+  - Highlights row rejections in rose pill badge when `recordsRejected > 0`.
+  - Features cell text sanitization to neutralize spreadsheet formula injection (`=`, `+`, `-`, `@`).
+
+### 17.3 Query Mutation & Page 1 Reset Lifecycle
+* **Server-Side Pagination & Hard Bounds**:
+  - Adheres strictly to the bounded pagination contract: page size defaults to 20 and is capped at 100 on the server.
+  - Never fetches all rows into browser memory.
+* **Deterministic Filter Reset Invariant**:
+  - Any mutation to search text (searching by `batchId`), `module` dropdown, or `status` dropdown updates query parameters and immediately resets pagination to `page = 1`.
+  - Active filter badges render dynamically with individual removal triggers and a global "Reset" action that clears all active dimensions and queries `page = 1`.
+
+### 17.4 Distinct Stable States
+The interface transitions deterministically across 5 distinct, accessible states:
+1. **Loading State (`TableSkeleton`)**:
+   - Renders 5-row by 9-column shimmer skeleton with `role="status"` and `aria-busy="true"` when asynchronous fetch is in-flight.
+2. **Zero-Data State (`EmptyState`)**:
+   - When no records exist and filters are active, displays `"No matching migration runs"` with actionable `"Clear All Filters"` button.
+   - When database has zero records registered, displays `"No migration runs recorded"`.
+3. **API Failure State (`ErrorAlert`)**:
+   - Renders alert banner with `role="alert"` and `aria-live="assertive"`.
+   - Strips internal system paths and raw stack traces (`sanitizeErrorMessage`).
+   - Provides keyboard-operable `"Retry Connection"` button that triggers re-fetch.
+4. **403 Forbidden State (`AccessDeniedView`)**:
+   - Activates when server returns HTTP 403 or `isPermissionDenied: true`.
+   - Explicitly displays the required capability (`control:read`) and resource name (`Migration Control Center`).
+5. **Populated Data State**:
+   - Renders `RunsTable` along with `@cs/ui` `Pagination` control supporting previous/next navigation and page jump.
+
+### 17.5 Accessibility, WAI-ARIA & Keyboard Navigation
+* **Landmarks & Regions**: Page wrapper uses `<main role="main" aria-label="Migration Runs List Page">`, table wrapper uses `role="region" aria-label="Migration Runs Projections Table"` with `tabIndex={0}` for responsive horizontal scrolling on tablets and desktops.
+* **Keyboard-Operable Controls**:
+  - Sortable column headers feature `<button type="button">` with descriptive accessible names (`Sort by Batch ID ascending/descending`) and `aria-sort` attributes.
+  - Table rows support `onKeyDown` navigation; pressing `Enter` or `Space` activates row selection (`onRowClick`).
+  - Search input supports keyboard submission on `Enter` and clearing on `Escape` or clear button.
+* **Formula Injection Prevention**: Text values starting with spreadsheet formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) are safely escaped with leading single quotes (`'`) to neutralize CSV/formula execution vulnerabilities (CWE-1236).
+
+### 17.6 Domain Invariant Verification
+Automated test suites assert that:
+1. **Module Read-Only Isolation**: CRM-5 only reads approved event projections (`crm5_runs`, `crm5_scores`, `crm5_rejects`, `crm5_reconciliation`) and never writes into another module's private tables (`crm1_contacts`, `crm2_deals`, `crm3_activities`, `crm4_analytics`) or mutates shared Kit batches directly (`kit_batches`).
+2. **Quality Score Formula**: Exactly $100 \times (\text{completeness} + \text{validity} + (1 - \text{duplicate\_rate}) + (1 - \text{reject\_rate}) + \text{link\_integrity}) / 5$, rounded to 2 decimal places, returning `null` (N/A) if any component is missing.
+3. **Reconciliation Conservation**: Evaluates $\text{source} = \text{loaded} + \text{rejected} + \text{merged} + \text{skipped}$ and verifies status is `OK` if and only if $\text{unaccounted} = 0$.
+
+### 17.7 Versioned Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G2-002`
+* **Milestone:** Gate G2 — UI & API List Integration (Weeks 3–4)
+* **Date:** 2026-10-23
+* **Status:** Verified & Passing
+* **Sign-off:** Role 1 (Core Lead) & Role 4 (Data/QA Lead)
