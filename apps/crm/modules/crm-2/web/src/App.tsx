@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
+import { Crm2Shell } from './shell/Crm2Shell.js';
 import { DealsListPage } from './pages/DealsListPage.js';
 import { DealDetailPage } from './pages/DealDetailPage.js';
 import { DealFormPage } from './pages/DealFormPage.js';
 import { QuoteFormPage } from './pages/QuoteFormPage.js';
+import { PipelineOverviewPage } from './pages/PipelineOverviewPage.js';
+import { QuotesListPage } from './pages/QuotesListPage.js';
 import { BatchLoaderPage } from './pages/BatchLoaderPage.js';
 import { DuplicateReviewPage } from './pages/DuplicateReviewPage.js';
+import { CRM2_ROUTES, getRouteBreadcrumbs } from './routes.js';
+import { checkRouteAuth } from './auth/route-guard.js';
+import type { BreadcrumbItem, UserSession } from './types.js';
 import type { Deal } from '@clearshift/contracts';
-import { Button } from '@clearshift/ui';
+import { Roles } from '@cs/identity';
+import { Capabilities } from '@cs/rbac';
+import { Button, Alert } from '@clearshift/ui';
 
 export type ViewState =
-  | { type: 'list' }
+  | { type: 'deals' }
+  | { type: 'pipeline' }
+  | { type: 'quotes' }
   | { type: 'detail'; dealId: string; deal?: Deal | undefined }
   | { type: 'create-deal' }
   | { type: 'edit-deal'; dealId: string }
@@ -19,141 +29,290 @@ export type ViewState =
   | { type: 'duplicates' };
 
 export function App() {
-  const [view, setView] = useState<ViewState>({ type: 'list' });
+  const [view, setView] = useState<ViewState>({ type: 'deals' });
+  const [activeTab, setActiveTab] = useState<'deals' | 'pipeline' | 'quotes'>('deals');
   const [simulateDenied, setSimulateDenied] = useState(false);
   const [simulateErr, setSimulateErr] = useState(false);
+  const [simulateUnauth, setSimulateUnauth] = useState(false);
+
+  // Active mock user session
+  const userSession: UserSession | null = simulateUnauth
+    ? null
+    : {
+        userId: 'usr-demo-001',
+        roles: simulateDenied ? [Roles.VIEWER] : [Roles.EDITOR],
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      };
+
+  // Derive active tab and breadcrumbs based on view state
+  let currentBreadcrumbs: BreadcrumbItem[] = CRM2_ROUTES['deals'].breadcrumbs;
+  if (view.type === 'detail') {
+    currentBreadcrumbs = getRouteBreadcrumbs('dealDetail', {
+      dealId: view.dealId,
+      dealName: view.deal?.name || 'Deal Details',
+    });
+  } else if (view.type === 'create-deal') {
+    currentBreadcrumbs = getRouteBreadcrumbs('dealCreate');
+  } else if (view.type === 'edit-deal') {
+    currentBreadcrumbs = getRouteBreadcrumbs('dealEdit');
+  } else if (view.type === 'create-quote') {
+    currentBreadcrumbs = getRouteBreadcrumbs('quoteCreate');
+  } else if (view.type === 'edit-quote') {
+    currentBreadcrumbs = getRouteBreadcrumbs('quoteEdit');
+  } else if (view.type === 'batch-loader') {
+    currentBreadcrumbs = [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Deals & Quotes', href: '/crm-2' },
+      { label: 'Batch Loader' },
+    ];
+  } else if (view.type === 'duplicates') {
+    currentBreadcrumbs = [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Deals & Quotes', href: '/crm-2' },
+      { label: 'Duplicate Review' },
+    ];
+  } else if (view.type === 'pipeline') {
+    currentBreadcrumbs = CRM2_ROUTES['pipeline'].breadcrumbs;
+  } else if (view.type === 'quotes') {
+    currentBreadcrumbs = CRM2_ROUTES['quotes'].breadcrumbs;
+  } else {
+    currentBreadcrumbs = CRM2_ROUTES['deals'].breadcrumbs;
+  }
+
+  // Handle Tab Navigation from the Shell Header
+  const handleTabSelect = (tabKey: string) => {
+    if (tabKey === 'deals') {
+      setActiveTab('deals');
+      setView({ type: 'deals' });
+    } else if (tabKey === 'pipeline') {
+      setActiveTab('pipeline');
+      setView({ type: 'pipeline' });
+    } else if (tabKey === 'quotes') {
+      setActiveTab('quotes');
+      setView({ type: 'quotes' });
+    }
+  };
+
+  // Check route guard for mutation views
+  const isMutationView =
+    view.type === 'create-deal' ||
+    view.type === 'edit-deal' ||
+    view.type === 'create-quote' ||
+    view.type === 'edit-quote';
+
+  const authGuardResult = checkRouteAuth(
+    userSession,
+    `/crm-2/${activeTab}`,
+    isMutationView ? Capabilities.MODULE_WRITE : Capabilities.MODULE_READ
+  );
+
+  // Action controls rendered in Shell Header
+  const shellActions = (
+    <div className="flex items-center gap-2 text-xs">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setView({ type: 'batch-loader' })}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        Batch Loader
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setView({ type: 'duplicates' })}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        Duplicates
+      </Button>
+      <Button
+        variant={simulateUnauth ? 'danger' : 'outline'}
+        size="sm"
+        onClick={() => {
+          setSimulateUnauth((prev) => !prev);
+          setSimulateDenied(false);
+          setSimulateErr(false);
+        }}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        {simulateUnauth ? 'Sign In' : 'Simulate 401'}
+      </Button>
+      <Button
+        variant={simulateDenied ? 'danger' : 'outline'}
+        size="sm"
+        onClick={() => {
+          setSimulateDenied((prev) => !prev);
+          setSimulateUnauth(false);
+          setSimulateErr(false);
+        }}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        {simulateDenied ? 'Restore Access' : 'Simulate 403'}
+      </Button>
+      <Button
+        variant={simulateErr ? 'danger' : 'outline'}
+        size="sm"
+        onClick={() => {
+          setSimulateErr((prev) => !prev);
+          setSimulateUnauth(false);
+          setSimulateDenied(false);
+        }}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        {simulateErr ? 'Clear Error' : 'Simulate 500'}
+      </Button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans">
-      {/* Top Navigation Bar */}
-      <header className="bg-slate-900 text-white border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setView({ type: 'list' })}
-              className="text-xl font-bold tracking-tight text-white flex items-center gap-2 hover:opacity-90"
-            >
-              <span className="text-indigo-400">ClearShift</span> CRM
-            </button>
-            <span className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono">
-              CRM-2 V1: Deals &amp; Quotes
-            </span>
-          </div>
-
-          {/* Development / Demo simulation controls */}
-          <div className="flex items-center gap-2 text-xs">
+    <Crm2Shell
+      activeTabKey={activeTab}
+      onTabSelect={handleTabSelect}
+      breadcrumbs={currentBreadcrumbs}
+      actions={shellActions}
+    >
+      {/* Route Guard Fallbacks */}
+      {!authGuardResult.isAllowed ? (
+        <div className="p-8 max-w-xl mx-auto space-y-4">
+          <Alert
+            variant="error"
+            title={
+              authGuardResult.reason === 'UNAUTHENTICATED'
+                ? 'Authentication Required'
+                : 'Access Denied (403)'
+            }
+          >
+            {authGuardResult.reason === 'UNAUTHENTICATED'
+              ? 'Your active session is unauthenticated or has expired. Redirecting to Hub login.'
+              : 'You lack the required module permissions to access this screen.'}
+          </Alert>
+          <div className="text-center">
             <Button
-              variant={view.type === 'batch-loader' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setView((prev) => (prev.type === 'batch-loader' ? { type: 'list' } : { type: 'batch-loader' }))}
-              className="text-xs bg-slate-800 border-slate-700 text-slate-200"
-            >
-              {view.type === 'batch-loader' ? 'Deals List' : 'Batch Loader'}
-            </Button>
-            <Button
-              variant={view.type === 'duplicates' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setView((prev) => (prev.type === 'duplicates' ? { type: 'list' } : { type: 'duplicates' }))}
-              className="text-xs bg-slate-800 border-slate-700 text-slate-200"
-            >
-              {view.type === 'duplicates' ? 'Deals List' : 'Duplicate Review'}
-            </Button>
-            <Button
-              variant={simulateDenied ? 'danger' : 'outline'}
-              size="sm"
+              variant="primary"
               onClick={() => {
-                setSimulateDenied((prev) => !prev);
-                setSimulateErr(false);
-              }}
-              className="text-xs bg-slate-800 border-slate-700 text-slate-200"
-            >
-              {simulateDenied ? 'Restore Access' : 'Simulate 403'}
-            </Button>
-            <Button
-              variant={simulateErr ? 'danger' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setSimulateErr((prev) => !prev);
+                setSimulateUnauth(false);
                 setSimulateDenied(false);
               }}
-              className="text-xs bg-slate-800 border-slate-700 text-slate-200"
             >
-              {simulateErr ? 'Clear Error' : 'Simulate 500'}
+              Reset Session to Authorized
             </Button>
           </div>
         </div>
-      </header>
+      ) : (
+        <>
+          {/* Deals Tab / List View */}
+          {view.type === 'deals' && (
+            <DealsListPage
+              simulatePermissionDenied={simulateDenied}
+              simulateError={simulateErr}
+              onCreateDeal={() => setView({ type: 'create-deal' })}
+              onSelectDeal={(deal) => setView({ type: 'detail', dealId: deal.id, deal })}
+              onViewQuotes={(deal) => setView({ type: 'detail', dealId: deal.id, deal })}
+            />
+          )}
 
-      {/* Main View Switcher */}
-      <main>
-        {view.type === 'list' && (
-          <DealsListPage
-            simulatePermissionDenied={simulateDenied}
-            simulateError={simulateErr}
-            onCreateDeal={() => setView({ type: 'create-deal' })}
-            onSelectDeal={(deal) => setView({ type: 'detail', dealId: deal.id, deal })}
-            onViewQuotes={(deal) => setView({ type: 'detail', dealId: deal.id, deal })}
-          />
-        )}
+          {/* Pipeline Tab View */}
+          {view.type === 'pipeline' && (
+            <PipelineOverviewPage
+              onCreateDeal={() => setView({ type: 'create-deal' })}
+              onFilterByStage={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
+            />
+          )}
 
-        {view.type === 'detail' && (
-          <DealDetailPage
-            dealId={view.dealId}
-            initialDeal={view.deal ?? undefined}
-            onBackToList={() => setView({ type: 'list' })}
-            onEditDeal={(deal) => setView({ type: 'edit-deal', dealId: deal.id })}
-            onAddQuote={(deal) => setView({ type: 'create-quote', dealId: deal.id, deal })}
-            onEditQuote={(quote, deal) =>
-              setView({ type: 'edit-quote', dealId: deal.id, quoteId: quote.id })
-            }
-          />
-        )}
+          {/* Quotes Tab View */}
+          {view.type === 'quotes' && (
+            <QuotesListPage
+              onSelectDeal={(dealId) => setView({ type: 'detail', dealId })}
+              onEditQuote={(quote) =>
+                setView({ type: 'edit-quote', dealId: quote.deal_id, quoteId: quote.id })
+              }
+            />
+          )}
 
-        {view.type === 'create-deal' && (
-          <DealFormPage
-            onBackToList={() => setView({ type: 'list' })}
-            onSuccess={(saved) => setView({ type: 'detail', dealId: saved.id, deal: saved })}
-          />
-        )}
+          {/* Opportunity Detail View */}
+          {view.type === 'detail' && (
+            <DealDetailPage
+              dealId={view.dealId}
+              initialDeal={view.deal ?? undefined}
+              onBackToList={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
+              onEditDeal={(deal) => setView({ type: 'edit-deal', dealId: deal.id })}
+              onAddQuote={(deal) => setView({ type: 'create-quote', dealId: deal.id, deal })}
+              onEditQuote={(quote, deal) =>
+                setView({ type: 'edit-quote', dealId: deal.id, quoteId: quote.id })
+              }
+            />
+          )}
 
-        {view.type === 'edit-deal' && (
-          <DealFormPage
-            dealId={view.dealId}
-            onBackToList={() => setView({ type: 'detail', dealId: view.dealId })}
-            onSuccess={(saved) => setView({ type: 'detail', dealId: saved.id, deal: saved })}
-          />
-        )}
+          {/* Create Opportunity Form */}
+          {view.type === 'create-deal' && (
+            <DealFormPage
+              onBackToList={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
+              onSuccess={(saved) => setView({ type: 'detail', dealId: saved.id, deal: saved })}
+            />
+          )}
 
-        {view.type === 'create-quote' && (
-          <QuoteFormPage
-            dealId={view.dealId}
-            initialDeal={view.deal ?? undefined}
-            onBackToDeal={() => setView({ type: 'detail', dealId: view.dealId, deal: view.deal })}
-            onSuccess={() => setView({ type: 'detail', dealId: view.dealId, deal: view.deal })}
-          />
-        )}
+          {/* Edit Opportunity Form */}
+          {view.type === 'edit-deal' && (
+            <DealFormPage
+              dealId={view.dealId}
+              onBackToList={() => setView({ type: 'detail', dealId: view.dealId })}
+              onSuccess={(saved) => setView({ type: 'detail', dealId: saved.id, deal: saved })}
+            />
+          )}
 
-        {view.type === 'edit-quote' && (
-          <QuoteFormPage
-            dealId={view.dealId}
-            quoteId={view.quoteId}
-            onBackToDeal={() => setView({ type: 'detail', dealId: view.dealId })}
-            onSuccess={() => setView({ type: 'detail', dealId: view.dealId })}
-          />
-        )}
+          {/* Create Quote Form */}
+          {view.type === 'create-quote' && (
+            <QuoteFormPage
+              dealId={view.dealId}
+              initialDeal={view.deal ?? undefined}
+              onBackToDeal={() => setView({ type: 'detail', dealId: view.dealId, deal: view.deal })}
+              onSuccess={() => setView({ type: 'detail', dealId: view.dealId, deal: view.deal })}
+            />
+          )}
 
-        {view.type === 'batch-loader' && (
-          <BatchLoaderPage
-            onBackToList={() => setView({ type: 'list' })}
-          />
-        )}
+          {/* Edit Quote Form */}
+          {view.type === 'edit-quote' && (
+            <QuoteFormPage
+              dealId={view.dealId}
+              quoteId={view.quoteId}
+              onBackToDeal={() => setView({ type: 'detail', dealId: view.dealId })}
+              onSuccess={() => setView({ type: 'detail', dealId: view.dealId })}
+            />
+          )}
 
-        {view.type === 'duplicates' && (
-          <DuplicateReviewPage onBackToList={() => setView({ type: 'list' })} />
-        )}
-      </main>
-    </div>
+          {/* Batch Loader View */}
+          {view.type === 'batch-loader' && (
+            <BatchLoaderPage
+              onBackToList={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
+            />
+          )}
+
+          {/* Duplicate Review View */}
+          {view.type === 'duplicates' && (
+            <DuplicateReviewPage
+              onBackToList={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
+            />
+          )}
+        </>
+      )}
+    </Crm2Shell>
   );
 }
 export default App;
