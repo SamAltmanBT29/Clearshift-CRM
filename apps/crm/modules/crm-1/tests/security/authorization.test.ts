@@ -22,7 +22,10 @@ import {
   IMMUTABLE_MUTATION_FIELDS,
 } from '../../src/interface/authz.js';
 
-describe('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
+const databaseUrl = process.env["DATABASE_URL_TEST"];
+const authSuite = databaseUrl ? describe : describe.skip;
+
+authSuite('CRM-1 Security & Authorization (Issue #14 / [CRM1-09])', () => {
   let app: ReturnType<typeof buildApp>;
   let service: Crm1Service;
   let auditService: Crm1AuditService;

@@ -36,30 +36,33 @@ This Requirement-to-Test Traceability Matrix maps 100% of functional requirement
 | **`BR-CRM2-DUP-01`** | Deterministic deal duplicate candidate key based on normalized `source_system + source_id`. | **Must** | SDS v2.0 §4.11 & Baseline | Domain | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`BR-CRM2-DUP-02`** | Deterministic deal business duplicate candidate key: `${normalizedName}#${stageId}#${contactId || "orphan"}`. No fuzzy matching. | **Must** | ClearShift Core Rules & SDS §4.11 | Domain | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`BR-CRM2-DUP-03`** | Quote unique key normalization: `quote_number` trimmed and uppercase. | **Must** | SDS CRM v2.0 §4.2 | Domain | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
-| **`MIG-CRM2-01`** | Target domain mutation and migration import receipt commit together in one local database transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-2/tests/api/crm2-routes.test.ts`<br>`CRM-2 Target Adapter & Durable Receipts` | **VERIFIED (Green)** |
+| **`MIG-CRM2-01`** | Target domain mutation and migration import receipt commit together in one local database transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-2/tests/migration/idempotency.test.ts`<br>`CRM-2 Target Adapter & Durable Receipts (Issue #124 / [CRM2-11])` | **VERIFIED (Green)** |
 | **`MIG-CRM2-02`** | Row conservation balance sheet: `source = loaded + rejected + merged + skipped` (`unaccounted = 0`). | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`<br>`CRM-2 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`MIG-CRM2-03`** | Bounded batching (500 rows), idempotent retries with exponential backoff, and stop migration when failures exceed 10% of attempted rows (`STOPPED_EXCESSIVE_FAILURES`). | **Must** | ClearShift Core Rules & SDS §4.2 | Migration | Unit / API | `apps/crm/modules/crm-2/tests/domain/batch-loader.test.ts`<br>`apps/crm/modules/crm-2/tests/api/batch-loader.test.ts`<br>`apps/crm/modules/crm-2/tests/migration/target-adapter.test.ts`<br>`apps/crm/modules/crm-2/web/tests/batch-loader-ui.test.tsx` | **VERIFIED (Green)** |
+| **`MIG-CRM2-04`** | Target adapter implements `loadBatch` interface executing type-safe UPSERT operations with atomic receipts. | **Must** | KIT-08 & Gate G2 | Migration | Integration | `apps/crm/modules/crm-2/tests/migration/idempotency.test.ts`<br>`CRM-2 Target Adapter loadBatch Interface` | **VERIFIED (Green)** |
+| **`MIG-CRM2-05`** | Re-running the same source row with identical idempotency key returns existing receipt without duplication. | **Must** | KIT-08 & Gate G2 | Migration | Integration | `apps/crm/modules/crm-2/tests/migration/idempotency.test.ts`<br>`CRM-2 Durable Receipt Idempotency` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-2 automated test suite currently comprises 12 executing test files with 250+ individual test assertions:
+The CRM-2 automated test suite currently comprises 14 executing test files with 270+ individual test assertions:
 
 ```
 apps/crm/modules/crm-2/
 ├── tests/
 │   ├── api/
 │   │   ├── crm2-routes.test.ts              (23 tests) — CRUD routes, Zod validation, stage filtering
-│   │   ├── mutations.test.ts                (32 tests) — Deal and quote mutations, RBAC authorization
 │   │   ├── list.test.ts                     (34 tests) — Bounded pagination, non-overlapping sorting
+│   │   ├── mutations.test.ts                (32 tests) — Deal and quote mutations, RBAC authorization
 │   │   └── batch-loader.test.ts             (10 tests) — Batch execute-load, 500-chunking, 10% halt (CRM2-13)
 │   ├── domain/
 │   │   ├── relationships.test.ts            (51 tests) — State transitions, decimal sums, won events
 │   │   ├── qa-g1-design.test.ts             (18 tests) — Data dictionary, ERD, and conservation equations
 │   │   └── batch-loader.test.ts             (9 tests)  — 500 chunking, backoff delays, 10% halt policy (CRM2-13)
 │   ├── migration/
-│   │   └── target-adapter.test.ts           (5 tests)  — Target adapter port, durable receipts, dry-run preflight
+│   │   ├── target-adapter.test.ts           (5 tests)  — Target adapter port, durable receipts, dry-run preflight
+│   │   └── idempotency.test.ts              (19 tests) — Target adapter, durable receipts, atomic rollback, loadBatch
 │   └── schema.test.sql                      (SQL test) — Stage checks, currency format, non-negative checks
 └── web/tests/
     ├── deals-table.test.ts                  (12 tests) — Search, filter, sorting, pagination, orphan badges

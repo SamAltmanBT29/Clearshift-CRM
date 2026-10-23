@@ -1,0 +1,1045 @@
+{
+  "module": "crm-4",
+  "name": "CRM-4 Marketing Lists and Campaign History Canonical Dirty Data Pack",
+  "version": "1.0.0",
+  "specification": "SDS ClearShift CRM v2.0 §4.5, §4.7 & Issue #178 [CRM4-25] Acceptance Criteria",
+  "fixtureFile": "dirty-pack-100.csv",
+  "totalRecords": 100,
+  "sha256": "aceed5c310863ea01ed33f649a93c0bbcc4de51316ab15af1e7ead57f77162e9",
+  "summary": {
+    "cleanRecordsCount": 50,
+    "defectiveRecordsCount": 50,
+    "totalDefectCategories": 7,
+    "isDisjoint": true,
+    "requiredOutcomesCovered": [
+      "valid",
+      "malformed",
+      "null_required",
+      "exact_duplicate",
+      "foreign_key_missing"
+    ],
+    "edgeCasesCovered": [
+      "utf8_characters",
+      "whitespace_padding",
+      "date_format_variants",
+      "boundary_numbers"
+    ]
+  },
+  "defectCategories": {
+    "NULL_REQUIRED": {
+      "description": "Mandatory fields (name, contact_id, campaign_id, consent_source) with missing or blank values",
+      "expectedOutcome": "null_required",
+      "count": 7,
+      "recordIndices": [
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57
+      ]
+    },
+    "EXACT_DUPLICATE": {
+      "description": "Exact duplicate records replicating natural or business candidate keys of existing rows",
+      "expectedOutcome": "exact_duplicate",
+      "count": 6,
+      "recordIndices": [
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ]
+    },
+    "FOREIGN_KEY_MISSING": {
+      "description": "Referential orphan campaign or member records referencing non-existent list_id or campaign_id",
+      "expectedOutcome": "foreign_key_missing",
+      "count": 6,
+      "recordIndices": [
+        64,
+        65,
+        66,
+        67,
+        68,
+        69
+      ]
+    },
+    "INVALID_MEMBER_STATUS": {
+      "description": "Member status outside strict allowlist (sent, opened, clicked) such as bounced, delivered, draft",
+      "expectedOutcome": "malformed",
+      "count": 6,
+      "recordIndices": [
+        70,
+        71,
+        72,
+        73,
+        74,
+        75
+      ]
+    },
+    "MONOTONIC_OPT_OUT_VIOLATION": {
+      "description": "BR-CRM4-01 violation: attempting to re-subscribe a contact with known prior unsubscribed status",
+      "expectedOutcome": "malformed",
+      "count": 5,
+      "recordIndices": [
+        76,
+        77,
+        78,
+        79,
+        80
+      ]
+    },
+    "DATE_FORMAT_VARIANTS": {
+      "description": "Non-ISO date formats, localized dates, or unparseable date strings in campaign_date",
+      "expectedOutcome": "malformed",
+      "count": 6,
+      "recordIndices": [
+        81,
+        82,
+        83,
+        84,
+        85,
+        86
+      ]
+    },
+    "BOUNDARY_NUMBERS": {
+      "description": "Negative counter integers or 32-bit integer capacity overflows in member_count or campaign_count",
+      "expectedOutcome": "malformed",
+      "count": 5,
+      "recordIndices": [
+        87,
+        88,
+        89,
+        90,
+        91
+      ]
+    },
+    "WHITESPACE_PADDING": {
+      "description": "Unstripped leading, trailing, or tab whitespace in identifiers, names, or enum fields",
+      "expectedOutcome": "whitespace_padding",
+      "count": 5,
+      "recordIndices": [
+        92,
+        93,
+        94,
+        95,
+        96
+      ]
+    },
+    "FORMULA_INJECTION_RISK": {
+      "description": "Text fields starting with spreadsheet formula trigger prefixes (=, @, +, -)",
+      "expectedOutcome": "malformed",
+      "count": 4,
+      "recordIndices": [
+        97,
+        98,
+        99,
+        100
+      ]
+    }
+  },
+  "records": [
+    {
+      "index": 1,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 2,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 3,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 4,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 5,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 6,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": true
+    },
+    {
+      "index": 7,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": true
+    },
+    {
+      "index": 8,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": true
+    },
+    {
+      "index": 9,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": true
+    },
+    {
+      "index": 10,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": true
+    },
+    {
+      "index": 11,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 12,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 13,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 14,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 15,
+      "entityType": "list",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 16,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 17,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 18,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 19,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 20,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 21,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 22,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 23,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 24,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 25,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 26,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 27,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 28,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 29,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 30,
+      "entityType": "campaign",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 31,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 32,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 33,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 34,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 35,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 36,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 37,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 38,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 39,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 40,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 41,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 42,
+      "entityType": "member",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 43,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 44,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 45,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 46,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 47,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 48,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 49,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 50,
+      "entityType": "consent",
+      "status": "VALID",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "hasUtf8": false
+    },
+    {
+      "index": 51,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "missing_mandatory_name"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 52,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "whitespace_only_mandatory_name"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 53,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "missing_campaign_name"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 54,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "missing_contact_id"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 55,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "missing_campaign_id"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 56,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "missing_contact_id"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 57,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "null_required",
+      "defects": [
+        "missing_consent_source"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 58,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        "duplicate_list_natural_key"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 59,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        "duplicate_list_natural_key"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 60,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        "duplicate_campaign_member_pair"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 61,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        "duplicate_campaign_member_pair"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 62,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        "duplicate_contact_consent_assertion"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 63,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        "duplicate_contact_consent_assertion"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 64,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        "list_id_not_found"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 65,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        "list_id_not_found"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 66,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        "list_id_not_found"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 67,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        "campaign_id_not_found"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 68,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        "campaign_id_not_found"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 69,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        "campaign_id_not_found"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 70,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "invalid_member_status_bounced"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 71,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "invalid_member_status_delivered"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 72,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "invalid_member_status_draft"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 73,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "invalid_member_status_failed"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 74,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "invalid_member_status_queued"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 75,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "invalid_member_status_pending_review"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 76,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "monotonic_opt_out_reversal_violation"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 77,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "monotonic_opt_out_reversal_violation"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 78,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "monotonic_opt_out_reversal_violation"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 79,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "monotonic_opt_out_reversal_violation"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 80,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "monotonic_opt_out_reversal_violation"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 81,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "non_iso_date_european_slash_format"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 82,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "non_iso_date_us_dash_format"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 83,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "non_iso_date_dot_delimited_format"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 84,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "non_iso_date_english_text_date"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 85,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "non_iso_date_slash_delimited_format"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 86,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "non_iso_date_unparseable_string"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 87,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "negative_campaign_count"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 88,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "negative_member_count"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 89,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "negative_member_count"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 90,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "integer_overflow_campaign_count"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 91,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "integer_overflow_member_count"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 92,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "whitespace_padding",
+      "defects": [
+        "untrimmed_leading_trailing_spaces"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 93,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "whitespace_padding",
+      "defects": [
+        "untrimmed_tabs"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 94,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "whitespace_padding",
+      "defects": [
+        "untrimmed_spaces_campaign_name"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 95,
+      "entityType": "member",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "whitespace_padding",
+      "defects": [
+        "untrimmed_member_status"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 96,
+      "entityType": "consent",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "whitespace_padding",
+      "defects": [
+        "untrimmed_consent_source"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 97,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "equal_prefix_calc_injection"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 98,
+      "entityType": "list",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "plus_prefix_formula_trigger"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 99,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "at_symbol_formula_trigger"
+      ],
+      "hasUtf8": false
+    },
+    {
+      "index": 100,
+      "entityType": "campaign",
+      "status": "DEFECTIVE",
+      "expectedOutcome": "malformed",
+      "defects": [
+        "minus_prefix_formula_trigger"
+      ],
+      "hasUtf8": false
+    }
+  ]
+}

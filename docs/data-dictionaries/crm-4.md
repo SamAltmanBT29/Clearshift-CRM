@@ -85,3 +85,78 @@
 3. **List Immutability:** Campaigns belong to one list throughout their lifecycle; reassignment is rejected.
 4. **Member Status Allowlist:** Only `sent`, `opened`, and `clicked` are valid statuses.
 5. **Security & RBAC:** All routes require `Capabilities.MODULE_READ`. Unauthenticated sessions are redirected to Hub login with returnUrl preservation.
+
+---
+
+## 4. Security, Authorization & Audit Architecture (Issue #44 / [CRM4-15])
+
+### 4.1 Hub Identity Authentication & Asymmetric Verification
+- EdDSA asymmetric token validation issued by `clearshift-hub` for audience `clearshift`.
+- Token expiration check and disabled account rejection (`disabled: true` returns HTTP 401).
+
+### 4.2 Endpoint Role Capability Matrix (SDS ClearShift CRM v2.0 §4 / §7.1)
+
+| Endpoint | Method | Allowed Roles | Prohibited Roles (HTTP 403) |
+|---|---|---|---|
+| `/api/v1/crm-marketing/lists` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/lists` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/lists/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/lists/:id` | `PATCH` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/campaigns` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id` | `PATCH` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id/members` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id/members` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/consents` | `POST` | `editor`, `admin` | `viewer`, `analyst`, `migration_runner` |
+| `/api/v1/crm-marketing/consents/:contact` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+| `/api/v1/crm-marketing/campaigns/:id/export` | `GET` | `viewer`, `editor`, `analyst`, `admin` | `migration_runner` |
+
+### 4.3 Field-Level Protection & Masking
+- Bank details formatted as `XXXX-XXXX-7890` (preserving only last 4 digits).
+- Salary values formatted as `XX,XXX` or `salary hidden`.
+- Neutralization of CSV formula injection (`=`, `+`, `-`, `@`, `\t`, `\r` escaped with leading apostrophe `'`).
+- Sensitive object redaction and log sanitization preventing credentials, tokens, and raw rows from leaking into logs or audit records.
+
+### 4.4 Append-Only Audit Logging
+- Managed by `Crm4AuditService` recording actor, action, timestamp, entity, correlation, outcome, and pre-redacted diffs without plain secrets.
+
+---
+
+## 5. OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-4.yaml`)
+
+* **Base URL:** `/api/v1/crm-marketing`
+* **Specification Version:** `1.0.0` (OpenAPI `3.1.0`)
+* **Authentication Scheme:** `bearerAuth` (HTTP Bearer JWT)
+* **Endpoints:**
+  - `GET  /api/v1/crm-marketing/lists`: List and search marketing lists (server-paginated)
+  - `POST /api/v1/crm-marketing/lists`: Create a marketing list record
+  - `PATCH /api/v1/crm-marketing/lists/{id}`: Partial update of marketing list name/description
+  - `GET  /api/v1/crm-marketing/campaigns`: List campaigns with optional listId filter
+  - `POST /api/v1/crm-marketing/campaigns`: Create campaign with linked marketing list
+  - `GET  /api/v1/crm-marketing/campaigns/{id}`: Fetch single campaign by UUID
+  - `PATCH /api/v1/crm-marketing/campaigns/{id}`: Update campaign name and/or date (listId immutable)
+  - `GET  /api/v1/crm-marketing/campaigns/{id}/members`: List campaign members with status filtering
+  - `POST /api/v1/crm-marketing/campaigns/{id}/members`: Add contact member to campaign
+  - `POST /api/v1/crm-marketing/consents`: Set or update contact consent status (enforces BR-CRM4-01)
+  - `GET  /api/v1/crm-marketing/consents/{contact}`: Fetch contact consent record by contact UUID
+* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), and `409` (Conflict / Monotonic Opt-Out Invariant Violation).
+
+---
+
+## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
+
+In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseline 1.0-A §4.2, and Issue #177 `[CRM4-24]`, CRM-4 Marketing Lists and Campaign History establishes production-grade design specifications for Gate G1:
+
+1. **Field-Level Data Dictionary:** Defines every entity column across all 7 tables (`crm4_lists`, `crm4_campaigns`, `crm4_members`, `crm4_consents`, `crm4_import_batches`, `crm4_import_receipts`, `crm4_import_rejects`) with PostgreSQL data type, nullability, constraints, business rule, and synthetic example. Documented in [`apps/crm/modules/crm-4/docs/data-dictionary.md`](../../apps/crm/modules/crm-4/docs/data-dictionary.md) and programmatically asserted against Drizzle ORM schema via automated tests (`apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts`).
+2. **Entity-Relationship Diagram & Ownership Boundaries:** Visual Mermaid ERD, cardinality catalog, and PLT-03 master-data boundaries documented in [`apps/crm/modules/crm-4/docs/erd.md`](../../apps/crm/modules/crm-4/docs/erd.md). Asserts that CRM-1 contacts are referenced via application guards without cross-module SQL foreign keys.
+3. **Requirement-to-Test Traceability Matrix:** Comprehensive matrix mapping `FR-CRM4-01..05`, `FR-CRM4-10..12`, `FR-CRM4-20..21`, `BR-CRM4-01`, `BR-CRM4-DUP-01..03`, and `MIG-CRM4-01..03` to existing automated test suites documented in [`apps/crm/modules/crm-4/docs/traceability-matrix.md`](../../apps/crm/modules/crm-4/docs/traceability-matrix.md).
+4. **Dirty Data Pack Plan:** Synthetic edge-case strategy covering 11 anomaly categories, seeded defect distributions, and 100-row & 1,000-row conservation balance sheets documented in [`apps/crm/modules/crm-4/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-4/docs/dirty-data-pack-plan.md).
+5. **Executable QA Invariants:** Reusable data structures, candidate key builders, and conservation assertion helpers implemented in [`apps/crm/modules/crm-4/src/domain/qa-specs.ts`](../../apps/crm/modules/crm-4/src/domain/qa-specs.ts).
+
+### 6.1 Versioned Change Record & Gate G1 Sign-off
+* **Change Record ID:** `CR-CRM4-G1-001`
+* **Milestone:** Gate G1 — Design Complete (Sprint 1)
+* **Date:** 2026-10-23
+* **Status:** Verified, 100% Tests Passing, Approved for V1
+* **Sign-off Authority:** Group 4 Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)

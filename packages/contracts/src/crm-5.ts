@@ -317,6 +317,17 @@ export const CreateRunInputSchema = z.object({
 });
 export type CreateRunInput = z.infer<typeof CreateRunInputSchema>;
 
+export const UpdateRunInputSchema = z.object({
+  status: MigrationRunStatusSchema.optional(),
+  recordsIn: z.number().int({ message: 'recordsIn must be an integer' }).nonnegative({ message: 'recordsIn cannot be negative' }).optional(),
+  recordsOut: z.number().int({ message: 'recordsOut must be an integer' }).nonnegative({ message: 'recordsOut cannot be negative' }).optional(),
+  recordsRejected: z.number().int({ message: 'recordsRejected must be an integer' }).nonnegative({ message: 'recordsRejected cannot be negative' }).optional(),
+  completedAt: z.coerce.date().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  expectedUpdatedAt: z.coerce.date().optional(),
+});
+export type UpdateRunInput = z.infer<typeof UpdateRunInputSchema>;
+
 export const CreateScoreInputSchema = z.object({
   batchId: z.string().min(1, 'batchId is required').max(128),
   module: CrmModuleSchema,
@@ -644,5 +655,12 @@ export const CRM5ErrorEnvelopeSchema = z.object({
 export type CRM5ErrorEnvelope = z.infer<typeof CRM5ErrorEnvelopeSchema>;
 
 export * from './import-target.js';
+export {
+  CRM5_RUNS_TARGET_FIELDS,
+  CRM5_SCORES_TARGET_FIELDS,
+  CRM5_REJECTS_TARGET_FIELDS,
+  CRM5_RECONCILIATION_TARGET_FIELDS,
+  CRM5_TARGET_ENTITIES,
+} from './migration-target.js';
 
 

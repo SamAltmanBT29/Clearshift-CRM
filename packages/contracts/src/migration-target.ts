@@ -901,6 +901,16 @@ export const TargetEntityDefinitionSchema = z.object({
 });
 export type TargetEntityDefinition = z.infer<typeof TargetEntityDefinitionSchema>;
 
+export const TypeIncompatibilityWarningSchema = z.object({
+  targetField: z.string(),
+  targetLabel: z.string(),
+  targetType: z.string(),
+  sourceColumn: z.string(),
+  sourceType: z.string(),
+  warning: z.string(),
+});
+export type TypeIncompatibilityWarning = z.infer<typeof TypeIncompatibilityWarningSchema>;
+
 export const MappingValidationResultSchema = z.object({
   valid: z.boolean(),
   missingRequiredFields: z.array(z.string()),
@@ -912,6 +922,8 @@ export const MappingValidationResultSchema = z.object({
     })
   ),
   errors: z.array(z.string()),
+  warnings: z.array(z.string()).optional(),
+  typeIncompatibilities: z.array(TypeIncompatibilityWarningSchema).optional(),
 });
 export type MappingValidationResult = z.infer<typeof MappingValidationResultSchema>;
 
@@ -971,6 +983,125 @@ export const CRM_LEADS_TARGET_FIELDS: TargetFieldDefinition[] = [
   },
 ];
 
+export const CRM5_RUNS_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target ClearShift CRM module',
+  },
+  {
+    name: 'step',
+    label: 'Pipeline Step',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile'],
+    description: 'Active migration pipeline execution phase',
+  },
+  {
+    name: 'status',
+    label: 'Execution Status',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['pending', 'running', 'completed', 'failed', 'halted'],
+    description: 'Lifecycle run execution status',
+  },
+  { name: 'recordsIn', label: 'Source Records In', required: false, dataType: 'number', description: 'Total source records processed' },
+  { name: 'recordsOut', label: 'Loaded Records Out', required: false, dataType: 'number', description: 'Records successfully loaded' },
+  { name: 'recordsRejected', label: 'Rejected Records', required: false, dataType: 'number', description: 'Count of rejected rows' },
+  { name: 'startedAt', label: 'Started Timestamp', required: false, dataType: 'date', description: 'Run initiation timestamp' },
+  { name: 'completedAt', label: 'Completed Timestamp', required: false, dataType: 'date', description: 'Run finish timestamp' },
+];
+
+export const CRM5_SCORES_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target ClearShift CRM module',
+  },
+  { name: 'completeness', label: 'Completeness Ratio', required: false, dataType: 'number', description: 'Completeness score between 0 and 1' },
+  { name: 'validity', label: 'Validity Ratio', required: false, dataType: 'number', description: 'Validity score between 0 and 1' },
+  { name: 'duplicateRate', label: 'Duplicate Rate', required: false, dataType: 'number', description: 'Exact duplicate rate between 0 and 1' },
+  { name: 'rejectRate', label: 'Reject Rate', required: false, dataType: 'number', description: 'Rejection rate between 0 and 1' },
+  { name: 'linkIntegrity', label: 'Link Integrity', required: false, dataType: 'number', description: 'Linkage score between 0 and 1' },
+  { name: 'score', label: 'Overall Quality Score', required: true, dataType: 'number', description: 'Composite data quality score between 0 and 100' },
+];
+
+export const CRM5_REJECTS_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target module where rejection occurred',
+  },
+  { name: 'rowIndex', label: 'Source Row Index', required: true, dataType: 'number', description: '1-based source row index' },
+  { name: 'errorCode', label: 'Rejection Error Code', required: true, dataType: 'string', description: 'Machine error code' },
+  { name: 'errorMessage', label: 'Error Message', required: true, dataType: 'string', description: 'Human-readable failure reason' },
+  { name: 'rawPayloadHash', label: 'Raw Payload Hash', required: true, dataType: 'string', description: 'Deterministic SHA-256 hash of raw row payload' },
+];
+
+export const CRM5_RECONCILIATION_TARGET_FIELDS: TargetFieldDefinition[] = [
+  { name: 'batchId', label: 'Batch ID', required: true, dataType: 'string', description: 'Unique batch execution identifier' },
+  {
+    name: 'module',
+    label: 'Module Identifier',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'],
+    description: 'Target ClearShift module',
+  },
+  { name: 'sourceCount', label: 'Source Count', required: true, dataType: 'number', description: 'Total source records ingested' },
+  { name: 'loadedCount', label: 'Loaded Count', required: true, dataType: 'number', description: 'Total records written to target' },
+  { name: 'rejectedCount', label: 'Rejected Count', required: true, dataType: 'number', description: 'Total records rejected to audit table' },
+  { name: 'mergedCount', label: 'Merged Count', required: false, dataType: 'number', description: 'Total records merged into golden entities' },
+  { name: 'skippedCount', label: 'Skipped Count', required: false, dataType: 'number', description: 'Total records explicitly skipped' },
+  {
+    name: 'status',
+    label: 'Conservation Status',
+    required: true,
+    dataType: 'enum',
+    allowedValues: ['OK', 'UNBALANCED'],
+    description: 'Reconciliation conservation audit status',
+  },
+];
+
+export const CRM5_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
+  crm5_runs: {
+    entity: 'crm5_runs',
+    module: 'crm-5',
+    label: 'CRM-5 Run Projections',
+    fields: CRM5_RUNS_TARGET_FIELDS,
+  },
+  crm5_scores: {
+    entity: 'crm5_scores',
+    module: 'crm-5',
+    label: 'CRM-5 Data Quality Scores',
+    fields: CRM5_SCORES_TARGET_FIELDS,
+  },
+  crm5_rejects: {
+    entity: 'crm5_rejects',
+    module: 'crm-5',
+    label: 'CRM-5 Migration Rejections',
+    fields: CRM5_REJECTS_TARGET_FIELDS,
+  },
+  crm5_reconciliation_reports: {
+    entity: 'crm5_reconciliation_reports',
+    module: 'crm-5',
+    label: 'CRM-5 Reconciliation Reports',
+    fields: CRM5_RECONCILIATION_TARGET_FIELDS,
+  },
+};
+
 export const CRM_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
   contacts: {
     entity: 'contacts',
@@ -984,6 +1115,7 @@ export const CRM_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
     label: 'CRM Leads',
     fields: CRM_LEADS_TARGET_FIELDS,
   },
+  ...CRM5_TARGET_ENTITIES,
 };
 
 /**
@@ -1197,5 +1329,113 @@ export function computeTargetBaselineHash(records: unknown[]): string {
   });
   stringified.sort();
   return createHash('sha256').update(stringified.join('\n'), 'utf8').digest('hex');
+}
+
+// ============================================================================
+// KIT-08: Generic Target Adapter, Stable Idempotency & Import Receipts
+// ============================================================================
+
+/**
+ * Idempotency Key Generation Parameters Schema (KIT-08)
+ * Key is derived from: batch_id + source_row + module target + operation version
+ * (NOT mutable payload alone; SDS ClearShift Migration Kit v2.0 §11.4)
+ */
+export const IdempotencyKeyParamsSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  sourceRow: z.number().int({ message: 'sourceRow must be an integer' }).min(1, 'sourceRow must be >= 1'),
+  module: z.string().min(1, 'module is required').max(64),
+  entity: z.string().min(1, 'entity is required').max(64),
+  operationVersion: z.number().int().min(1).default(1),
+});
+export type IdempotencyKeyParams = z.infer<typeof IdempotencyKeyParamsSchema>;
+
+/**
+ * Derives a deterministic stable idempotency key for a source row.
+ * Format: SHA256(batchId:sourceRow:module:entity:v{operationVersion})
+ */
+export function computeStableIdempotencyKey(params: IdempotencyKeyParams): string {
+  const parsed = IdempotencyKeyParamsSchema.parse(params);
+  const rawKey = `${parsed.batchId}:${parsed.sourceRow}:${parsed.module}:${parsed.entity}:v${parsed.operationVersion}`;
+  return createHash('sha256').update(rawKey, 'utf8').digest('hex');
+}
+
+export const deriveStableIdempotencyKey = computeStableIdempotencyKey;
+
+/**
+ * Idempotency Payload Conflict Error (HTTP 409)
+ * Raised when the same idempotency key is submitted with a different payload.
+ */
+export class IdempotencyConflictError extends Error {
+  public readonly statusCode = 409;
+  public readonly code = 'IDEMPOTENCY_CONFLICT';
+
+  constructor(
+    public readonly idempotencyKey: string,
+    public readonly reason: string = `Idempotency key '${idempotencyKey}' was already used with a different request payload.`
+  ) {
+    super(reason);
+    this.name = 'IdempotencyConflictError';
+  }
+}
+
+/**
+ * Result returned by a MigrationTargetAdapter import operation.
+ */
+export interface MigrationTargetAdapterResult {
+  targetId: string;
+  receipt: {
+    batchId: string;
+    sourceRow: number;
+    entity: string;
+    schemaVersion: number;
+    idempotencyKey: string;
+    targetId: string;
+    kind: 'created' | 'linked';
+    createdAt: Date;
+    payloadHash?: string | undefined;
+  };
+  isExisting?: boolean | undefined;
+}
+
+/**
+ * Error detail returned by a MigrationTargetAdapter.
+ */
+export interface MigrationTargetAdapterError {
+  reasonCode: string;
+  message: string;
+  field?: string | undefined;
+  retryable?: boolean | undefined;
+}
+
+/**
+ * Generic Target Adapter Contract (Decision C4 & KIT-08)
+ * Executed in-process or via module adapter port to guarantee atomic transaction commits
+ * between target business records and durable import receipts.
+ */
+export interface MigrationTargetAdapter<TRow = unknown> {
+  readonly module: string;
+  readonly entity: string;
+  readonly schemaVersion: number;
+
+  /**
+   * Preflight validation during dry-run phase (zero database mutations).
+   */
+  preflight(
+    batchId: string,
+    rows: TRow[]
+  ): Promise<{ validCount: number; rejectCount: number } | { error: MigrationTargetAdapterError }>;
+
+  /**
+   * Commits target business record and durable import receipt atomically in one local PG transaction.
+   */
+  importRow(
+    batchId: string,
+    sourceRow: number,
+    idempotencyKey: string,
+    cleanData: TRow
+  ): Promise<
+    | { ok: true; value: MigrationTargetAdapterResult }
+    | { ok: false; error: MigrationTargetAdapterError }
+  >;
 }
 

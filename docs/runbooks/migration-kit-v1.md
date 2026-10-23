@@ -671,3 +671,154 @@ FROM public.kit_batch_steps
 WHERE batch_id = 'BATCH_UUID' AND step_name = 'dry_run';
 ```
 
+---
+
+## 12. Step 6: Generic Target Adapter, Stable Idempotency & Import Receipts (KIT-08)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #75 `[KIT-08]`.
+
+### 12.1 Pipeline Stage Overview
+
+Step 5 (**Load**) is responsible for committing mapped and validated business entities into ClearShift target modules. To satisfy enterprise reliability and zero-data-loss guarantees under transient failures or worker crashes, all load operations adhere to the **Generic Target Adapter Contract** and **Durable Import Receipt Protocol**.
+
+```
+    [ Cleaned & Mapped Rows ]
+                │
+                ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Migration Kit TargetBatchLoader                              │
+    │ - Default chunk size: 500 rows                               │
+    │ - Stable Idempotency Key: batchId:sourceRow:module:entity:v# │
+    │ - 10% failure circuit breaker (STP-01)                       │
+    └──────────────────────┬───────────────────────────────────────┘
+                           │ Dispatches via TargetAdapter Port
+                           ▼ (Zero Direct Target DB Privileges in Kit)
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Target Module Adapter Port (e.g., crm-1, crm-2, crm-3)      │
+    │                                                              │
+    │  1. Check existing receipt by idempotencyKey                 │
+    │     ├── Same Key + Same Hash ──► Return prior target ID (200)│
+    │     └── Same Key + Diff Hash ──► Return Conflict 409 (Abort) │
+    │                                                              │
+    │  2. Domain Validation & Mutation                             │
+    │                                                              │
+    │  3. Single Local PostgreSQL Transaction:                     │
+    │     BEGIN;                                                   │
+    │       INSERT INTO <module>.<entity> (...);                   │
+    │       INSERT INTO <module>.<entity>_import_receipts (...);   │
+    │     COMMIT;                                                  │
+    └──────────────────────────────────────────────────────────────┘
+```
+
+### 12.2 Stable Idempotency Key Derivation
+
+Per SDS §11.4, idempotency keys MUST be stable across retries and cannot be derived from mutable payload content alone:
+
+$$\text{idempotencyKey} = \text{SHA256}(\text{batchId} : \text{sourceRow} : \text{module} : \text{entity} : \text{v}\{\text{operationVersion}\})$$
+
+Key invariants:
+- **Stability:** The key is completely deterministic based on the source location and target operation version.
+- **Payload Hash Tracking:** A canonical SHA-256 hash of the cleaned payload is computed deterministically (`computeCanonicalPayloadHash(cleanData)`) and stored alongside the receipt.
+- **Payload Drift Guard:** If a retry arrives with the same idempotency key but a modified payload, the target adapter detects the hash mismatch and immediately rejects the mutation with an HTTP 409 Conflict (`IDEMPOTENCY_CONFLICT`).
+
+### 12.3 Idempotency Replay Semantics
+
+| Request State | Receipt Lookup | Hash Comparison | Action & Outcome |
+| :--- | :--- | :--- | :--- |
+| **First Attempt** | Not found | N/A | Commits business record and import receipt atomically in one transaction. Returns `targetId` and `isExisting: false`. |
+| **Identical Retry** | Found | Identical | Returns previous `targetId` and existing receipt immediately. `isExisting: true`. Zero duplicate target records created. |
+| **Drifted Payload Retry** | Found | Mismatch | Rejects mutation with `409 Conflict` (`IDEMPOTENCY_CONFLICT`). Original target record is protected. |
+| **Worker Process Crash** | Found in DB | Identical | Worker recovers durable receipts from PostgreSQL; subsequent retries safely return prior IDs. |
+
+### 12.4 Bounded Chunk Loading & Failure Threshold Guard
+
+1. **500-Row Chunking:** The `TargetBatchLoader` processes records in configurable chunks (default: 500 rows) to bound memory consumption and avoid holding long-lived database locks.
+2. **Circuit Breaker (10% Failure Ceiling):** If the cumulative row failure rate exceeds 10.0% ($\frac{\text{rejectedRows}}{\text{attemptedRows}} > 0.10$), the loader halts immediately:
+   - Remaining rows are marked `REJECTED` with reason `STOP_THRESHOLD_EXCEEDED`.
+   - Batch status in `public.kit_batches` transitions to `load_failed_partial` or `failed`.
+   - Unaccounted rows are strictly guaranteed to be 0:
+     $$\text{totalSourceRows} = \text{loaded} + \text{rejected} + \text{merged} + \text{skipped}$$
+
+### 12.5 Architectural Privilege Boundary
+
+Migration Kit operates under strict privilege separation (ADR-004 / Decision C4):
+- **No Direct Table Privileges:** The Migration Kit worker role possesses ZERO insert, update, or delete privileges on module-owned domain schemas (`crm1.*`, `crm2.*`, `crm3.*`, `crm4.*`).
+- **Adapter In-Process Port:** All loads are mediated via the owning module's `MigrationTargetAdapter`, ensuring that module business rules, events, and transactional boundaries are strictly respected.
+
+---
+
+## 13. Step 7: Shared Target Validation & Post-Load Integrity Engine (KIT-06)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.8 (FR-VA-01–04), §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #73 `[KIT-06]`.
+
+### 13.1 Pipeline Stage Overview
+
+Step 6 (**Validate**) runs module-declared validation rules against ingested, cleaned, and loaded datasets to verify both business-level and database-level integrity before signoff and reconciliation.
+
+```
+       [public.clean_crm] / Target Domain Records
+                           │
+                           ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Shared Target Validation Engine                              │
+    │ 1. Pre-Load Business Checks (Formats, Enums, Required)       │
+    │ 2. Post-Load Referential Link Integrity (Foreign Key Target) │
+    │ 3. Domain Rules (Freshness Timestamps, Cross-Field Balance)  │
+    │ 4. Deterministic Checksum & Failure Attribution             │
+    └──────────────────────┬───────────────────────────────────────┘
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+      [All Rules Pass]            [Failures Detected]
+      - State: `validated`        - State: `failed`
+      - Emit `batch.validated`   - Reconciliation strictly BLOCKED
+      - Proceed to Step 7         - Detailed failure report with ruleId,
+                                    sourceRow, targetId, reasonCode
+```
+
+### 13.2 Typed Validation Rule Types
+
+The validation engine supports five standardized, typed rule categories:
+
+| Rule Type | Scope | Example | Behavior on Failure |
+| :--- | :---: | :--- | :--- |
+| **`required_field`** | Pre-Load | `CRM1-VAL-REQ-01`: `contacts.first_name` cannot be empty. | Fails row with `REQUIRED_FIELD_MISSING`. |
+| **`format`** | Pre-Load | `CRM1-VAL-FMT-01`: `contacts.email` must match RFC email regex. | Fails row with `INVALID_FORMAT`. |
+| **`enum`** | Pre-Load | `CRM1-VAL-ENUM-01`: `contacts.lead_status` in `['New', 'Working', 'Qualified', 'Closed']`. | Fails row with `INVALID_ENUM_VALUE`. |
+| **`relationship`** | Post-Load | `CRM1-VAL-REL-01`: `contacts.company_id` must exist in `crm1_companies`. | Fails row with `RELATIONSHIP_NOT_FOUND` (Link integrity error). |
+| **`domain`** | Pre/Post | `CRM1-VAL-DOM-01`: Non-unknown consent must have `consent_updated_at`. | Fails row with `DOMAIN_RULE_VIOLATION`. |
+
+### 13.3 Strict Referential Link Integrity Gate
+
+A critical non-negotiable invariant of ClearShift data reliability:
+1. Every loaded record's external entity references (e.g. `order -> customer`, `deal -> contact`, `contact -> company`) are checked in post-load validation.
+2. If any link integrity failure is detected:
+   - The failure is explicitly recorded with `ruleId`, `sourceRow`, `targetId`, and reason `RELATIONSHIP_NOT_FOUND`.
+   - The validation report is marked `isValid: false`.
+   - The batch status in `public.kit_batches` transitions to `'failed'`.
+   - **Reconciliation & Signoff Gate:** `ValidationService.assertBatchCanReconcile()` strictly blocks execution of Step 7 (Reconcile). No batch with failed link integrity can be signed off as successful.
+
+### 13.4 Deterministic Output & Audit Trail
+
+- **Determinism:** Validation failures are always sorted by `sourceRow ASC`, then `ruleId ASC`, then `field ASC`.
+- **SHA-256 Checksum:** Every report calculates a cryptographic hash over the failure array. Repeated executions against the same dataset produce identical checksums.
+- **Outbox Event (`batch.validated`):**
+  ```json
+  {
+    "eventType": "batch.validated",
+    "aggregateType": "kit_batch",
+    "aggregateId": "BATCH_UUID",
+    "payload": {
+      "batch_id": "BATCH_UUID",
+      "module": "crm-1",
+      "total_checked": 500,
+      "validation_failures": 0,
+      "is_valid": true,
+      "checksum": "a3f5c7...",
+      "timestamp": "2026-10-23T22:30:00.000Z"
+    }
+  }
+  ```
+
+---
+

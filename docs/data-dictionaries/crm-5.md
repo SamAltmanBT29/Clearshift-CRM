@@ -698,3 +698,147 @@ In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseli
 * **Date:** 2026-10-23
 * **Status:** Verified, 100% Tests Passing, Approved for V1
 * **Sign-off Authority:** Group 5 Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)
+
+---
+
+## 18. Migration Kit Wizard Schema Metadata & Type Compatibility Integration ([CRM5-22] — Issue #195)
+
+### 18.1 Target Entity Registrations in Shared Migration Kit
+In compliance with Gate G4 requirements and ClearShift SDS §4.5, CRM-5 registers all four owned projection/reporting entities with the shared Migration Kit wizard registry (`CRM_TARGET_ENTITIES`):
+
+| Target Entity Key | Label | Module | Primary Key | Required Target Fields | Enum Fields & Allowlists |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `crm5_runs` | CRM-5 Run Projections | `crm-5` | `id` (UUID) | `batchId`, `module`, `step`, `status` | `module` ('crm-1'..'crm-5'), `step` ('extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile'), `status` ('pending', 'running', 'completed', 'failed', 'halted') |
+| `crm5_scores` | CRM-5 Data Quality Scores | `crm-5` | `id` (UUID) | `batchId`, `module`, `score` | `module` ('crm-1'..'crm-5') |
+| `crm5_rejects` | CRM-5 Migration Rejections | `crm-5` | `id` (UUID) | `batchId`, `module`, `rowIndex`, `errorCode`, `errorMessage`, `rawPayloadHash` | `module` ('crm-1'..'crm-5') |
+| `crm5_reconciliation_reports` | CRM-5 Reconciliation Reports | `crm-5` | `id` (UUID) | `batchId`, `module`, `sourceCount`, `loadedCount`, `rejectedCount`, `status` | `module` ('crm-1'..'crm-5'), `status` ('OK', 'UNBALANCED') |
+
+### 18.2 Field-by-Field Specification Directory
+
+#### 18.2.1 `crm5_runs` (Migration Run Projections)
+* `batchId` (`string`, required): Unique migration batch identifier.
+* `module` (`enum`, required): Target ClearShift module (`['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']`).
+* `step` (`enum`, required): Pipeline execution phase (`['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']`).
+* `status` (`enum`, required): Lifecycle run state (`['pending', 'running', 'completed', 'failed', 'halted']`).
+* `recordsIn` (`number`, optional): Total source input records processed.
+* `recordsOut` (`number`, optional): Records written to target entity.
+* `recordsRejected` (`number`, optional): Row records diverted to rejection audit.
+* `startedAt` (`date`, optional): Run start timestamp.
+* `completedAt` (`date`, optional): Run completion timestamp.
+
+#### 18.2.2 `crm5_scores` (Data Quality Scores)
+* `batchId` (`string`, required): Unique migration batch identifier.
+* `module` (`enum`, required): Target ClearShift module.
+* `completeness` (`number`, optional): Ratio of populated mandatory fields [0..1].
+* `validity` (`number`, optional): Conformance ratio to format/regex rules [0..1].
+* `duplicateRate` (`number`, optional): Exact duplicate ratio [0..1].
+* `rejectRate` (`number`, optional): Rejection ratio [0..1].
+* `linkIntegrity` (`number`, optional): Foreign key integrity ratio [0..1].
+* `score` (`number`, required): Composite quality score [0..100].
+
+#### 18.2.3 `crm5_rejects` (Migration Rejections)
+* `batchId` (`string`, required): Unique migration batch identifier.
+* `module` (`enum`, required): Target module where rejection occurred.
+* `rowIndex` (`number`, required): 1-based source row index.
+* `errorCode` (`string`, required): Machine error identifier.
+* `errorMessage` (`string`, required): Detailed human-readable explanation.
+* `rawPayloadHash` (`string`, required): Deterministic SHA-256 fingerprint.
+
+#### 18.2.4 `crm5_reconciliation_reports` (Conservation Balance Sheets)
+* `batchId` (`string`, required): Unique migration batch identifier.
+* `module` (`enum`, required): Target ClearShift module.
+* `sourceCount` (`number`, required): Total source records parsed.
+* `loadedCount` (`number`, required): Successfully loaded target rows.
+* `rejectedCount` (`number`, required): Rejection audit table count.
+* `mergedCount` (`number`, optional): Authorized merged duplicate count.
+* `skippedCount` (`number`, optional): Explicitly authorized skipped row count.
+* `status` (`enum`, required): Conservation outcome status (`['OK', 'UNBALANCED']`).
+
+### 18.3 Source-to-Target Type Compatibility Matrix
+
+To safeguard against silent coercion failures and data corruption during migration, the wizard evaluates source column profiled types against target field data types:
+
+| Target Field Data Type | Compatible Source Types | Incompatible Source Types (Triggers Warning) | Coercion / Validation Rule |
+| :--- | :--- | :--- | :--- |
+| `string` | All scalar types (`string`, `number`, `integer`, `float`, `date`, `boolean`, `uuid`) | None | Any scalar can be safely converted to string representation. |
+| `number` | `integer`, `float`, `number`, `numeric` | `date`, `datetime`, `boolean`, `uuid`, `email`, `phone`, `unknown_string` | Rejects non-numeric strings with `INVALID_NUMERIC` / `INVALID_INTEGER`. |
+| `date` | `date`, `datetime`, `timestamp` | `number`, `integer`, `float`, `boolean`, `uuid`, `phone`, `email` | Must conform to strict ISO-8601 (`YYYY-MM-DDTHH:mm:ssZ`). |
+| `uuid` | `uuid` | `number`, `integer`, `float`, `boolean`, `date`, `phone`, `email` | Must conform to canonical RFC 4122 8-4-4-4-12 hexadecimal structure. |
+| `boolean` | `boolean` | `date`, `uuid`, `float`, `email`, `phone`, arbitrary text | Boolean true/false or strict 0/1 binary states. |
+| `enum` | `enum`, `string` (with conversion) | `number`, `float`, `boolean`, `date`, `uuid` | Target value must strictly match domain allowlist; unmapped values trigger policy. |
+
+### 18.4 Execution Gating & Operator Protections
+1. **Required Unmapped Fields Block (AC 4):**
+   - The wizard evaluates all required fields in the active `TargetEntityDefinition`.
+   - If any required field lacks a mapped source column, `canProceed` evaluates to `false`.
+   - The primary execution button (`Execute Step 4: Map & Save` / `Proceed to Dry Run`) is strictly disabled (`disabled={!canProceed}`).
+   - An Amber warning banner is rendered: `"Required Target Field Enforcement Block: The following required target fields have no source column mapped: [field1, field2]..."`.
+   - Programmatic execution via `assertDryRunEligible()` throws `AppError('MAPPING_INCOMPLETE', ..., 400)`.
+2. **Type Incompatibility Warnings (AC 3):**
+   - When a source column is mapped to a target field with an incompatible data type, the wizard renders a prominent warning pill `⚠️ Incompatible Type (<sourceType> ➔ <targetType>)`.
+   - A summary banner alerts the operator: `"Type Incompatibility Warning: Attempting to map incompatible source types. The following N mapping(s) may fail validation or cause data loss."`
+   - Warnings inform the operator while allowing intentional overrides if a custom converter or cleaning rule is declared downstream.
+
+### 18.5 Versioned Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G4-022`
+* **Milestone:** Gate G4 — Release Candidate & Migration Kit Wizard Integration (Weeks 7–8)
+* **Date:** 2026-10-23
+* **Status:** Verified, Tests Passing, Gate G4 Ready
+* **Sign-off Authority:** Group 5 Role 3 (Frontend / Review-screen Engineer) & Role 2 (Integration Engineer)
+
+---
+
+## 19. Entity Detail View, Inline Edit Workflow, and Linked Master Records (CRM5-21 / Issue #194)
+
+### 19.1 Detail View & Primary Attributes Specification (`RunDetailPage`)
+The CRM-5 Migration Control Center implements an entity detail page for migration run projections (`RunDetailPage`), providing operators with end-to-end execution visibility:
+* **Primary Attributes Display (AC 1):**
+  - **Run Identifier:** Immutable UUID (`run.id`) displayed with copyable format.
+  - **Batch Identifier:** Master migration batch ID (`run.batchId`).
+  - **Target Module Badge:** Color-coded module tag (`crm-1`, `crm-2`, `crm-3`, `crm-4`, `crm-5`).
+  - **Pipeline Phase Badge:** Canonical step tag (`extract`, `profile`, `clean`, `map`, `load`, `validate`, `reconcile`).
+  - **Status Pill:** Real-time state badge (`pending`, `running`, `completed`, `failed`, `halted`).
+  - **Execution Metrics:** Records In, Records Out, Records Rejected, Throughput/Success percentage (`(recordsOut / recordsIn) * 100%`), and elapsed execution duration.
+* **Audit & System Metadata Panel (AC 1):**
+  - **Golden ID / Master Identity:** Explicitly surfaces the Golden ID (`metadata.goldenId`) with a dedicated Golden Identity badge (`🏅 Golden ID`). When unassigned, indicates derived identity from batch.
+  - **Created At & Updated At:** ISO-8601 audit timestamps formatted in localized string representations.
+  - **Operator Notes:** Displays historical operator audit annotations or recovery notes.
+
+### 19.2 Controlled Inline Edit / Slide-Over Drawer Form (`EditRunDrawer`)
+Controlled mutation of migration run projections is performed via `EditRunDrawer` (`PATCH /api/v1/crm-control/runs/:id`):
+* **Allowlisted Mutable Fields (AC 2):**
+  - `status`: Select dropdown enforcing state machine transitions (`assertValidTransition`). Reverting terminal states (`completed`, `failed`) is strictly blocked.
+  - `recordsIn`: Integer input (`>= 0`).
+  - `recordsOut`: Integer input (`>= 0`).
+  - `recordsRejected`: Integer input (`>= 0`).
+  - `metadata.operatorNotes`: Textarea documenting operator justification for manual recovery or reconciliation.
+* **Immutable Read-Only Fields:** `id`, `batchId`, `module`, `step`, and `createdAt` cannot be modified.
+* **RBAC Permission Gate (AC 2):**
+  - Requires `migration_runner`, `editor`, or `admin` role (`CRM5_ENDPOINT_ROLES.RUNS_UPDATE`).
+  - Read-only users (e.g. `viewer`, `analyst`) receive an inline 403 Forbidden alert, and form submission is disabled (`canEdit=false`).
+
+### 19.3 Optimistic Concurrency Control & 409 Conflict Handling (AC 4)
+* **Concurrency Token:** Edits include `expectedUpdatedAt: run.updatedAt`.
+* **Conflict Detection:** If the server record was updated concurrently by another operator or background job (`current.updatedAt > expectedUpdatedAt`), the API returns HTTP 409 Conflict (`code: CONCURRENT_MODIFICATION`).
+* **Operator Conflict Prompt & Recovery:** The drawer captures HTTP 409 and presents an alert: *"Concurrent Modification Conflict: This run projection was updated concurrently by another operator. Please refresh to load the latest state before re-applying."*
+* **Refresh and Re-apply Action:** Operators click **"Refresh and Re-apply"** (`data-testid="refresh-reapply-btn"`), which automatically fetches the latest record state from the server and updates form inputs.
+
+### 19.4 Linked Entity Sub-Tables & Module Deep Links (AC 3)
+The detail view embeds 4 linked sub-tables displaying related records for the batch:
+1. **Pipeline Steps Sub-Table:** Displays all 7 canonical migration step runs for the same `batchId`, highlighting the currently inspected step.
+2. **Quality Scores Sub-Table:** Displays 5-dimension quality score metrics (completeness, validity, duplicate rate, reject rate, link integrity, and overall score).
+3. **Migration Rejects Sub-Table:** Lists row-level rejections for the batch with row index, error code, reason, and modal review action (`RejectDetailModal`).
+4. **Owning Module Master Records Sub-Table:** Provides navigation links to target records in owning CRM modules:
+   - For `crm-1`: Navigation link to CRM-1 Contacts (`/crm/contacts`).
+   - For `crm-2`: Navigation link to CRM-2 Deals (`/crm/deals`).
+   - For `crm-3`: Navigation link to CRM-3 Tickets (`/crm/tickets`).
+   - For `crm-4`: Navigation link to CRM-4 Campaigns (`/crm/campaigns`).
+   - For `crm-5`: Navigation link to Control Center Reports (`/crm-5`).
+
+### 19.5 Versioned Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G3-021`
+* **Milestone:** Gate G3 — Detail/Edit Workflow and Linked Records (Weeks 5–6)
+* **Date:** 2026-10-24
+* **Status:** Verified, Tests Passing, Gate G3 Ready
+* **Sign-off Authority:** Group 5 Lead & Role 3 (Frontend Engineer)
+
