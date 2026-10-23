@@ -429,3 +429,27 @@ Available in `@clearshift/contracts` for downstream module development and contr
 | **Group 1 Role 4** (Data Reliability & QA Lead) | Data / QA Lead | **APPROVED** | 2026-10-23 |
 | **Group 5 Peer Review** (CRM-5 Migration Control) | Peer Review Lead | **APPROVED** | 2026-10-23 |
 | **Workstream 12 PMO** (Architecture Baseline) | PMO Lead | **VERIFIED** | 2026-10-23 |
+
+---
+
+## 16. UI Presentation States & Error Sanitization (CRM1-19)
+
+Governs standard UI visual states across all CRM-1 entity tables and pages (`ContactsListPage`, `CompaniesListPage`, `LeadsPipelinePage`, `DuplicateReviewPage`, `ImportsOverviewPage`).
+
+### 16.1 State Hierarchy & Dispatch Matrix
+
+| Priority | State Condition | Visual Component | Accessibility / ARIA | Interactive Controls |
+| :---: | :--- | :--- | :--- | :--- |
+| 1 | 403 Forbidden / Missing Permission | `AccessDeniedView` | `role="region"`, `aria-labelledby="cs-access-denied-title"`, icon `aria-hidden="true"` | Primary CTA button (`Return to Safe Area` or custom `actionLabel`) |
+| 2 | Error (API failure, network abort) | `ErrorAlert` | `role="alert"`, `aria-live="assertive"`, dismissible banner | Primary `Retry` button (`aria-label="Retry operation"`), optional secondary action |
+| 3 | Initial or Active Fetching | `TableSkeleton` | `role="status"`, `aria-busy="true"`, `aria-label="Loading content..."` | Animated shimmering placeholders for toolbar, headers, and body rows |
+| 4 | Empty (Zero total records or filtered out) | `EmptyState` | `role="status"`, semantic header and description | Primary CTA button (`actionLabel` / `onAction`), secondary CTA or reset filters |
+| 5 | Normal Populated Data | `DataTable` | `role="table"`, sorting headers (`aria-sort`), paginator (`aria-label="Table Pagination"`) | Column sorting, search filter, page navigation, record actions |
+
+### 16.2 Error Message Sanitization Standard
+
+All error payloads rendered in user-facing components (`ErrorAlert`, `DataTableController`) MUST pass through `sanitizeErrorMessage()` before presentation:
+- **Stack Traces**: Strips any trailing lines containing `at functionName (path/to/file.ts:line:col)`.
+- **File System Paths**: Strips absolute or relative paths matching `(/[\w.-]+)+:\d+:\d+`.
+- **Database / Internal Diagnostics**: Masks SQL queries, syntax errors, and database connection strings into human-readable messages (`"An unexpected error occurred while communicating with the server."`).
+- **Sanitized Fallback**: Null, undefined, empty, or whitespace-only messages fall back to `"An unexpected error occurred. Please try again."`.
