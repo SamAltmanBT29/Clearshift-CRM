@@ -47,6 +47,13 @@ export class Crm5ApiError extends Error {
   }
 }
 
+export class Crm5PermissionError extends Crm5ApiError {
+  constructor(message = 'Access denied: insufficient permissions to access CRM-5 migration control', details?: unknown) {
+    super(403, 'FORBIDDEN', message, details);
+    this.name = 'Crm5PermissionError';
+  }
+}
+
 export interface RequestOptions {
   signal?: AbortSignal;
   permissionHeader?: string;
@@ -365,3 +372,68 @@ export async function getBatchSummary(
   const raw = await request<BatchSummary>(endpoint, { method: 'GET', ...options });
   return raw;
 }
+
+export const postRun = createRun;
+export const patchRun = updateRun;
+
+export async function transitionRunStatus(
+  id: string,
+  status: MigrationRun['status'],
+  options: RequestOptions = {}
+): Promise<MigrationRun> {
+  return updateRun(id, { status }, options);
+}
+
+export const getMigrationRuns = getRuns;
+export const getQualityScores = getScores;
+export const getMigrationRejects = getRejects;
+
+export class Crm5ApiClient {
+  constructor(
+    public readonly baseUrl: string = API_BASE,
+    private readonly fetchFn?: typeof fetch,
+    private readonly getAuthToken?: () => string | null
+  ) {}
+
+  public async getRuns(query: Partial<RunsQuery> = {}, options: RequestOptions = {}): Promise<PaginatedRunsResponse> {
+    return getRuns(query, options);
+  }
+
+  public async getRunById(runId: string, options: RequestOptions = {}): Promise<MigrationRun> {
+    return getRunById(runId, options);
+  }
+
+  public async postRun(input: CreateRunInput, options: RequestOptions = {}): Promise<MigrationRun> {
+    return createRun(input, options);
+  }
+
+  public async patchRun(runId: string, input: UpdateRunInput, options: RequestOptions = {}): Promise<MigrationRun> {
+    return updateRun(runId, input, options);
+  }
+
+  public async transitionRunStatus(
+    runId: string,
+    status: MigrationRun['status'],
+    options: RequestOptions = {}
+  ): Promise<MigrationRun> {
+    return transitionRunStatus(runId, status, options);
+  }
+
+  public async getBatchSummary(batchId: string, options: RequestOptions = {}): Promise<BatchSummary> {
+    return getBatchSummary(batchId, options);
+  }
+
+  public async getScores(query: Partial<ScoresQuery> = {}, options: RequestOptions = {}): Promise<ScoresResponse> {
+    return getScores(query, options);
+  }
+
+  public async getRejects(query: Partial<RejectsQuery> = {}, options: RequestOptions = {}): Promise<PaginatedRejectsResponse> {
+    return getRejects(query, options);
+  }
+
+  public async getReconciliation(batchId: string, options: RequestOptions = {}): Promise<ReconciliationReport> {
+    return getReconciliation(batchId, options);
+  }
+}
+
+export const crm5Api = new Crm5ApiClient();
