@@ -19,11 +19,15 @@ import {
   QuoteNotFoundError,
 } from '../domain/errors.js';
 
-export interface TargetAdapterOptions {
+export { computeCanonicalPayloadHash };
+export type { Crm2TargetEntity };
+
+export interface Crm2TargetAdapterOptions {
   service?: Crm2Service;
   simulate503?: boolean;
   failReceiptCommit?: boolean;
 }
+export type TargetAdapterOptions = Crm2TargetAdapterOptions;
 
 export interface BatchLoadResult {
   loaded: TargetAdapterResult[];
@@ -44,8 +48,14 @@ export class Crm2TargetAdapter implements TargetAdapter<ImportRowInput | Record<
   private receipts: Map<string, ImportReceiptContract> = new Map();
   private receiptsByBatchRow: Map<string, ImportReceiptContract> = new Map();
 
-  constructor(service?: Crm2Service) {
-    this.service = service ?? crm2Service;
+  constructor(serviceOrOptions?: Crm2Service | Crm2TargetAdapterOptions) {
+    if (serviceOrOptions instanceof Crm2Service) {
+      this.service = serviceOrOptions;
+    } else if (serviceOrOptions && typeof serviceOrOptions === 'object') {
+      this.service = serviceOrOptions.service ?? crm2Service;
+    } else {
+      this.service = crm2Service;
+    }
   }
 
   public getService(): Crm2Service {
@@ -123,7 +133,7 @@ export class Crm2TargetAdapter implements TargetAdapter<ImportRowInput | Record<
     sourceRow: number,
     idempotencyKey: string,
     cleanData: ImportRowInput | Record<string, unknown>,
-    options?: TargetAdapterOptions
+    options?: Crm2TargetAdapterOptions
   ): Promise<Result<TargetAdapterResult, TargetAdapterError>> {
     // 1. Check for transient infrastructure failure simulation (e.g. 503)
     if (options?.simulate503) {
@@ -373,113 +383,119 @@ export class Crm2TargetAdapter implements TargetAdapter<ImportRowInput | Record<
         targetId,
         receipt: adapterReceipt,
       });
-    } catch (error: unknown) {
+    } catch (error: any) {
+      // Guaranteed rollback of in-process state snapshot on failure
       this.service.restoreState(snapshot);
+
+      if (options?.failReceiptCommit) {
+        throw error;
+      }
+
       if (error instanceof DomainValidationError) {
         return err({
-          reasonCode: error.code,
+          reasonCode: error.code || 'VALIDATION_ERROR',
           message: error.message,
+          ...(error.details?.[0]?.field ? { field: error.details[0].field } : {}),
         });
       }
-      if (error instanceof DealNotFoundError) {
-        return err({
-          reasonCode: 'REFERENCE_NOT_FOUND',
-          message: error.message,
-          field: 'deal_id',
-        });
-      }
-      if (error instanceof QuoteNotFoundError) {
-        return err({
-          reasonCode: 'REFERENCE_NOT_FOUND',
-          message: error.message,
-          field: 'quote_id',
-        });
-      }
-      throw error;
+
+      return err({
+        reasonCode: 'TARGET_ADAPTER_ERROR',
+        message: error.message || 'Atomic transaction failed while loading target record and receipt.',
+      });
     }
   }
 
   /**
-   * Implements the loadBatch interface executing type-safe UPSERT operations.
-   * Atomically loads rows and commits durable import receipts.
+   * Executes type-safe batch loading across a sequence of source rows.
    */
   public async loadBatch(
     batchId: string,
     rows: (ImportRowInput | Record<string, unknown>)[],
-    options?: TargetAdapterOptions
+    options?: Crm2TargetAdapterOptions
   ): Promise<Result<BatchLoadResult, TargetAdapterError>> {
     const loaded: TargetAdapterResult[] = [];
     const errors: Array<{ sourceRow: number; error: TargetAdapterError }> = [];
 
-    let rowIndex = 1;
-    for (const raw of rows) {
-      const sourceRow = (raw as ImportRowInput).sourceRow ?? rowIndex;
-      const entity = this.inferEntity(raw);
-      const idempotencyKey =
-        (raw as ImportRowInput).idempotencyKey ??
-        ((raw as Record<string, unknown>)['idempotencyKey'] as string) ??
-        `${batchId}:${sourceRow}:${entity}`;
+    let rowIdx = 1;
+    for (const row of rows) {
+      const sourceRow = (row as ImportRowInput).sourceRow ?? rowIdx;
+      const idempotencyKey = (row as ImportRowInput).idempotencyKey ?? `batch-${batchId}-row-${sourceRow}`;
 
-      const res = await this.importRow(batchId, sourceRow, idempotencyKey, raw, options);
+      const res = await this.importRow(batchId, sourceRow, idempotencyKey, row, options);
       if (res.ok) {
         loaded.push(res.value);
       } else {
         errors.push({ sourceRow, error: res.error });
       }
-      rowIndex++;
+      rowIdx++;
     }
 
     return ok({ loaded, errors });
   }
 
-  private inferEntity(cleanData: ImportRowInput | Record<string, unknown>): Crm2TargetEntity {
-    if ('entity' in cleanData && typeof cleanData.entity === 'string') {
-      const e = cleanData.entity.toLowerCase();
+  /**
+   * Infers CRM-2 target entity from payload structure.
+   */
+  public inferEntity(raw: ImportRowInput | Record<string, unknown>): Crm2TargetEntity {
+    const candidate = (raw as ImportRowInput).entity ?? (raw as Record<string, unknown>)['entity'];
+    if (typeof candidate === 'string') {
+      const lower = candidate.toLowerCase();
+      if (lower === 'deal' || lower === 'deals') return 'deal';
+      if (lower === 'quote' || lower === 'quotes') return 'quote';
+      if (lower === 'stage' || lower === 'stages') return 'stage';
       if (
-        e === 'deal' ||
-        e === 'deals' ||
-        e === 'quote' ||
-        e === 'quotes' ||
-        e === 'stage' ||
-        e === 'stages' ||
-        e === 'quote_line' ||
-        e === 'quote_lines' ||
-        e === 'quotelines' ||
-        e === 'quotelines'
+        lower === 'quote_line' ||
+        lower === 'quote_lines' ||
+        lower === 'quotelines' ||
+        lower === 'line'
       ) {
-        return (e === 'quotelines' ? 'quote_line' : e) as Crm2TargetEntity;
+        return 'quote_line';
       }
     }
 
-    const payload = ((cleanData as ImportRowInput).data ?? cleanData) as Record<string, unknown>;
-    if ('line_number' in payload || 'lineNumber' in payload || 'unit_price' in payload || 'unitPrice' in payload) {
+    const data = ((raw as ImportRowInput).data ?? raw) as Record<string, unknown>;
+    if (data['line_number'] !== undefined || data['lineNumber'] !== undefined) {
       return 'quote_line';
     }
-    if ('quote_number' in payload || 'quoteNumber' in payload || 'deal_id' in payload || 'dealId' in payload) {
+    if (data['quote_number'] || data['quoteNumber'] || data['deal_id'] || data['dealId']) {
       return 'quote';
     }
-    if ('position' in payload || 'is_won' in payload || 'isWon' in payload) {
-      return 'stage';
+    if (data['stage_name'] || data['stageName']) {
+      return 'deal';
     }
-
     return 'deal';
   }
 
+  /**
+   * Validates target record schema and domain business invariants before persistence.
+   */
   private async validateEntityData(
     entity: Crm2TargetEntity,
     data: Record<string, unknown>
-  ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; reasonCode: string; message: string; field?: string }> {
-    const entityLower = entity.toLowerCase();
-
-    switch (entityLower) {
+  ): Promise<
+    | { ok: true; data: Record<string, unknown> }
+    | { ok: false; reasonCode: string; message: string; field?: string }
+  > {
+    switch (entity) {
       case 'deal':
       case 'deals': {
+        const rawStage = (data['stage_name'] ?? data['stageName']) as string | undefined;
+        if (rawStage && !CRM2_STAGES.includes(rawStage as Crm2StageName)) {
+          return {
+            ok: false,
+            reasonCode: 'INVALID_STAGE',
+            message: `Stage '${rawStage}' is not one of the approved 6 fixed stages: ${CRM2_STAGES.join(', ')}`,
+            field: 'stage_name',
+          };
+        }
+
         const dealInput = {
-          name: data['name'] as string,
+          name: (data['name'] as string) ?? '',
           contact_id: (data['contact_id'] ?? data['contactId'] ?? null) as string | null,
           value: String(data['value'] ?? ''),
           currency: (data['currency'] as string) || 'USD',
-          stage_name: (data['stage_name'] ?? data['stageName'] ?? 'New') as any,
+          stage_name: (rawStage ?? 'New') as any,
           close_date: (data['close_date'] ?? data['closeDate'] ?? '') as string,
           source_system: (data['source_system'] ?? data['sourceSystem'] ?? null) as string | null,
           source_id: (data['source_id'] ?? data['sourceId'] ?? null) as string | null,
@@ -489,18 +505,15 @@ export class Crm2TargetAdapter implements TargetAdapter<ImportRowInput | Record<
         if (!parsed.success) {
           const first = parsed.error.issues[0];
           const field = first && first.path.length > 0 ? first.path.join('.') : undefined;
-          const isStageError = field === 'stage_name' || (dealInput.stage_name && !CRM2_STAGES.includes(dealInput.stage_name as Crm2StageName));
           return {
             ok: false,
-            reasonCode: isStageError ? 'INVALID_STAGE' : 'VALIDATION_ERROR',
-            message: isStageError
-              ? `Stage '${dealInput.stage_name}' is not one of the approved 6 fixed stages: ${CRM2_STAGES.join(', ')}`
-              : (first?.message ?? 'Invalid deal payload'),
+            reasonCode: 'VALIDATION_ERROR',
+            message: first?.message ?? 'Invalid deal payload',
             ...(field ? { field } : {}),
           };
         }
 
-        // Contact reference verification (CRM-1 cross-module boundary)
+        // Contact link invariant verification
         if (parsed.data.contact_id) {
           const exists = await this.service.getContactResolver().exists('contact', parsed.data.contact_id);
           if (!exists) {
@@ -581,7 +594,7 @@ export class Crm2TargetAdapter implements TargetAdapter<ImportRowInput | Record<
 
       case 'quote_line':
       case 'quote_lines':
-      case 'quotelines':
+      case 'quoteLines':
       default: {
         const lineInput = {
           quote_id: (data['quote_id'] ?? data['quoteId'] ?? '') as string,
