@@ -6,3 +6,4 @@ export * from './table/types.js';
 export * from './table/columns.js';
 export * from './table/DataTableController.js';
 export * from './src/index.js';
+export * from './pages/MappingTemplatesPage.js';

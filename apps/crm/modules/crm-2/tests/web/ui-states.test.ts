@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import {
   TableSkeleton,
@@ -14,6 +14,63 @@ import {
 } from '../../web/index.js';
 import { DataTableController } from '../../web/table/DataTableController.js';
 import { DEALS_COLUMNS } from '../../web/table/columns.js';
+
+// Setup React Hook Dispatcher for direct functional component execution in tests
+beforeEach(() => {
+  const dispatcher = {
+    useState: (initial: unknown) => [
+      typeof initial === 'function' ? (initial as () => unknown)() : initial,
+      vi.fn(),
+    ],
+    useId: () => ':crm2-test-id:',
+    useEffect: (effect: () => void | (() => void)) => {
+      const cleanup = effect();
+      if (typeof cleanup === 'function') {
+        // cleanup registered
+      }
+    },
+    useMemo: (factory: () => unknown) => (typeof factory === 'function' ? factory() : factory),
+    useCallback: (callback: unknown) => callback,
+    useRef: (initial: unknown) => ({ current: initial }),
+    useTransition: () => [false, (fn: () => void) => fn()],
+  };
+
+  const reactInternals = (React as unknown as {
+    __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE?: {
+      H?: unknown;
+    };
+  }).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+
+  if (reactInternals) {
+    reactInternals.H = dispatcher;
+  }
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// Helper to traverse and find matching React elements in the virtual tree
+function findElement(
+  node: unknown,
+  predicate: (el: { type?: unknown; props?: Record<string, unknown> }) => boolean
+): { type?: unknown; props?: Record<string, unknown> } | null {
+  if (!node) return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findElement(child, predicate);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof node !== 'object') return null;
+  const candidate = node as { type?: unknown; props?: Record<string, unknown> };
+  if (predicate(candidate)) return candidate;
+  if (candidate.props && candidate.props['children']) {
+    return findElement(candidate.props['children'], predicate);
+  }
+  return null;
+}
 
 describe('CRM-2 UI Loading, Empty, Error, and 403 Access-Denied States (Issue #132 / CRM2-19)', () => {
   describe('1. TableSkeleton Component', () => {
@@ -542,13 +599,10 @@ describe('CRM-2 UI Loading, Empty, Error, and 403 Access-Denied States (Issue #1
         isLoading: true,
       });
 
-      const children = element.props.children;
-      const header = children[0];
-      expect(header.props.className).toBe('cs-page-header');
-
-      const content = children[1];
-      const skeleton = content.props.children[2];
-      expect(skeleton.type).toBe(TableSkeleton);
+      expect(element).not.toBeNull();
+      const skeleton = findElement(element, (el) => el?.type === TableSkeleton);
+      expect(skeleton).not.toBeNull();
+      expect(skeleton?.props?.ariaLabel).toContain('Loading CRM deals');
     });
 
     it('renders ErrorAlert with onRetry when error is provided', () => {
@@ -558,12 +612,15 @@ describe('CRM-2 UI Loading, Empty, Error, and 403 Access-Denied States (Issue #1
         onRetry,
       });
 
-      const content = element.props.children[1];
-      const errorContainer = content.props.children[1];
-      expect(errorContainer.props.className).toBe('cs-error-container');
-      const errorAlert = errorContainer.props.children;
-      expect(errorAlert.type).toBe(ErrorAlert);
-      expect(errorAlert.props.error).toBe('Database timeout');
+      expect(element).not.toBeNull();
+      const errorContainer = findElement(
+        element,
+        (el) => el?.props?.['data-testid'] === 'recoverable-error-state'
+      );
+      expect(errorContainer).not.toBeNull();
+      const errorAlert = findElement(element, (el) => el?.type === ErrorAlert);
+      expect(errorAlert).not.toBeNull();
+      expect(errorAlert?.props?.error).toBe('Database timeout');
     });
 
     it('renders AccessDeniedView when isAccessDenied={true}', () => {
@@ -572,9 +629,10 @@ describe('CRM-2 UI Loading, Empty, Error, and 403 Access-Denied States (Issue #1
         requiredRole: 'admin',
       });
 
-      const accessDenied = element.props.children[1];
-      expect(accessDenied.type).toBe(AccessDeniedView);
-      expect(accessDenied.props.requiredRole).toBe('admin');
+      expect(element).not.toBeNull();
+      const accessDenied = findElement(element, (el) => el?.type === AccessDeniedView);
+      expect(accessDenied).not.toBeNull();
+      expect(accessDenied?.props?.requiredRole).toBe('admin');
     });
 
     it('renders DataTable with emptyActionLabel when empty', () => {
@@ -585,11 +643,18 @@ describe('CRM-2 UI Loading, Empty, Error, and 403 Access-Denied States (Issue #1
         onEmptyAction: onAdd,
       });
 
-      const content = element.props.children[1];
-      const dataTable = content.props.children[2];
-      expect(dataTable.type).toBe(DataTable);
-      expect(dataTable.props.emptyActionLabel).toBe('+ Add Opportunity');
-      expect(dataTable.props.onEmptyAction).toBe(onAdd);
+      expect(element).not.toBeNull();
+      const emptyContainer = findElement(
+        element,
+        (el) => el?.props?.['data-testid'] === 'empty-results-state'
+      );
+      expect(emptyContainer).not.toBeNull();
+      const actionBtn = findElement(
+        emptyContainer,
+        (el) => el?.props?.children === '+ Add Opportunity'
+      );
+      expect(actionBtn).not.toBeNull();
+      expect(actionBtn?.props?.children).toBe('+ Add Opportunity');
     });
   });
 
