@@ -43,12 +43,21 @@ export interface SeedOptions {
   silent?: boolean;
 }
 
+export function resolveSeedDatabaseUrl(): string {
+  if (process.env['DATABASE_URL']) {
+    return process.env['DATABASE_URL'];
+  }
+  if (process.env['DATABASE_URL_TEST']) {
+    return process.env['DATABASE_URL_TEST'];
+  }
+  if (process.env['DATABASE_MIGRATOR_URL']) {
+    return process.env['DATABASE_MIGRATOR_URL'];
+  }
+  return 'postgresql://postgres:postgres_dev_secret@localhost:5432/clearshift';
+}
+
 export async function seedDatabase(options: SeedOptions = {}): Promise<{ companies: number; contacts: number }> {
-  const databaseUrl =
-    options.databaseUrl ||
-    process.env['DATABASE_URL'] ||
-    (process.env['NODE_ENV'] === 'test' ? process.env['DATABASE_URL_TEST'] : undefined) ||
-    'postgresql://postgres:postgres_dev_secret@localhost:5432/clearshift';
+  const databaseUrl = options.databaseUrl || resolveSeedDatabaseUrl();
 
   assertSafeDatabaseUrl(databaseUrl);
   const silent = options.silent ?? false;
