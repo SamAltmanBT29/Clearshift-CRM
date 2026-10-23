@@ -53,6 +53,62 @@ Indexes support case-insensitive name search, contact lookup, stage filtering an
 
 Indexes support deal and quote-date lookups.
 
+### 1.4 `crm2.crm2_quote_lines`
+
+| Field | Type | Nullability | Meaning | Constraints |
+|---|---|---|---|---|
+| `id` | UUID | NOT NULL | Line item identifier | Primary key |
+| `quote_id` | UUID | NOT NULL | Parent quote identifier | FK to `crm2.crm2_quotes.id`; ON DELETE CASCADE |
+| `line_number` | INTEGER | NOT NULL | Line sequence order | 1-indexed; > 0; unique per quote (`quote_id`, `line_number`) |
+| `product_id` | UUID | NULL | ERP-1 product catalog link | Resolved via ERP-1 API; no cross-schema FK |
+| `description` | TEXT | NOT NULL | Item / service line description | Non-blank string |
+| `quantity` | NUMERIC(12,4) | NOT NULL | Order quantity | Positive decimal; default 1.0000 |
+| `unit_price` | NUMERIC(14,2) | NOT NULL | Price per unit | Non-negative decimal |
+| `line_total` | NUMERIC(14,2) | NOT NULL | Server-calculated line amount | `quantity * unit_price` (bankers rounding) |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Creation timestamp | Defaults to now() |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | Last update timestamp | Defaults to now() |
+
+### 1.5 `crm2.crm2_import_batches`
+
+| Field | Type | Nullability | Meaning | Constraints |
+|---|---|---|---|---|
+| `id` | UUID | NOT NULL | Ingest batch identifier | Primary key |
+| `source_system` | TEXT | NOT NULL | Origin system identifier | Non-blank string |
+| `status` | TEXT | NOT NULL | Batch processing state | One of `pending`, `processing`, `completed`, `failed` |
+| `idempotency_key` | TEXT | NULL | Batch-level idempotency key | Unique |
+| `request_hash` | TEXT | NULL | SHA-256 payload digest | Paired with idempotency_key |
+| `loaded_count` | INTEGER | NOT NULL | Count of committed records | Default 0; non-negative |
+| `rejected_count` | INTEGER | NOT NULL | Count of rejected rows | Default 0; non-negative |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Batch start timestamp | Defaults to now() |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | Last status update | Defaults to now() |
+| `completed_at` | TIMESTAMPTZ | NULL | Batch completion timestamp | Set on terminal status |
+
+### 1.6 `crm2.crm2_import_receipts`
+
+| Field | Type | Nullability | Meaning | Constraints |
+|---|---|---|---|---|
+| `id` | UUID | NOT NULL | Receipt identifier | Primary key |
+| `batch_id` | UUID | NOT NULL | Parent batch reference | FK to `crm2.crm2_import_batches.id`; ON DELETE CASCADE |
+| `source_row` | INTEGER | NOT NULL | Source file row number | 1-indexed; > 0 |
+| `entity` | TEXT | NOT NULL | Target entity type | One of `deal`, `quote`, `stage`, `quote_line` |
+| `source_system` | TEXT | NOT NULL | Source system tag | Non-blank string |
+| `source_id` | TEXT | NOT NULL | Legacy row identifier | Non-blank string |
+| `target_id` | UUID | NOT NULL | Committed business record ID | Indexed |
+| `idempotency_key` | TEXT | NOT NULL | Row idempotency key | Unique: `${batch_id}:${source_row}:${entity}` |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Receipt timestamp | Defaults to now() |
+
+### 1.7 `crm2.crm2_import_rejects`
+
+| Field | Type | Nullability | Meaning | Constraints |
+|---|---|---|---|---|
+| `id` | UUID | NOT NULL | Reject audit identifier | Primary key |
+| `batch_id` | UUID | NOT NULL | Parent batch reference | FK to `crm2.crm2_import_batches.id`; ON DELETE CASCADE |
+| `source_row` | INTEGER | NOT NULL | Source row number | 1-indexed; > 0 |
+| `entity` | TEXT | NOT NULL | Target entity type | One of `deal`, `quote`, `stage`, `quote_line` |
+| `reason_code` | TEXT | NOT NULL | Machine error code | Non-blank (e.g. `NEGATIVE_VALUE`, `INVALID_CURRENCY`) |
+| `message` | TEXT | NOT NULL | Privacy-safe diagnostic | Non-blank |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Reject timestamp | Defaults to now() |
+
 ---
 
 ## 2. API Contract Baseline (`/api/v1/crm-deals`) & Alignment

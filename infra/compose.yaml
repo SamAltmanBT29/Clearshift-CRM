@@ -5,20 +5,20 @@ name: clearshift
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.6
     container_name: clearshift-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: clearshift
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_dev_secret
+      POSTGRES_DB: ${POSTGRES_DB:-clearshift}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_secret}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../docker/initdb/00-roles.sql:/docker-entrypoint-initdb.d/00-roles.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d clearshift"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-clearshift}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
       - clearshift-net
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.10.1
     container_name: clearshift-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory-policy noeviction
