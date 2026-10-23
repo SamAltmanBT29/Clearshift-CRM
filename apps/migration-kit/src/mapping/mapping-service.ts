@@ -55,13 +55,18 @@ export class DrizzleCleanCrmRepository implements ICleanCrmRepository {
   async saveRows(rows: CleanCrmRow[]): Promise<void> {
     if (rows.length === 0) return;
 
-    const values = rows.map((r) => ({
-      id: r.id,
-      batchId: r.batchId,
-      sourceRow: r.sourceRow,
-      payload: r.payload,
-      createdAt: r.createdAt ?? new Date(),
-    }));
+    const values: (typeof cleanCrm.$inferInsert)[] = rows.map((r) => {
+      const rowValue: typeof cleanCrm.$inferInsert = {
+        batchId: r.batchId,
+        sourceRow: r.sourceRow,
+        payload: r.payload,
+        createdAt: r.createdAt ?? new Date(),
+      };
+      if (r.id) {
+        rowValue.id = r.id;
+      }
+      return rowValue;
+    });
 
     // Bounded batch insertion (500 rows per chunk)
     const BATCH_SIZE = 500;
