@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useTransition } from 'react';
+import React, { useState, useEffect, useCallback, useTransition, useMemo } from 'react';
 import {
   Card,
   Input,
@@ -7,7 +7,10 @@ import {
   Alert,
 } from '@cs/ui';
 import type { CRM4List } from '@clearshift/contracts';
-import type { TableSortState } from '../../table/types.js';
+import type { TableSortState, TableFilterState, FilterFacet, ActiveFilterPill } from '../../table/types.js';
+import { CRM4_MARKETING_LISTS_FACETS } from '../../table/facets.js';
+import { SearchFilterController, SEARCH_DEBOUNCE_MS } from '../../table/SearchFilterController.js';
+import { ActiveFilterPills } from '../components/ActiveFilterPills.js';
 import { getMarketingLists, Crm4ApiError } from '../api/crm-4.js';
 import { MarketingListsTable } from '../components/MarketingListsTable.js';
 
@@ -21,11 +24,16 @@ export interface MarketingListsPageProps {
   initialTotalCount?: number | undefined;
   initialTotalPages?: number | undefined;
   initialSort?: TableSortState | undefined;
+  initialFilters?: TableFilterState | undefined;
+  facets?: FilterFacet[] | undefined;
   onSortChange?: ((sort: TableSortState) => void) | undefined;
+  onFilterChange?: ((filters: TableFilterState) => void) | undefined;
+  onQueryChange?: ((params: Record<string, string>) => void) | undefined;
   getMarketingListsFn?: typeof getMarketingLists | undefined;
   forceLoading?: boolean | undefined;
   forceError?: Error | Crm4ApiError | null | undefined;
   forcePermissionDenied?: boolean | undefined;
+  debounceMs?: number | undefined;
 }
 
 export function MarketingListsPage({
@@ -38,17 +46,42 @@ export function MarketingListsPage({
   initialTotalCount,
   initialTotalPages,
   initialSort,
+  initialFilters,
+  facets = CRM4_MARKETING_LISTS_FACETS,
   onSortChange: onSortChangeProp,
+  onFilterChange: onFilterChangeProp,
+  onQueryChange: onQueryChangeProp,
   getMarketingListsFn = getMarketingLists,
   forceLoading,
   forceError,
   forcePermissionDenied,
+  debounceMs = SEARCH_DEBOUNCE_MS,
 }: MarketingListsPageProps) {
   // Query state
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialFilters?.search ?? '');
+  const [filters, setFilters] = useState<TableFilterState>(() => {
+    const init = { ...initialFilters };
+    delete init.search;
+    return init;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [sort, setSort] = useState<TableSortState | undefined>(initialSort);
   const pageSize = 10;
+
+  // SearchFilterController instance for bidirectional sync and pills
+  const controller = useMemo(() => {
+    return new SearchFilterController({
+      initialSearch: search,
+      initialFilters: filters,
+      debounceMs,
+      onSearchChange: (val) => setSearch(val),
+      onFilterChange: (f) => {
+        setFilters(f);
+        onFilterChangeProp?.(f);
+      },
+      onQueryChange: (params) => onQueryChangeProp?.(params),
+    });
+  }, [debounceMs]);
 
   // Data state
   const [lists, setLists] = useState<CRM4List[]>(initialLists ?? []);
@@ -72,8 +105,55 @@ export function MarketingListsPage({
   });
   const [, startTransition] = useTransition();
 
+  // Active filter pills calculation
+  const activePills: ActiveFilterPill[] = useMemo(() => {
+    return controller.getActiveFilterPills(facets);
+  }, [controller, search, filters, facets]);
+
+  const hasActiveFilters = search.trim().length > 0 || Object.values(filters).some((v) => !!v && v.trim().length > 0);
+
+  // Filter in-memory lists when initialLists fixture is provided
+  const filteredInitialLists = useMemo(() => {
+    if (!initialLists) return null;
+    let res = [...initialLists];
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      res = res.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          (item.description && item.description.toLowerCase().includes(q))
+      );
+    }
+
+    if (filters['memberRange']) {
+      const mr = filters['memberRange'];
+      if (mr === 'empty') res = res.filter((item) => item.memberCount === 0);
+      else if (mr === 'small') res = res.filter((item) => item.memberCount >= 1 && item.memberCount <= 50);
+      else if (mr === 'medium') res = res.filter((item) => item.memberCount >= 51 && item.memberCount <= 250);
+      else if (mr === 'large') res = res.filter((item) => item.memberCount > 250);
+    }
+
+    if (filters['campaignActivity']) {
+      const ca = filters['campaignActivity'];
+      if (ca === 'active') res = res.filter((item) => item.campaignCount > 0);
+      else if (ca === 'none') res = res.filter((item) => item.campaignCount === 0);
+    }
+
+    return res;
+  }, [initialLists, search, filters]);
+
   // Fetch marketing lists from server
   const loadLists = useCallback(async () => {
+    if (initialLists !== undefined) {
+      if (filteredInitialLists) {
+        setLists(filteredInitialLists);
+        setTotalCount(filteredInitialLists.length);
+        setTotalPages(filteredInitialLists.length > 0 ? Math.ceil(filteredInitialLists.length / pageSize) : 0);
+      }
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -108,7 +188,7 @@ export function MarketingListsPage({
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, pageSize, search, simulatePermissionDenied, simulateError]);
+  }, [currentPage, pageSize, search, simulatePermissionDenied, simulateError, initialLists, filteredInitialLists, getMarketingListsFn]);
 
   useEffect(() => {
     loadLists();
@@ -119,6 +199,7 @@ export function MarketingListsPage({
     const val = e.target.value;
     startTransition(() => {
       setSearch(val);
+      controller.setSearch(val, true);
       setCurrentPage(1); // Requirement: search/filter changes reset pagination to first page
     });
   };
@@ -126,7 +207,41 @@ export function MarketingListsPage({
   const handleClearSearch = () => {
     startTransition(() => {
       setSearch('');
+      controller.clearSearch();
       setCurrentPage(1);
+    });
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    startTransition(() => {
+      const nextFilters = { ...filters };
+      if (!value || value.trim() === '') {
+        delete nextFilters[key];
+      } else {
+        nextFilters[key] = value.trim();
+      }
+      setFilters(nextFilters);
+      controller.setFilter(key, value);
+      setCurrentPage(1);
+      onFilterChangeProp?.(nextFilters);
+    });
+  };
+
+  const handleRemoveFilter = (key: string) => {
+    if (key === 'search') {
+      handleClearSearch();
+      return;
+    }
+    handleFilterChange(key, '');
+  };
+
+  const handleClearAll = () => {
+    startTransition(() => {
+      setSearch('');
+      setFilters({});
+      controller.clearAll();
+      setCurrentPage(1);
+      onFilterChangeProp?.({});
     });
   };
 
@@ -216,6 +331,47 @@ export function MarketingListsPage({
               {totalCount} {totalCount === 1 ? 'list' : 'lists'} found
             </span>
           </div>
+
+          {/* Faceted Filters Group */}
+          {facets.length > 0 && (
+            <div className="sm:col-span-3 flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200/60">
+              {facets.map((facet) => {
+                const currentVal = filters[facet.paramKey] ?? '';
+                return (
+                  <div key={facet.id} className="cs-filter-facet">
+                    <label htmlFor={`filter-${facet.id}`} className="cs-facet-label">
+                      {facet.label}:
+                    </label>
+                    <select
+                      id={`filter-${facet.id}`}
+                      className="cs-facet-select text-xs"
+                      value={currentVal}
+                      onChange={(e) => handleFilterChange(facet.paramKey, e.target.value)}
+                      data-facet={facet.paramKey}
+                      aria-label={`Filter by ${facet.label}`}
+                    >
+                      {facet.options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Active Filter Pill Tags */}
+          {activePills.length > 0 && (
+            <div className="sm:col-span-3">
+              <ActiveFilterPills
+                pills={activePills}
+                onRemoveFilter={handleRemoveFilter}
+                onClearAll={handleClearAll}
+              />
+            </div>
+          )}
         </form>
       </Card>
 
@@ -263,12 +419,14 @@ export function MarketingListsPage({
       {!error && (
         <Card className="overflow-hidden border border-slate-200 shadow-sm">
           <MarketingListsTable
-            lists={lists}
+            lists={filteredInitialLists ?? lists}
             loading={isLoading}
-            emptyTitle={search ? 'No matching marketing lists' : 'No marketing lists recorded'}
+            emptyTitle={hasActiveFilters ? 'No matching marketing lists' : 'No marketing lists recorded'}
             emptyDescription={
               search
                 ? `No marketing lists match the query "${search}". Try adjusting your search term.`
+                : hasActiveFilters
+                ? 'No marketing lists match the active filter criteria. Try resetting your filters.'
                 : 'No marketing lists are currently registered in CRM-4.'
             }
             onSelectList={onSelectList}
