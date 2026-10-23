@@ -120,11 +120,11 @@ Indexes support deal and quote-date lookups.
 |---|---|---|---|---|---|
 | `GET` | `/stages` | Returns the 6 fixed pipeline stages in order | None | `{ items: Stage[] }` | 500 |
 | `GET` | `/deals` | Paginated deals list with search and stage filter | None | `{ items: Deal[], pagination: PaginationMeta }` | 400, 403, 500 |
-| `GET` | `/deals/{id}` | Get single deal detail by ID | None | `Deal` | 404, 500 |
+| `GET` | `/deals/{id}` | Get single deal detail by ID | None | `Deal` | 400, 404, 500 |
 | `POST` | `/deals` | Create a new sales opportunity | `CreateDealInput` | `Deal` (201 Created) | 400, 403, 422, 500 |
 | `PATCH` | `/deals/{id}` | Update existing opportunity fields | `UpdateDealInput` | `Deal` (200 OK) | 400, 404, 422, 500 |
 | `GET` | `/quotes` | List quotes (filter by `deal_id`) | None | `{ items: Quote[], pagination: PaginationMeta }` | 400, 500 |
-| `GET` | `/quotes/{id}` | Get single quote by ID | None | `Quote` | 404, 500 |
+| `GET` | `/quotes/{id}` | Get single quote by ID | None | `Quote` | 400, 404, 500 |
 | `POST` | `/quotes` | Create a simple quote linked to a deal | `CreateQuoteInput` | `Quote` (201 Created) | 400, 404, 409, 422, 500 |
 | `PATCH` | `/quotes/{id}` | Update quote details | `UpdateQuoteInput` | `Quote` (200 OK) | 400, 404, 409, 422, 500 |
 | `POST` | `/import` | Ingest migration row with atomic durable receipt | `Crm2ImportRow` | `Crm2ImportResult` (201 Created / 200 OK) | 400, 403, 409, 422, 500 |
@@ -371,4 +371,14 @@ $$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemp
 - `apps/crm/modules/crm-2/tests/api/batch-loader.test.ts`: Integration tests for `POST /api/v1/crm-deals/batches/execute-load`, RBAC enforcement (401/403/200), input validation (400), and durable receipts verification.
 - `apps/crm/modules/crm-2/tests/migration/target-adapter.test.ts`: In-process target adapter port tests asserting atomic deal/quote commits, duplicate idempotent replay, and transient 503 error handling.
 - `apps/crm/modules/crm-2/web/tests/batch-loader-ui.test.tsx`: UI component tests asserting chunk metrics display, halt alerts, and receipt durability.
+
+---
+
+## 13. Defect Traceability & Resolutions (DEF-CRM2-01..03)
+
+| Defect ID | Severity | Root Cause | Resolution | Verification |
+|---|---|---|---|---|
+| `DEF-CRM2-01` | Medium | Non-UUID parameter on `GET /deals/{id}` and `GET /quotes/{id}` returned HTTP 400 `BAD_REQUEST`, but OpenAPI spec and data dictionary previously listed 404 only. | OpenAPI contract (`crm-2.yaml`) and Data Dictionary updated to document HTTP 400 for malformed UUID format. Implementation and contract now aligned. | `BD-08`, `BD-09` in `boundary-and-idempotency.test.ts` assert 400 `BAD_REQUEST`. |
+| `DEF-CRM2-02` | High (P1) | `DecimalStringSchema` used unconstrained integer digits (`^\d+`), permitting values > 12 integer digits (e.g. `1000000000000.00`) to pass Zod validation and trigger PostgreSQL `NUMERIC(14,2)` overflow (SQLSTATE 22003) -> 500 error. | Constrained `DecimalStringSchema` to max 12 integer digits (`^\d{1,12}(\.\d{1,4})?$`), rejecting oversized numbers at API validation boundary with HTTP 400 `VALIDATION_ERROR`. | `BD-01`, `BD-02` in `boundary-and-idempotency.test.ts` and test 5 in `api-postgres-integration.test.ts`. |
+| `DEF-CRM2-03` | High (P1) | Whitespace-only deal names (e.g. `'   '`) passed `z.string().min(1)` and hit the DB constraint `check (btrim(name) <> '')` (SQLSTATE 23514) -> 500 error. | Added `.trim()` before `.min(1)` in `CreateDealInputSchema`, `QuoteSchema`, and `CreateQuoteInputSchema`, rejecting blank and whitespace-only text with HTTP 400 `VALIDATION_ERROR`. | `dirty-data-pack.test.ts` (conservation 75/17/8/0/0) and test 4 in `api-postgres-integration.test.ts`. |
 

@@ -15,7 +15,7 @@ describe('CRM-2 Database Schema Constraints & Precision (DB-01..DB-13)', () => {
     process.env['DATABASE_URL_TEST'] ||
     process.env['DATABASE_MIGRATOR_URL'] ||
     process.env['DATABASE_URL'] ||
-    'postgresql://cs_migrator:migrator_secret_123@localhost:5432/clearshift_test';
+    'postgresql://clearshift@localhost:5432/clearshift_test';
 
   beforeAll(async () => {
     try {

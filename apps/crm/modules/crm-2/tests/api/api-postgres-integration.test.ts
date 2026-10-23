@@ -18,8 +18,9 @@ import { DuplicateRecordError } from '../../src/domain/errors.js';
 const { Pool } = pg;
 const databaseUrl =
   process.env['DATABASE_URL_TEST'] ||
+  process.env['DATABASE_MIGRATOR_URL'] ||
   process.env['DATABASE_URL'] ||
-  'postgresql://cs_migrator:migrator_secret_123@localhost:5432/clearshift_test';
+  'postgresql://clearshift@localhost:5432/clearshift_test';
 
 /**
  * PostgreSQL-backed Crm2Service adapter for API-to-PostgreSQL integration testing.
