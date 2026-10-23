@@ -429,3 +429,34 @@ Available in `@clearshift/contracts` for downstream module development and contr
 | **Group 1 Role 4** (Data Reliability & QA Lead) | Data / QA Lead | **APPROVED** | 2026-10-23 |
 | **Group 5 Peer Review** (CRM-5 Migration Control) | Peer Review Lead | **APPROVED** | 2026-10-23 |
 | **Workstream 12 PMO** (Architecture Baseline) | PMO Lead | **VERIFIED** | 2026-10-23 |
+
+---
+
+## 16. Module Authorization Policy & Object-Level Guards (CRM1-15)
+
+The CRM-1 module enforces centralized module authorization policy and object-level guards per Slot 15 of Architecture Spec §6.1 and SDS ClearShift CRM v2.0 §4.2:
+
+### Endpoint Role & Capability Binding
+All API endpoints across contacts, companies, leads, and imports enforce the role capability matrix:
+* `GET /contacts`, `GET /contacts/:id`: `module.read` — Allowed: `viewer`, `editor`, `analyst`, `admin`.
+* `POST /contacts`, `PATCH /contacts/:id`: `module.write` — Allowed: `editor`, `migration_runner`, `admin`.
+* `GET /companies`, `GET /companies/:id`: `module.read` — Allowed: `viewer`, `editor`, `admin`.
+* `POST /companies`, `PATCH /companies/:id`: `module.write` — Allowed: `editor`, `migration_runner`, `admin`.
+* `GET /leads`, `GET /leads/:id`: `module.read` — Allowed: `viewer`, `editor`, `admin`.
+* `POST /leads`, `PATCH /leads/:id`: `module.write` — Allowed: `editor`, `migration_runner`, `admin`.
+* `POST /imports`: `kit.run` — Allowed: `migration_runner`, `admin`.
+* `GET /imports/:batch`, `GET /imports/:batch/rejects`: `kit.read` — Allowed: `viewer`, `analyst`, `admin`.
+
+### Multi-Tenant Boundary Isolation
+* Evaluates incoming Hub JWT token claims (`tenant_id`, `tenantId`, `org_id`) against request headers (`x-tenant-id`, `x-organization-id`, `x-org-id`).
+* Mismatched tenant contexts or attempted cross-tenant record mutations fail closed with `HTTP 403 Forbidden`.
+
+### Cross-User Record Ownership
+* Mutations on records with an assigned owner/creator require caller identity to match `resourceOwnerId` (via `employee_id` or `sub`).
+* Cross-user mutation attempts by non-administrators return `HTTP 403 Forbidden`.
+* Administrators possess universal override for system maintenance.
+
+### Immutable Field Mutation Guard
+* Enforces immutability on domain identity keys and lineage attributes: `goldenId`, `sourceSystem`, `sourceId`, `createdAt`, and `id`.
+* Modifying immutable fields during update (`PATCH`) or forging golden IDs during creation (`POST`) returns `HTTP 403 Forbidden`.
+

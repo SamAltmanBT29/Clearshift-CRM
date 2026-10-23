@@ -114,3 +114,40 @@ In strict compliance with ClearShift Core Rules:
 * All development, testing, and demonstration data consists solely of 100% synthetic fixtures.
 * Real customer, employee, or corporate data is strictly prohibited.
 * No credentials, `.env` files, or production secrets may ever be committed to the repository.
+
+---
+
+## 8. Module Authorization Policy & Object-Level Guards (CRM1-15)
+
+In conformance with **Slot 15 of Architecture Spec §6.1** and **ClearShift SDS v2.0 §4.2**, CRM-1 enforces centralized module authorization policy and object-level guards:
+
+### 8.1 RBAC Capability Mapping
+All endpoints are bound to platform RBAC capabilities in `@cs/rbac`:
+* `CONTACTS_LIST` / `CONTACTS_READ`: `Capabilities.MODULE_READ` (`module.read`)
+* `CONTACTS_CREATE` / `CONTACTS_UPDATE`: `Capabilities.MODULE_WRITE` (`module.write`)
+* `COMPANIES_LIST` / `COMPANIES_READ`: `Capabilities.MODULE_READ` (`module.read`)
+* `COMPANIES_CREATE` / `COMPANIES_UPDATE`: `Capabilities.MODULE_WRITE` (`module.write`)
+* `LEADS_LIST` / `LEADS_READ`: `Capabilities.MODULE_READ` (`module.read`)
+* `LEADS_CREATE` / `LEADS_UPDATE`: `Capabilities.MODULE_WRITE` (`module.write`)
+* `IMPORTS_START`: `Capabilities.KIT_RUN` (`kit.run`)
+* `IMPORTS_STATUS` / `IMPORTS_REJECTS`: `Capabilities.KIT_READ` (`kit.read`)
+
+### 8.2 Object-Level Guards
+1. **Multi-Tenant Boundary Isolation (`assertTenantIsolation`)**:
+   * Evaluates request tenant context against JWT claims (`tenant_id`, `tenantId`, `org_id`).
+   * Validates header tenant indicators (`x-tenant-id`, `x-organization-id`, `x-org-id`).
+   * Rejects header-token mismatches and cross-tenant resource mutations with `HTTP 403 Forbidden`.
+2. **Cross-User Record Ownership (`assertRecordOwnership`)**:
+   * Restricts mutations on records with assigned owners/creators to the record owner (`employee_id` or `sub`).
+   * Non-owner callers without administrator privileges are blocked with `HTTP 403 Forbidden`.
+   * Administrator users (`admin` role) possess universal override for operational maintenance.
+3. **Immutable Identity Field Mutation Guard (`assertNoImmutableFieldMutation`)**:
+   * On record update (`PATCH`), prevents modification of immutable identity and lineage fields: `goldenId`, `sourceSystem`, `sourceId`, `createdAt`, `id`.
+   * On record creation (`POST`), prohibits non-admin forgery of golden identity keys (`goldenId`).
+   * Attempts to mutate or forge immutable fields return `HTTP 403 Forbidden`.
+
+### 8.3 Error Envelope Conformance
+All authorization and authentication rejections strictly follow the ClearShift standard envelope `{ code, message, details, correlation_id, error }`:
+* `HTTP 401 Unauthorized` for missing, expired, invalid, or disabled tokens.
+* `HTTP 403 Forbidden` for role capability deficits, tenant mismatches, or object guard violations.
+

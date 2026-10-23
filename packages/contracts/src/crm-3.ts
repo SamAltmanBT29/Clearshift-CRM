@@ -1,0 +1,171 @@
+import { z } from "zod";
+
+export const CRM3_API_PREFIX = "/api/v1/crm-tickets";
+
+// ---------------------------------------------------------------------------
+// 1. Enums & Statuses (FR-CRM3-03)
+// ---------------------------------------------------------------------------
+
+export const CRM3TicketStatusSchema = z.enum([
+  "New",
+  "Open",
+  "Waiting",
+  "Solved",
+  "Closed"
+]);
+export type CRM3TicketStatus = z.infer<typeof CRM3TicketStatusSchema>;
+
+export const CRM3TicketPrioritySchema = z.enum([
+  "Low",
+  "Normal",
+  "High",
+  "Urgent"
+]);
+export type CRM3TicketPriority = z.infer<typeof CRM3TicketPrioritySchema>;
+
+export const CRM3EntityTypeSchema = z.enum(["ticket", "note"]);
+export type CRM3EntityType = z.infer<typeof CRM3EntityTypeSchema>;
+
+export const CRM3ImportStatusSchema = z.enum([
+  "pending",
+  "processing",
+  "completed",
+  "failed"
+]);
+export type CRM3ImportStatus = z.infer<typeof CRM3ImportStatusSchema>;
+
+// Aliases matching root export style
+export const TicketStatusSchema = CRM3TicketStatusSchema;
+export const TicketPrioritySchema = CRM3TicketPrioritySchema;
+
+// ---------------------------------------------------------------------------
+// 2. Core Entities: Ticket & Note (FR-CRM3-01..05)
+// ---------------------------------------------------------------------------
+
+export const CRM3TicketSchema = z.object({
+  id: z.string().uuid(),
+  subject: z.string().min(1),
+  status: CRM3TicketStatusSchema,
+  priority: CRM3TicketPrioritySchema,
+  contactId: z.string().uuid(),
+  orderRef: z.string().nullable(),
+  sourceSystem: z.string().nullable(),
+  sourceId: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+export type CRM3Ticket = z.infer<typeof CRM3TicketSchema>;
+
+export const CRM3TicketReadSchema = CRM3TicketSchema.extend({
+  contactName: z.string().nullable().optional(),
+  contactEmail: z.string().email().nullable().optional()
+});
+export type CRM3TicketRead = z.infer<typeof CRM3TicketReadSchema>;
+
+export const CRM3NoteSchema = z.object({
+  id: z.string().uuid(),
+  ticketId: z.string().uuid(),
+  authorId: z.string().min(1),
+  noteText: z.string().min(1),
+  createdAt: z.string().datetime()
+});
+export type CRM3Note = z.infer<typeof CRM3NoteSchema>;
+
+// ---------------------------------------------------------------------------
+// 3. Request Payloads (Create / Patch)
+// ---------------------------------------------------------------------------
+
+export const CRM3TicketCreateSchema = z.object({
+  subject: z.string().trim().min(1),
+  status: CRM3TicketStatusSchema.default("New"),
+  priority: CRM3TicketPrioritySchema.default("Normal"),
+  contactId: z.string().uuid(),
+  orderRef: z.string().trim().min(1).optional().nullable(),
+  note: z.string().trim().min(1).optional(),
+  sourceSystem: z.string().trim().min(1).optional().nullable(),
+  sourceId: z.string().trim().min(1).optional().nullable()
+}).strict();
+export type CRM3TicketCreate = z.infer<typeof CRM3TicketCreateSchema>;
+
+export const CRM3TicketPatchSchema = z.object({
+  subject: z.string().trim().min(1).optional(),
+  status: CRM3TicketStatusSchema.optional(),
+  priority: CRM3TicketPrioritySchema.optional(),
+  contactId: z.string().uuid().optional(),
+  orderRef: z.string().trim().min(1).optional().nullable()
+}).strict().refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field must be provided for update"
+});
+export type CRM3TicketPatch = z.infer<typeof CRM3TicketPatchSchema>;
+
+export const CRM3NoteCreateSchema = z.object({
+  ticketId: z.string().uuid(),
+  noteText: z.string().trim().min(1),
+  authorId: z.string().trim().min(1).optional()
+}).strict();
+export type CRM3NoteCreate = z.infer<typeof CRM3NoteCreateSchema>;
+
+// ---------------------------------------------------------------------------
+// 4. Query & Pagination Schemas
+// ---------------------------------------------------------------------------
+
+export const CRM3TicketListQuerySchema = z.object({
+  status: CRM3TicketStatusSchema.optional(),
+  priority: CRM3TicketPrioritySchema.optional(),
+  contactId: z.string().uuid().optional(),
+  search: z.string().trim().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(25)
+});
+export type CRM3TicketListQuery = z.infer<typeof CRM3TicketListQuerySchema>;
+
+export const CRM3NoteListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(25)
+});
+export type CRM3NoteListQuery = z.infer<typeof CRM3NoteListQuerySchema>;
+
+export const CRM3ListResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+  z.object({
+    items: z.array(itemSchema),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative()
+  });
+
+export const CRM3TicketListResponseSchema = CRM3ListResponseSchema(CRM3TicketReadSchema);
+export type CRM3TicketListResponse = z.infer<typeof CRM3TicketListResponseSchema>;
+
+export const CRM3NoteListResponseSchema = CRM3ListResponseSchema(CRM3NoteSchema);
+export type CRM3NoteListResponse = z.infer<typeof CRM3NoteListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// 5. Import Schemas (Migration Kit Integration)
+// ---------------------------------------------------------------------------
+
+export const CRM3ImportBatchSchema = z.object({
+  id: z.string().uuid(),
+  sourceSystem: z.string().min(1),
+  status: CRM3ImportStatusSchema,
+  idempotencyKey: z.string().nullable().optional(),
+  requestHash: z.string().nullable().optional(),
+  loadedCount: z.number().int().nonnegative(),
+  rejectedCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable()
+});
+export type CRM3ImportBatch = z.infer<typeof CRM3ImportBatchSchema>;
+
+export const CRM3ImportReceiptSchema = z.object({
+  id: z.string().uuid(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  entity: CRM3EntityTypeSchema,
+  sourceSystem: z.string().min(1),
+  sourceId: z.string().min(1),
+  targetId: z.string().uuid(),
+  idempotencyKey: z.string().min(1),
+  createdAt: z.string().datetime()
+});
+export type CRM3ImportReceipt = z.infer<typeof CRM3ImportReceiptSchema>;
