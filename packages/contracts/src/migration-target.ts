@@ -633,3 +633,83 @@ export class MalformedFileError extends Error {
     this.name = 'MalformedFileError';
   }
 }
+
+/**
+ * ---------------------------------------------------------------------------
+ * KIT-03: Column Profiling, Data Health Report & Export Contracts
+ * ---------------------------------------------------------------------------
+ */
+
+export const InferredDataTypeSchema = z.enum([
+  'string',
+  'integer',
+  'decimal',
+  'date',
+  'email',
+  'phone',
+  'uuid',
+  'boolean',
+  'json',
+]);
+export type InferredDataType = z.infer<typeof InferredDataTypeSchema>;
+
+export const TopValueSchema = z.object({
+  value: z.string(),
+  count: z.number().int().nonnegative(),
+  percentage: z.number().min(0).max(100),
+});
+export type TopValue = z.infer<typeof TopValueSchema>;
+
+export const ColumnProfileSchema = z.object({
+  columnName: z.string().min(1),
+  totalRows: z.number().int().nonnegative(),
+  emptyCount: z.number().int().nonnegative(),
+  distinctCount: z.number().int().nonnegative(),
+  invalidCount: z.number().int().nonnegative(),
+  inferredType: InferredDataTypeSchema,
+  topValues: z.array(TopValueSchema),
+  minValue: z.string().nullable().optional(),
+  maxValue: z.string().nullable().optional(),
+});
+export type ColumnProfile = z.infer<typeof ColumnProfileSchema>;
+
+export const DuplicateCandidateReportSchema = z.object({
+  keyFields: z.array(z.string()),
+  totalDuplicates: z.number().int().nonnegative(),
+  uniqueDuplicateKeys: z.number().int().nonnegative(),
+  sampleDuplicateKeys: z.array(z.string()).default([]),
+});
+export type DuplicateCandidateReport = z.infer<typeof DuplicateCandidateReportSchema>;
+
+export const ProfileReportSummarySchema = z.object({
+  emptyCount: z.number().int().nonnegative(),
+  invalidCount: z.number().int().nonnegative(),
+  duplicateCount: z.number().int().nonnegative(),
+});
+export type ProfileReportSummary = z.infer<typeof ProfileReportSummarySchema>;
+
+export const ProfileReportSchema = z.object({
+  batchId: z.string().uuid(),
+  module: z.string().min(1),
+  rulesetVersion: z.number().int().positive().default(1),
+  totalRows: z.number().int().nonnegative(),
+  totalColumns: z.number().int().nonnegative(),
+  columns: z.array(ColumnProfileSchema),
+  duplicates: DuplicateCandidateReportSchema,
+  summary: ProfileReportSummarySchema,
+  generatedAt: z.coerce.date(),
+});
+export type ProfileReport = z.infer<typeof ProfileReportSchema>;
+
+export const BatchProfiledPayloadSchema = z.object({
+  batchId: z.string().uuid(),
+  module: z.string().min(1),
+  emptyCount: z.number().int().nonnegative(),
+  invalidCount: z.number().int().nonnegative(),
+  duplicateCount: z.number().int().nonnegative(),
+  totalRows: z.number().int().nonnegative(),
+  columnsCount: z.number().int().nonnegative(),
+  rulesetVersion: z.number().int().positive().default(1),
+});
+export type BatchProfiledPayload = z.infer<typeof BatchProfiledPayloadSchema>;
+
