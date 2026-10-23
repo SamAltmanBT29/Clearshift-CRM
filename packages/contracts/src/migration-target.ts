@@ -1492,3 +1492,164 @@ export class UnauthorizedMergeDecisionError extends Error {
     this.name = 'UnauthorizedMergeDecisionError';
   }
 }
+
+// ============================================================================
+// KIT-11: BullMQ Worker Execution, Bounded Retries & Partial-Load Recovery
+// ============================================================================
+
+/**
+ * Pinned Redis version baseline (Decision KIT-11 & SDS §11.1)
+ */
+export const REDIS_PINNED_VERSION = '8.10.1';
+
+/**
+ * Default BullMQ Worker Concurrency (Decision KIT-11)
+ */
+export const DEFAULT_BULLMQ_CONCURRENCY = 4;
+
+/**
+ * Bounded retry attempt ceiling (STP-01 & Decision KIT-11)
+ */
+export const BULLMQ_DEFAULT_ATTEMPTS = 3;
+
+/**
+ * Exponential backoff base in milliseconds (1 second)
+ */
+export const BULLMQ_BACKOFF_BASE_MS = 1000;
+
+/**
+ * Exponential backoff ceiling in milliseconds (30 seconds)
+ */
+export const BULLMQ_BACKOFF_MAX_MS = 30000;
+
+/**
+ * Per-job execution timeout in milliseconds (15 minutes)
+ */
+export const BULLMQ_JOB_TIMEOUT_MS = 900000;
+
+/**
+ * Pipeline Job Types executed in BullMQ Workers (not HTTP request handlers)
+ */
+export const MigrationJobTypeSchema = z.enum([
+  'extract',
+  'profile',
+  'clean',
+  'map',
+  'load',
+  'validate',
+]);
+export type MigrationJobType = z.infer<typeof MigrationJobTypeSchema>;
+
+/**
+ * BullMQ Job Options Schema
+ */
+export const BullMQJobOptionsSchema = z.object({
+  attempts: z.number().int().min(1).max(10).default(BULLMQ_DEFAULT_ATTEMPTS),
+  backoff: z
+    .object({
+      type: z.enum(['exponential', 'fixed']).default('exponential'),
+      delay: z.number().int().min(100).default(BULLMQ_BACKOFF_BASE_MS),
+      maxDelay: z.number().int().min(1000).default(BULLMQ_BACKOFF_MAX_MS).optional(),
+    })
+    .default({
+      type: 'exponential',
+      delay: BULLMQ_BACKOFF_BASE_MS,
+      maxDelay: BULLMQ_BACKOFF_MAX_MS,
+    }),
+  timeout: z.number().int().min(1000).default(BULLMQ_JOB_TIMEOUT_MS),
+  concurrency: z.number().int().min(1).max(64).default(DEFAULT_BULLMQ_CONCURRENCY),
+  removeOnComplete: z.union([z.boolean(), z.number().int()]).default(1000),
+  removeOnFail: z.union([z.boolean(), z.number().int()]).default(false),
+});
+export type BullMQJobOptions = z.infer<typeof BullMQJobOptionsSchema>;
+
+/**
+ * Migration Worker Job Payload Schema
+ */
+export const MigrationWorkerJobPayloadSchema = z.object({
+  jobId: z.string().uuid(),
+  batchId: z.string().min(1).max(128),
+  jobType: MigrationJobTypeSchema,
+  module: z.string().min(1).max(64),
+  entity: z.string().min(1).max(64),
+  chunkIndex: z.number().int().min(0).default(0),
+  startRow: z.number().int().min(1),
+  endRow: z.number().int().min(1),
+  checkpoint: z.string().default('created'),
+  attempt: z.number().int().min(1).max(BULLMQ_DEFAULT_ATTEMPTS).default(1),
+  idempotencyKey: z.string().max(256).optional(),
+});
+export type MigrationWorkerJobPayload = z.infer<typeof MigrationWorkerJobPayloadSchema>;
+
+/**
+ * Durable Checkpoint Schema for Partial-Load Recovery
+ */
+export const WorkerCheckpointSchema = z.object({
+  batchId: z.string().min(1).max(128),
+  lastCommittedRow: z.number().int().min(0),
+  lastCommittedChunk: z.number().int().min(0),
+  status: KitBatchStatusSchema,
+  checkpointName: z.string().min(1).max(64),
+  updatedAt: z.coerce.date().default(() => new Date()),
+});
+export type WorkerCheckpoint = z.infer<typeof WorkerCheckpointSchema>;
+
+/**
+ * Reconciliation Blocked by Batch State Error (HTTP 422 / 409)
+ * Raised when reconciliation is attempted on a batch that failed or remains in load_failed_partial.
+ */
+export class ReconciliationBlockedByBatchStateError extends Error {
+  public readonly statusCode = 422;
+  public readonly code = 'RECONCILIATION_BLOCKED_BY_BATCH_STATE';
+
+  constructor(
+    public readonly batchId: string,
+    public readonly batchStatus: KitBatchStatus,
+    reason: string = `Reconciliation is strictly blocked for batch '${batchId}' because it is in failure state '${batchStatus}'. The batch must be resumed to completion or rolled back before reconciliation.`
+  ) {
+    super(reason);
+    this.name = 'ReconciliationBlockedByBatchStateError';
+  }
+}
+
+/**
+ * Chunk Circuit Breaker Halt Error (HTTP 400)
+ * Raised when runtime row error rate within a chunk exceeds 10%, halting scheduling of further chunks.
+ */
+export class ChunkCircuitBreakerHaltError extends Error {
+  public readonly statusCode = 400;
+  public readonly code = 'CHUNK_CIRCUIT_BREAKER_HALTED';
+
+  constructor(
+    public readonly batchId: string,
+    public readonly chunkIndex: number,
+    public readonly failureRate: number,
+    public readonly threshold: number = 10.0,
+    reason: string = `Chunk ${chunkIndex} in batch '${batchId}' exceeded maximum allowable failure rate (${failureRate.toFixed(1)}% > ${threshold}%). Pipeline immediately halted new chunk scheduling (STP-01).`
+  ) {
+    super(reason);
+    this.name = 'ChunkCircuitBreakerHaltError';
+  }
+}
+
+/**
+ * Max Target Write Retries Exceeded Error (HTTP 500)
+ * Raised when target write error persists across bounded retry attempts (max 3),
+ * causing transition of the batch to load_failed_partial without marking unresolved rows as rejected.
+ */
+export class MaxTargetWriteRetriesExceededError extends Error {
+  public readonly statusCode = 500;
+  public readonly code = 'MAX_TARGET_WRITE_RETRIES_EXCEEDED';
+
+  constructor(
+    public readonly batchId: string,
+    public readonly sourceRow: number,
+    public readonly attempts: number,
+    public readonly lastError: string,
+    reason: string = `Target write for row ${sourceRow} in batch '${batchId}' failed after ${attempts} bounded retries. Error: ${lastError}. Batch transitioned to 'load_failed_partial'; row is NOT marked as rejected.`
+  ) {
+    super(reason);
+    this.name = 'MaxTargetWriteRetriesExceededError';
+  }
+}
+

@@ -952,4 +952,110 @@ WHERE o.batch_id = 'BATCH_UUID' AND o.outcome = 'merged'
 ORDER BY o.source_row ASC;
 ```
 
+---
+
+## 15. Pipeline Worker Execution, Bounded Retries & Partial-Load Recovery (KIT-11)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.10 (FR-WK-01–04), §§11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #78 `[KIT-11]`.
+
+### 15.1 Architecture Overview & BullMQ Worker Topology
+
+In accordance with ClearShift V1 non-negotiable baselines:
+1. **Background Execution:** All heavy migration pipeline stages (`extract`, `profile`, `clean`, `map`, `load`, `validate`) execute exclusively in asynchronous BullMQ background workers (`apps/migration-kit/src/workers/`), never within HTTP request handlers.
+2. **Authoritative State in PostgreSQL:** Redis serves strictly as the message broker and transient queue fabric (`kit-migration-pipeline`). Durable batch states, checkpoints, and terminal row outcomes reside authoritatively in PostgreSQL.
+3. **At-Least-Once Delivery + Stable Idempotency:** Worker retries are guaranteed safe by deterministic idempotency keys (`kit:<batchId>:<sourceRow>:<module>:<entity>:<schemaVersion>`).
+
+```
+   [Fastify HTTP Handler]  ──(enqueues job)──▶  [BullMQ Queue (kit-migration-pipeline)]
+                                                              │
+                                            ┌─────────────────┴─────────────────┐
+                                            ▼                                   ▼
+                                [Worker Process (concurrency=4)]      [Worker Process (concurrency=4)]
+                                            │                                   │
+                                            ▼                                   ▼
+                             ┌─────────────────────────────────────────────────────────┐
+                             │ Chunk Scheduler (500 rows / chunk)                      │
+                             │ 10% Failure Rate Circuit Breaker (STP-01)               │
+                             │ Bounded Retries (3 attempts, 1s base, 30s cap)          │
+                             └───────────────────────────┬─────────────────────────────┘
+                                                         │
+                                        ┌────────────────┴────────────────┐
+                                        ▼                                 ▼
+                               [Target Success]                 [3 Attempts Exhausted]
+                               - Commit target entity           - Move to `load_failed_partial`
+                               - Commit import receipt          - Persist `load_checkpoint`
+                               - Record outcome: `loaded`       - DO NOT mark row as rejected
+                               - Advance checkpoint             - Block reconciliation
+```
+
+### 15.2 Pinned Baseline & Worker Parameters
+
+- **Redis Pinned Baseline:** Redis version pinned to **`8.10.1`** (`image: redis:8.10.1-alpine` in `docker/compose.yml` and `REDIS_PINNED_VERSION = '8.10.1'`).
+- **Worker Configuration:**
+  - `attempts: 3` (bounded retry ceiling per job / write).
+  - `backoff`: Exponential backoff with base **1 second** (`1000ms`), capped at **30 seconds** (`30000ms`).
+  - `timeout`: Per-job execution timeout of **15 minutes** (`900000ms`).
+  - `concurrency`: Default **4** worker threads per instance (configurable).
+
+### 15.3 Chunk Scheduling & 10% Error Rate Circuit Breaker (STP-01)
+
+- Ingestion and loading process records in bounded chunks of **500 rows**.
+- **The 10% Stop Trigger:** Within any processing chunk, runtime row error rate is continuously monitored:
+  $$\text{errorRate} = \left(\frac{\text{rejectedRows}}{\text{attemptedRows}}\right) \times 100$$
+- If $\text{errorRate} > 10.0\%$, the worker immediately halts further chunk processing and throws `ChunkCircuitBreakerHaltError`. Unscheduled chunks are aborted without mutating downstream records.
+
+### 15.4 Partial-Load Failure & Non-Rejection Invariant
+
+When a target write experiences a transient database or network error:
+1. **Bounded Retries:** The worker retries the write up to 3 times using the **identical idempotency key**.
+2. **Terminal Write Failure:** If all 3 attempts fail:
+   - Batch status in `public.kit_batches` transitions to **`load_failed_partial`**.
+   - Checkpoint is committed with `checkpoint_name = 'load_checkpoint'` and `last_committed_row` preserved.
+   - **Crucial Invariant:** The failing row is **NOT marked as rejected** in the outcome ledger. It remains pending/unresolved so that operator intervention can inspect root cause without silent data classification loss.
+3. **Reconciliation Blocking:** Any batch in `load_failed_partial` or `failed` strictly blocks `assertCanSignoff` with `ReconciliationBlockedByBatchStateError` until resumed to completion or rolled back.
+
+### 15.5 Checkpoint Resumption Protocol
+
+When resuming an interrupted or crashed batch:
+1. The operator or scheduler triggers batch resumption (`status: 'loading'`).
+2. The worker retrieves the latest committed checkpoint (`load_checkpoint`).
+3. Source rows up to `last_committed_row` are skipped; processing resumes starting from `last_committed_row + 1`.
+4. Any already-written target rows are protected by the stable idempotency key (`findByBatchRow`), eliminating duplicate writes.
+
+### 15.6 Verification Queries
+
+```sql
+-- 1. Inspect active checkpoints and partial load states
+SELECT
+    id AS batch_id,
+    batch_number,
+    status,
+    checkpoint,
+    total_rows,
+    updated_at
+FROM public.kit_batches
+WHERE status IN ('loading', 'load_failed_partial', 'failed');
+
+-- 2. Inspect import receipts committed up to checkpoint
+SELECT
+    batch_id,
+    COUNT(*) AS committed_receipts,
+    MAX(source_row) AS last_committed_row
+FROM public.kit_import_receipts
+WHERE batch_id = 'BATCH_UUID'
+GROUP BY batch_id;
+
+-- 3. Verify unresolved rows in partial load
+SELECT
+    b.id AS batch_id,
+    b.total_rows AS source_count,
+    COUNT(o.id) AS accounted_count,
+    (b.total_rows - COUNT(o.id)) AS unresolved_pending_count
+FROM public.kit_batches b
+LEFT JOIN public.kit_row_outcomes o ON b.id = o.batch_id
+WHERE b.id = 'BATCH_UUID'
+GROUP BY b.id, b.total_rows;
+```
+
+
 

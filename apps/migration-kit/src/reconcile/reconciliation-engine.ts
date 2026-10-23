@@ -1,11 +1,13 @@
 import {
   type KitReconciliationReport,
+  type KitBatchStatus,
   ReconciliationInvariantError,
+  ReconciliationBlockedByBatchStateError,
 } from '@clearshift/contracts';
 import type { IRowOutcomeLedger } from './outcome-ledger.js';
 
 /**
- * Reconciliation Service (KIT-09 / SDS §11.8)
+ * Reconciliation Service (KIT-09 / KIT-11 / SDS §11.8)
  * Derives counts strictly from the append-only outcome ledger (kit_row_outcomes),
  * NEVER from target table totals.
  *
@@ -21,8 +23,13 @@ export class ReconciliationService {
    */
   public async reconcileBatch(
     batchId: string,
-    totalSourceRows: number
+    totalSourceRows: number,
+    batchStatus?: KitBatchStatus
   ): Promise<KitReconciliationReport> {
+    if (batchStatus && (batchStatus === 'load_failed_partial' || batchStatus === 'failed')) {
+      throw new ReconciliationBlockedByBatchStateError(batchId, batchStatus);
+    }
+
     const counts = await this.ledger.getCountsByBatchId(batchId);
 
     const accounted =
@@ -49,9 +56,15 @@ export class ReconciliationService {
 
   /**
    * Asserts that a batch meets all mathematical reconciliation invariants for final signoff.
-   * Throws ReconciliationInvariantError if unaccounted != 0 or status is UNBALANCED.
+   * Throws:
+   * - ReconciliationBlockedByBatchStateError if the batch is in load_failed_partial or failed
+   * - ReconciliationInvariantError if unaccounted != 0 or status is UNBALANCED
    */
-  public assertCanSignoff(report: KitReconciliationReport): void {
+  public assertCanSignoff(report: KitReconciliationReport, batchStatus?: KitBatchStatus): void {
+    if (batchStatus && (batchStatus === 'load_failed_partial' || batchStatus === 'failed')) {
+      throw new ReconciliationBlockedByBatchStateError(report.batchId, batchStatus);
+    }
+
     if (!report.isBalanced || report.status !== 'OK' || report.unaccountedCount !== 0) {
       const accounted =
         report.loadedCount +
