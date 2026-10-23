@@ -1,0 +1,101 @@
+row_id,entity_type,name,description,campaign_date,list_id,contact_id,campaign_id,member_status,unsubscribed,consent_status,consent_source,prior_consent_status,campaign_count,member_count,notes
+1,list,Q1 Enterprise Strategic Accounts,Synthetic strategic marketing list 1 with UTF-8 support,,44444444-1111-4444-8444-000000000001,,,,,,,,2,50,Clean golden marketing list
+2,list,Product Beta Advocates & Champions,Synthetic strategic marketing list 2 with UTF-8 support,,44444444-1111-4444-8444-000000000002,,,,,,,,2,50,Clean golden marketing list
+3,list,EMEA Partner Distribution Channel,Synthetic strategic marketing list 3 with UTF-8 support,,44444444-1111-4444-8444-000000000003,,,,,,,,2,50,Clean golden marketing list
+4,list,APAC High Growth Scaleups,Synthetic strategic marketing list 4 with UTF-8 support,,44444444-1111-4444-8444-000000000004,,,,,,,,2,50,Clean golden marketing list
+5,list,Cloud Migration Webinar Cohort,Synthetic strategic marketing list 5 with UTF-8 support,,44444444-1111-4444-8444-000000000005,,,,,,,,2,50,Clean golden marketing list
+6,list,Café Münich Enterprise Outreach,Synthetic strategic marketing list 6 with UTF-8 support,,44444444-1111-4444-8444-000000000006,,,,,,,,2,50,Clean golden marketing list
+7,list,München Developers Summit 2026,Synthetic strategic marketing list 7 with UTF-8 support,,44444444-1111-4444-8444-000000000007,,,,,,,,2,50,Clean golden marketing list
+8,list,東京 Launch Community Group,Synthetic strategic marketing list 8 with UTF-8 support,,44444444-1111-4444-8444-000000000008,,,,,,,,2,50,Clean golden marketing list
+9,list,São Paulo Tech Innovators,Synthetic strategic marketing list 9 with UTF-8 support,,44444444-1111-4444-8444-000000000009,,,,,,,,2,50,Clean golden marketing list
+10,list,Zürich FinTech Advisory Circle,Synthetic strategic marketing list 10 with UTF-8 support,,44444444-1111-4444-8444-000000000010,,,,,,,,2,50,Clean golden marketing list
+11,list,Nordic Cloud Architecture Forum,Synthetic strategic marketing list 11 with UTF-8 support,,44444444-1111-4444-8444-000000000011,,,,,,,,2,50,Clean golden marketing list
+12,list,Cybersecurity Leadership Council,Synthetic strategic marketing list 12 with UTF-8 support,,44444444-1111-4444-8444-000000000012,,,,,,,,2,50,Clean golden marketing list
+13,list,Autonomous AI Working Group,Synthetic strategic marketing list 13 with UTF-8 support,,44444444-1111-4444-8444-000000000013,,,,,,,,2,50,Clean golden marketing list
+14,list,Healthcare Systems Modernization,Synthetic strategic marketing list 14 with UTF-8 support,,44444444-1111-4444-8444-000000000014,,,,,,,,2,50,Clean golden marketing list
+15,list,Global Logistics Strategic Tier 1,Synthetic strategic marketing list 15 with UTF-8 support,,44444444-1111-4444-8444-000000000015,,,,,,,,2,50,Clean golden marketing list
+16,campaign,Global Developer Keynote 2026,Historical campaign recording Global Developer Keynote 2026,2026-11-02,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000001,,,,,,,25,Clean golden campaign with valid date and list reference
+17,campaign,Automated CI/CD Pipeline Showcase,Historical campaign recording Automated CI/CD Pipeline Showcase,2026-11-03,44444444-1111-4444-8444-000000000002,,44444444-2222-4444-8444-000000000002,,,,,,,25,Clean golden campaign with valid date and list reference
+18,campaign,Nordic Cloud Roadshow Stockholm,Historical campaign recording Nordic Cloud Roadshow Stockholm,2026-11-04,44444444-1111-4444-8444-000000000003,,44444444-2222-4444-8444-000000000003,,,,,,,25,Clean golden campaign with valid date and list reference
+19,campaign,Enterprise AI Governance Briefing,Historical campaign recording Enterprise AI Governance Briefing,2026-11-05,44444444-1111-4444-8444-000000000004,,44444444-2222-4444-8444-000000000004,,,,,,,25,Clean golden campaign with valid date and list reference
+20,campaign,FinTech Security Architecture Expo,Historical campaign recording FinTech Security Architecture Expo,2026-11-06,44444444-1111-4444-8444-000000000005,,44444444-2222-4444-8444-000000000005,,,,,,,25,Clean golden campaign with valid date and list reference
+21,campaign,Healthcare Compliance Summit,Historical campaign recording Healthcare Compliance Summit,2026-11-07,44444444-1111-4444-8444-000000000006,,44444444-2222-4444-8444-000000000006,,,,,,,25,Clean golden campaign with valid date and list reference
+22,campaign,APAC Partner Kickoff Singapore,Historical campaign recording APAC Partner Kickoff Singapore,2026-11-08,44444444-1111-4444-8444-000000000007,,44444444-2222-4444-8444-000000000007,,,,,,,25,Clean golden campaign with valid date and list reference
+23,campaign,EMEA Modernization Round Table,Historical campaign recording EMEA Modernization Round Table,2026-11-09,44444444-1111-4444-8444-000000000008,,44444444-2222-4444-8444-000000000008,,,,,,,25,Clean golden campaign with valid date and list reference
+24,campaign,NextGen Architecture Webinar,Historical campaign recording NextGen Architecture Webinar,2026-11-10,44444444-1111-4444-8444-000000000009,,44444444-2222-4444-8444-000000000009,,,,,,,25,Clean golden campaign with valid date and list reference
+25,campaign,Customer Advisory Board Session 1,Historical campaign recording Customer Advisory Board Session 1,2026-11-11,44444444-1111-4444-8444-000000000010,,44444444-2222-4444-8444-000000000010,,,,,,,25,Clean golden campaign with valid date and list reference
+26,campaign,Product Roadmap Q4 Sneak Peek,Historical campaign recording Product Roadmap Q4 Sneak Peek,2026-11-12,44444444-1111-4444-8444-000000000011,,44444444-2222-4444-8444-000000000011,,,,,,,25,Clean golden campaign with valid date and list reference
+27,campaign,High Velocity DevOps Hands-on Lab,Historical campaign recording High Velocity DevOps Hands-on Lab,2026-11-13,44444444-1111-4444-8444-000000000012,,44444444-2222-4444-8444-000000000012,,,,,,,25,Clean golden campaign with valid date and list reference
+28,campaign,Public Sector Zero Trust Workshop,Historical campaign recording Public Sector Zero Trust Workshop,2026-11-14,44444444-1111-4444-8444-000000000013,,44444444-2222-4444-8444-000000000013,,,,,,,25,Clean golden campaign with valid date and list reference
+29,campaign,Retail E-Commerce Scaleup Day,Historical campaign recording Retail E-Commerce Scaleup Day,2026-11-15,44444444-1111-4444-8444-000000000014,,44444444-2222-4444-8444-000000000014,,,,,,,25,Clean golden campaign with valid date and list reference
+30,campaign,Annual Cloud Migration Review,Historical campaign recording Annual Cloud Migration Review,2026-11-16,44444444-1111-4444-8444-000000000015,,44444444-2222-4444-8444-000000000015,,,,,,,25,Clean golden campaign with valid date and list reference
+31,member,,,,,11111111-1111-4111-8111-000000000001,44444444-2222-4444-8444-000000000001,sent,false,,,,,,Clean participant membership with status sent
+32,member,,,,,11111111-1111-4111-8111-000000000002,44444444-2222-4444-8444-000000000002,opened,false,,,,,,Clean participant membership with status opened
+33,member,,,,,11111111-1111-4111-8111-000000000003,44444444-2222-4444-8444-000000000003,clicked,false,,,,,,Clean participant membership with status clicked
+34,member,,,,,11111111-1111-4111-8111-000000000004,44444444-2222-4444-8444-000000000004,sent,false,,,,,,Clean participant membership with status sent
+35,member,,,,,11111111-1111-4111-8111-000000000005,44444444-2222-4444-8444-000000000005,opened,false,,,,,,Clean participant membership with status opened
+36,member,,,,,11111111-1111-4111-8111-000000000006,44444444-2222-4444-8444-000000000006,clicked,false,,,,,,Clean participant membership with status clicked
+37,member,,,,,11111111-1111-4111-8111-000000000007,44444444-2222-4444-8444-000000000007,sent,false,,,,,,Clean participant membership with status sent
+38,member,,,,,11111111-1111-4111-8111-000000000008,44444444-2222-4444-8444-000000000008,opened,false,,,,,,Clean participant membership with status opened
+39,member,,,,,11111111-1111-4111-8111-000000000009,44444444-2222-4444-8444-000000000009,clicked,false,,,,,,Clean participant membership with status clicked
+40,member,,,,,11111111-1111-4111-8111-000000000010,44444444-2222-4444-8444-000000000010,sent,false,,,,,,Clean participant membership with status sent
+41,member,,,,,11111111-1111-4111-8111-000000000011,44444444-2222-4444-8444-000000000011,opened,false,,,,,,Clean participant membership with status opened
+42,member,,,,,11111111-1111-4111-8111-000000000012,44444444-2222-4444-8444-000000000012,clicked,false,,,,,,Clean participant membership with status clicked
+43,consent,,,,,11111111-1111-4111-8111-000000000021,,,false,subscribed,webform_newsletter_v1,,,,Clean consent record granting subscribed
+44,consent,,,,,11111111-1111-4111-8111-000000000022,,,true,unsubscribed,webform_newsletter_v1,,,,Clean consent record granting unsubscribed
+45,consent,,,,,11111111-1111-4111-8111-000000000023,,,false,subscribed,webform_newsletter_v1,,,,Clean consent record granting subscribed
+46,consent,,,,,11111111-1111-4111-8111-000000000024,,,true,unsubscribed,webform_newsletter_v1,,,,Clean consent record granting unsubscribed
+47,consent,,,,,11111111-1111-4111-8111-000000000025,,,false,subscribed,webform_newsletter_v1,,,,Clean consent record granting subscribed
+48,consent,,,,,11111111-1111-4111-8111-000000000026,,,true,unsubscribed,webform_newsletter_v1,,,,Clean consent record granting unsubscribed
+49,consent,,,,,11111111-1111-4111-8111-000000000027,,,false,subscribed,webform_newsletter_v1,,,,Clean consent record granting subscribed
+50,consent,,,,,11111111-1111-4111-8111-000000000028,,,true,unsubscribed,webform_newsletter_v1,,,,Clean consent record granting unsubscribed
+51,list,,Missing list name,,,,,,,,,,,,Defect NULL_REQUIRED: missing_mandatory_name
+52,list,   ,Whitespace only list name,,,,,,,,,,,,Defect NULL_REQUIRED: whitespace_only_mandatory_name
+53,campaign,,,2026-11-15,44444444-1111-4444-8444-000000000001,,,,,,,,,,Defect NULL_REQUIRED: missing_campaign_name
+54,member,,,,,,44444444-2222-4444-8444-000000000001,sent,,,,,,,Defect NULL_REQUIRED: missing_contact_id
+55,member,,,,,11111111-1111-4111-8111-000000000010,,opened,,,,,,,Defect NULL_REQUIRED: missing_campaign_id
+56,consent,,,,,,,,,subscribed,form,,,,Defect NULL_REQUIRED: missing_contact_id
+57,consent,,,,,11111111-1111-4111-8111-000000000011,,,,subscribed,  ,,,,Defect NULL_REQUIRED: missing_consent_source
+58,list,Q1 Enterprise Strategic Accounts,Duplicate natural candidate key record,,44444444-1111-4444-8444-000000000001,,,,,,,,,,Defect EXACT_DUPLICATE: duplicate_list_natural_key
+59,list,Q1 Enterprise Strategic Accounts,Duplicate natural candidate key record,,44444444-1111-4444-8444-000000000001,,,,,,,,,,Defect EXACT_DUPLICATE: duplicate_list_natural_key
+60,member,,Duplicate natural candidate key record,,,11111111-1111-4111-8111-000000000001,44444444-2222-4444-8444-000000000001,clicked,,,,,,,Defect EXACT_DUPLICATE: duplicate_campaign_member_pair
+61,member,,Duplicate natural candidate key record,,,11111111-1111-4111-8111-000000000001,44444444-2222-4444-8444-000000000001,opened,,,,,,,Defect EXACT_DUPLICATE: duplicate_campaign_member_pair
+62,consent,,Duplicate natural candidate key record,,,11111111-1111-4111-8111-000000000021,,,,subscribed,csv_import,,,,Defect EXACT_DUPLICATE: duplicate_contact_consent_assertion
+63,consent,,Duplicate natural candidate key record,,,11111111-1111-4111-8111-000000000021,,,,subscribed,portal,,,,Defect EXACT_DUPLICATE: duplicate_contact_consent_assertion
+64,campaign,Orphan Campaign Alpha,Orphan reference defect,2026-11-20,00000000-0000-4000-8000-000000000000,,,,,,,,,,Defect FOREIGN_KEY_MISSING: list_id_not_found
+65,campaign,Orphan Campaign Beta,Orphan reference defect,2026-11-21,ffffffff-ffff-4fff-8fff-ffffffffffff,,,,,,,,,,Defect FOREIGN_KEY_MISSING: list_id_not_found
+66,campaign,Orphan Campaign Gamma,Orphan reference defect,2026-11-22,11111111-9999-4999-8999-000000000099,,,,,,,,,,Defect FOREIGN_KEY_MISSING: list_id_not_found
+67,member,,Orphan reference defect,,,11111111-1111-4111-8111-000000000001,00000000-0000-4000-8000-000000000000,sent,,,,,,,Defect FOREIGN_KEY_MISSING: campaign_id_not_found
+68,member,,Orphan reference defect,,,11111111-1111-4111-8111-000000000002,ffffffff-ffff-4fff-8fff-ffffffffffff,opened,,,,,,,Defect FOREIGN_KEY_MISSING: campaign_id_not_found
+69,member,,Orphan reference defect,,,11111111-1111-4111-8111-000000000003,22222222-9999-4999-8999-000000000099,clicked,,,,,,,Defect FOREIGN_KEY_MISSING: campaign_id_not_found
+70,member,,,,,11111111-1111-4111-8111-000000000070,44444444-2222-4444-8444-000000000001,bounced,false,,,,,,Defect MALFORMED: Invalid member status 'bounced'
+71,member,,,,,11111111-1111-4111-8111-000000000071,44444444-2222-4444-8444-000000000001,delivered,false,,,,,,Defect MALFORMED: Invalid member status 'delivered'
+72,member,,,,,11111111-1111-4111-8111-000000000072,44444444-2222-4444-8444-000000000001,draft,false,,,,,,Defect MALFORMED: Invalid member status 'draft'
+73,member,,,,,11111111-1111-4111-8111-000000000073,44444444-2222-4444-8444-000000000001,failed,false,,,,,,Defect MALFORMED: Invalid member status 'failed'
+74,member,,,,,11111111-1111-4111-8111-000000000074,44444444-2222-4444-8444-000000000001,queued,false,,,,,,Defect MALFORMED: Invalid member status 'queued'
+75,member,,,,,11111111-1111-4111-8111-000000000075,44444444-2222-4444-8444-000000000001,pending_review,false,,,,,,Defect MALFORMED: Invalid member status 'pending_review'
+76,consent,,,,,11111111-1111-4111-8111-000000000176,,,false,subscribed,marketing_reengagement_csv,unsubscribed,,,Defect MALFORMED: Monotonic opt-out reversal prohibited by BR-CRM4-01
+77,consent,,,,,11111111-1111-4111-8111-000000000177,,,false,subscribed,marketing_reengagement_csv,unsubscribed,,,Defect MALFORMED: Monotonic opt-out reversal prohibited by BR-CRM4-01
+78,consent,,,,,11111111-1111-4111-8111-000000000178,,,false,subscribed,marketing_reengagement_csv,unsubscribed,,,Defect MALFORMED: Monotonic opt-out reversal prohibited by BR-CRM4-01
+79,consent,,,,,11111111-1111-4111-8111-000000000179,,,false,subscribed,marketing_reengagement_csv,unsubscribed,,,Defect MALFORMED: Monotonic opt-out reversal prohibited by BR-CRM4-01
+80,consent,,,,,11111111-1111-4111-8111-000000000180,,,false,subscribed,marketing_reengagement_csv,unsubscribed,,,Defect MALFORMED: Monotonic opt-out reversal prohibited by BR-CRM4-01
+81,campaign,Event Date Test 81,Non-ISO date test,31/12/2026,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000081,,,,,,,,Defect MALFORMED: Date format variant '31/12/2026' (european_slash_format)
+82,campaign,Event Date Test 82,Non-ISO date test,12-31-2026,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000082,,,,,,,,Defect MALFORMED: Date format variant '12-31-2026' (us_dash_format)
+83,campaign,Event Date Test 83,Non-ISO date test,2026.11.15,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000083,,,,,,,,Defect MALFORMED: Date format variant '2026.11.15' (dot_delimited_format)
+84,campaign,Event Date Test 84,Non-ISO date test,November 15 2026,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000084,,,,,,,,Defect MALFORMED: Date format variant 'November 15 2026' (english_text_date)
+85,campaign,Event Date Test 85,Non-ISO date test,2026/11/15,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000085,,,,,,,,Defect MALFORMED: Date format variant '2026/11/15' (slash_delimited_format)
+86,campaign,Event Date Test 86,Non-ISO date test,invalid-epoch-date,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000086,,,,,,,,Defect MALFORMED: Date format variant 'invalid-epoch-date' (unparseable_string)
+87,list,Negative Campaign Count List,Boundary number anomaly,,,,,,,,,,-1,10,Defect MALFORMED: Boundary number (negative_campaign_count)
+88,list,Negative Member Count List,Boundary number anomaly,,,,,,,,,,2,-10,Defect MALFORMED: Boundary number (negative_member_count)
+89,campaign,Negative Participant Campaign,Boundary number anomaly,2026-11-20,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000089,,,,,,,-5,Defect MALFORMED: Boundary number (negative_member_count)
+90,list,Overflow Campaign Count List,Boundary number anomaly,,,,,,,,,,9999999999,10,Defect MALFORMED: Boundary number (integer_overflow_campaign_count)
+91,campaign,Overflow Member Count Campaign,Boundary number anomaly,2026-11-20,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000091,,,,,,,8888888888,Defect MALFORMED: Boundary number (integer_overflow_member_count)
+92,list,  APAC Strategic Expansion  ,Whitespace padding edge case,,,,,,,,,,1,10,Edge Case WHITESPACE_PADDING: untrimmed_leading_trailing_spaces
+93,list,	Cloud Migration Advocates	,Whitespace padding edge case,,,,,,,,,,1,10,Edge Case WHITESPACE_PADDING: untrimmed_tabs
+94,campaign,  Global Architecture Keynote 2026  ,Whitespace padding edge case,2026-11-20,44444444-1111-4444-8444-000000000001,,,,,,,,,10,Edge Case WHITESPACE_PADDING: untrimmed_spaces_campaign_name
+95,member,,Whitespace padding edge case,,,11111111-1111-4111-8111-000000000095,44444444-2222-4444-8444-000000000001,  sent  ,false,,,,,,Edge Case WHITESPACE_PADDING: untrimmed_member_status
+96,consent,,Whitespace padding edge case,,,11111111-1111-4111-8111-000000000096,,,,subscribed,  partner_portal_form  ,,,,Edge Case WHITESPACE_PADDING: untrimmed_consent_source
+97,list,=cmd|'/C calc'!A0,Spreadsheet formula injection test,,,,,,,,,,1,5,Defect MALFORMED: Formula injection risk (equal_prefix_calc_injection)
+98,list,+1234567890 Strategic Accounts,Spreadsheet formula injection test,,,,,,,,,,1,5,Defect MALFORMED: Formula injection risk (plus_prefix_formula_trigger)
+99,campaign,@SUM(1+1) High Value Outreach,Spreadsheet formula injection test,2026-11-20,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000099,,,,,,,5,Defect MALFORMED: Formula injection risk (at_symbol_formula_trigger)
+100,campaign,-100 Discount Campaign,Spreadsheet formula injection test,2026-11-20,44444444-1111-4444-8444-000000000001,,44444444-2222-4444-8444-000000000100,,,,,,,5,Defect MALFORMED: Formula injection risk (minus_prefix_formula_trigger)
