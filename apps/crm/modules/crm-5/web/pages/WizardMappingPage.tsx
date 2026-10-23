@@ -1,7 +1,6 @@
 import React, { useState, useId, Suspense } from 'react';
 import type { MappingTemplate, TargetEntityDefinition } from '@clearshift/contracts';
 import { CRM5_TARGET_ENTITIES } from '@clearshift/contracts';
-import type { MappingScreenProps } from '../../../../../migration-kit/web/src/pages/MappingScreen.js';
 
 const MappingScreen = React.lazy(() =>
   import('../../../../../migration-kit/web/src/pages/MappingScreen.js').then((mod) => ({
