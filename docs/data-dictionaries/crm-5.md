@@ -516,3 +516,41 @@ The rejection audit screen includes a one-click formula-safe CSV export action (
 * **RFC-4180 Compliance:** Proper field quoting and CRLF row terminators implemented via `@cs/core` (`exportCsvSafe`).
 * **Standardized Header Schema:** Export files contain uniform columns: `Row Index`, `Target Module`, `Batch Correlation ID`, `Context Identifier Label`, `Context Identifier Value`, `Error Code`, `Error Category`, `Failure Explanation`, `Remediation Guidance`, `Payload SHA-256 Hash`, `Masked Payload Sample`, and `Recorded At`.
 
+---
+
+## 15. Public Contracts, Domain Events, and Deterministic Mock Package (Gate G1 / CRM5-01 / Issue #187)
+
+### 15.1 OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-5.yaml`)
+* **Base URL:** `/api/v1/crm-control`
+* **Specification Version:** `1.0.0` (OpenAPI `3.1.0`)
+* **Authentication Scheme:** `bearerAuth` (HTTP Bearer JWT) with RBAC capabilities:
+  - `control:read`: Read-only access to `/runs`, `/scores`, `/rejects`, `/reconciliation`, `/reconciliation/{batch}`, `/duplicates/held`, `/duplicates/audit`, `/batches/{batch}`
+  - `control:export`: Export capabilities for CSV reporting routes
+  - `control:admin`: Administrative access for duplicate resolution and row-level import loader
+* **Public Route:** `GET /health` requires zero authentication for container liveness probes.
+
+### 15.2 Domain Event Taxonomy & Outbox Envelopes (`packages/contracts/src/crm-5-events.ts`)
+Conforms to standard outbox event envelope mandated by PLT-04 & PLT-09:
+
+| Event Type Constant | Wire Event Name | Producer | Aggregate Type | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `RUN_PROJECTED` | `crm.migration.run_projected` | `crm-5` | `crm5_run` | Migration execution event recorded from pipeline |
+| `SCORE_COMPUTED` | `crm.migration.score_computed` | `crm-5` | `crm5_score` | 5-dimension quality scorecard calculated |
+| `REJECT_RECORDED` | `crm.migration.reject_recorded` | `crm-5` | `crm5_reject` | Row-level validation failure recorded with SHA-256 payload hash |
+| `RECONCILIATION_COMPLETED` | `crm.migration.reconciliation_completed` | `crm-5` | `crm5_reconciliation_report` | Batch row conservation verified (`status: OK` iff `unaccounted = 0`) |
+| `DUPLICATE_DETECTED` | `crm.migration.duplicate_detected` | `crm-5` | `crm5_duplicate_candidate` | Exact normalized duplicate detected and held for review |
+| `DUPLICATE_RESOLVED` | `crm.migration.duplicate_resolved` | `crm-5` | `crm5_duplicate_candidate` | Operator human review decision applied (`MERGE`, `REJECT_DUPLICATE`, `KEEP_SEPARATE`) |
+
+### 15.3 Deterministic Mock Server & In-Memory Store (`packages/contracts/src/crm-5-mock.ts`)
+* **State Store (`Crm5MockStateStore`):** In-memory fixture repository pre-seeded with 100% synthetic runs, 5-dimension quality scores, row rejections, balanced reconciliation reports, and duplicate candidates.
+* **Fastify Plugin (`crm5MockServerPlugin`):** Mounts deterministic mock routes matching all `/api/v1/crm-control/*` endpoints for local testing and cross-module integration by dependent groups.
+* **Standard Error Handling:** Rejects `pageSize > 100` with HTTP 400 and returns HTTP 404 for missing batches/candidates using the standard ClearShift error envelope `{ code, message, details, correlation_id }`.
+
+### 15.4 Versioned Contract Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G1-001`
+* **Milestone:** Gate G1 — Design Complete (Weeks 1–2)
+* **Date:** 2026-10-23
+* **Status:** Approved & Frozen for V1
+* **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
+
+
