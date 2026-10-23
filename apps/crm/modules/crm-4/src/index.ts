@@ -13,6 +13,8 @@ export * from './interface/authz.js';
 export * from './routes/crm4.routes.js';
 export * from './app.js';
 export * from './public.js';
+export * from './domain/qa-specs.js';
+export * from '../db/schema.js';
 
 export interface ModuleDefinition {
   id: string;

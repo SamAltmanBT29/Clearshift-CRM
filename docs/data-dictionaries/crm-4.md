@@ -120,3 +120,22 @@
 
 ### 4.4 Append-Only Audit Logging
 - Managed by `Crm4AuditService` recording actor, action, timestamp, entity, correlation, outcome, and pre-redacted diffs without plain secrets.
+
+---
+
+## 5. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
+
+In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseline 1.0-A §4.2, and Issue #177 `[CRM4-24]`, CRM-4 Marketing Lists and Campaign History establishes production-grade design specifications for Gate G1:
+
+1. **Field-Level Data Dictionary:** Defines every entity column across all 7 tables (`crm4_lists`, `crm4_campaigns`, `crm4_members`, `crm4_consents`, `crm4_import_batches`, `crm4_import_receipts`, `crm4_import_rejects`) with PostgreSQL data type, nullability, constraints, business rule, and synthetic example. Documented in [`apps/crm/modules/crm-4/docs/data-dictionary.md`](../../apps/crm/modules/crm-4/docs/data-dictionary.md) and programmatically asserted against Drizzle ORM schema via automated tests (`apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts`).
+2. **Entity-Relationship Diagram & Ownership Boundaries:** Visual Mermaid ERD, cardinality catalog, and PLT-03 master-data boundaries documented in [`apps/crm/modules/crm-4/docs/erd.md`](../../apps/crm/modules/crm-4/docs/erd.md). Asserts that CRM-1 contacts are referenced via application guards without cross-module SQL foreign keys.
+3. **Requirement-to-Test Traceability Matrix:** Comprehensive matrix mapping `FR-CRM4-01..05`, `FR-CRM4-10..12`, `FR-CRM4-20..21`, `BR-CRM4-01`, `BR-CRM4-DUP-01..03`, and `MIG-CRM4-01..03` to existing automated test suites documented in [`apps/crm/modules/crm-4/docs/traceability-matrix.md`](../../apps/crm/modules/crm-4/docs/traceability-matrix.md).
+4. **Dirty Data Pack Plan:** Synthetic edge-case strategy covering 11 anomaly categories, seeded defect distributions, and 100-row & 1,000-row conservation balance sheets documented in [`apps/crm/modules/crm-4/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-4/docs/dirty-data-pack-plan.md).
+5. **Executable QA Invariants:** Reusable data structures, candidate key builders, and conservation assertion helpers implemented in [`apps/crm/modules/crm-4/src/domain/qa-specs.ts`](../../apps/crm/modules/crm-4/src/domain/qa-specs.ts).
+
+### 5.1 Versioned Change Record & Gate G1 Sign-off
+* **Change Record ID:** `CR-CRM4-G1-001`
+* **Milestone:** Gate G1 — Design Complete (Sprint 1)
+* **Date:** 2026-10-23
+* **Status:** Verified, 100% Tests Passing, Approved for V1
+* **Sign-off Authority:** Group 4 Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)
