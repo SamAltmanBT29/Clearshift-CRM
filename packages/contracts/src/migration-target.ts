@@ -1225,3 +1225,142 @@ export interface MigrationTargetAdapter<TRow = unknown> {
     | { ok: false; error: MigrationTargetAdapterError }
   >;
 }
+
+// ============================================================================
+// KIT-09: Terminal Outcome Ledger & Mathematically Exact Reconciliation
+// ============================================================================
+
+/**
+ * Terminal Outcome Types for Migration Kit V1 (Decision KIT-09 & SDS §11.1–11.9)
+ * Every source row must have exactly one terminal outcome.
+ */
+export const TerminalOutcomeTypeSchema = z.enum([
+  'loaded',
+  'rejected',
+  'merged',
+  'skipped',
+]);
+export type TerminalOutcomeType = z.infer<typeof TerminalOutcomeTypeSchema>;
+
+/**
+ * Policy code for operator approved row skip action
+ */
+export const OPERATOR_APPROVED_SKIP_POLICY = 'operator_approved_skip' as const;
+
+/**
+ * Input schema for operator-approved row skip action (KIT-09)
+ */
+export const SkipRowApprovalInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  sourceRow: z.number().int().min(1, 'sourceRow must be >= 1'),
+  reason: z
+    .string()
+    .min(10, 'Skip reason must contain at least 10 non-whitespace characters')
+    .refine((val) => val.trim().length >= 10, {
+      message: 'Skip reason must contain at least 10 non-whitespace characters',
+    }),
+  actor: z.string().min(1, 'actor is required').max(128),
+  actorRole: z.enum([
+    'migration_admin',
+    'platform_admin',
+    'editor',
+    'runner',
+    'viewer',
+  ]),
+});
+export type SkipRowApprovalInput = z.infer<typeof SkipRowApprovalInputSchema>;
+
+/**
+ * Terminal Row Outcome Contract Schema
+ */
+export const KitRowOutcomeSchema = z.object({
+  id: z.string().uuid().optional(),
+  batchId: z.string().min(1).max(128),
+  sourceRow: z.number().int().min(1),
+  outcome: TerminalOutcomeTypeSchema,
+  targetId: z.string().uuid().optional(),
+  reasonCode: z.string().max(64).optional(),
+  reasonMessage: z.string().optional(),
+  actor: z.string().max(128).optional(),
+  policyCode: z.string().max(64).optional(),
+  approvedBy: z.string().max(128).optional(),
+  approvedAt: z.coerce.date().optional(),
+  idempotencyKey: z.string().max(256).optional(),
+  createdAt: z.coerce.date().default(() => new Date()),
+});
+export type KitRowOutcome = z.infer<typeof KitRowOutcomeSchema>;
+
+/**
+ * Mathematically Exact Reconciliation Report Schema (KIT-09 / SDS §11.8)
+ * Counts derive strictly from outcome ledger (kit_row_outcomes), never target table totals.
+ */
+export const KitReconciliationReportSchema = z.object({
+  batchId: z.string().min(1).max(128),
+  sourceCount: z.number().int().min(0),
+  loadedCount: z.number().int().min(0),
+  rejectedCount: z.number().int().min(0),
+  mergedCount: z.number().int().min(0),
+  skippedCount: z.number().int().min(0),
+  unaccountedCount: z.number().int(),
+  status: z.enum(['OK', 'UNBALANCED']),
+  isBalanced: z.boolean(),
+  timestamp: z.coerce.date(),
+});
+export type KitReconciliationReport = z.infer<typeof KitReconciliationReportSchema>;
+
+/**
+ * Duplicate Terminal Outcome Error (HTTP 409)
+ * Raised when attempting to record more than one terminal outcome for the same source row.
+ */
+export class DuplicateRowOutcomeError extends Error {
+  public readonly statusCode = 409;
+  public readonly code = 'DUPLICATE_ROW_OUTCOME';
+
+  constructor(
+    public readonly batchId: string,
+    public readonly sourceRow: number,
+    public readonly existingOutcome: string,
+    public readonly attemptedOutcome: string
+  ) {
+    super(
+      `Row ${sourceRow} in batch '${batchId}' already has terminal outcome '${existingOutcome}'. Cannot overwrite with '${attemptedOutcome}'.`
+    );
+    this.name = 'DuplicateRowOutcomeError';
+  }
+}
+
+/**
+ * Invalid Skip Approval Error (HTTP 400 or 403)
+ * Raised when skip conditions (role, reason length, pre-load phase) are violated.
+ */
+export class InvalidSkipApprovalError extends Error {
+  public readonly statusCode: number;
+  public readonly code = 'INVALID_SKIP_APPROVAL';
+
+  constructor(message: string, isForbidden: boolean = false) {
+    super(message);
+    this.statusCode = isForbidden ? 403 : 400;
+    this.name = 'InvalidSkipApprovalError';
+  }
+}
+
+/**
+ * Reconciliation Invariant Error (HTTP 422)
+ * Raised when attempting to sign off a batch that fails exact row conservation.
+ */
+export class ReconciliationInvariantError extends Error {
+  public readonly statusCode = 422;
+  public readonly code = 'RECONCILIATION_UNBALANCED';
+
+  constructor(
+    public readonly batchId: string,
+    public readonly sourceCount: number,
+    public readonly accountedCount: number,
+    public readonly unaccountedCount: number
+  ) {
+    super(
+      `Batch '${batchId}' failed reconciliation: source (${sourceCount}) != accounted (${accountedCount}). Unaccounted: ${unaccountedCount}. Signoff is blocked.`
+    );
+    this.name = 'ReconciliationInvariantError';
+  }
+}

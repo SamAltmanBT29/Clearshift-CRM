@@ -719,3 +719,115 @@ Migration Kit operates under strict privilege separation (ADR-004 / Decision C4)
 - **No Direct Table Privileges:** The Migration Kit worker role possesses ZERO insert, update, or delete privileges on module-owned domain schemas (`crm1.*`, `crm2.*`, `crm3.*`, `crm4.*`).
 - **Adapter In-Process Port:** All loads are mediated via the owning module's `MigrationTargetAdapter`, ensuring that module business rules, events, and transactional boundaries are strictly respected.
 
+---
+
+## 13. Step 7: Terminal Outcome Ledger & Mathematically Exact Reconciliation (KIT-09)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §11.8; Project Plan v3.0 §§9, 11, 17; Issue #76 `[KIT-09]`.
+
+### 13.1 Pipeline Stage Overview
+
+Step 7 (**Reconcile**) executes the final accounting gate of the ClearShift Migration Pipeline. Before a batch can transition to the terminal `reconciled` status, every single source record ingested in Step 1 must be accounted for with exactly one terminal outcome in the append-only ledger `public.kit_row_outcomes`.
+
+```
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Source Records Ingested (Step 1: total_rows)                 │
+    └──────────────────────────────┬───────────────────────────────┘
+                                   │
+                                   ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Append-Only Outcome Ledger: public.kit_row_outcomes         │
+    │ UNIQUE (batch_id, source_row) ── Enforced by PG Trigger      │
+    ├──────────────┬───────────────┬──────────────┬────────────────┤
+    │    Loaded    │   Rejected    │    Merged    │    Skipped     │
+    │  (Target ID) │  (Error Code) │ (Golden ID)  │(Approved Skip) │
+    └──────────────┴───────────────┴──────────────┴────────────────┘
+                                   │
+                                   ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Exact Mathematical Conservation Audit:                       │
+    │ source = loaded + rejected + merged + skipped                │
+    │ unaccounted = source - (loaded + rejected + merged + skipped)│
+    └──────────────────────────────┬───────────────────────────────┘
+                     ┌─────────────┴─────────────┐
+                     ▼                           ▼
+            [ unaccounted = 0 ]          [ unaccounted != 0 ]
+            - Status: `OK`               - Status: `UNBALANCED`
+            - State: `reconciled`        - State: `reconciliation_failed`
+            - Signoff Enabled            - Signoff Strictly BLOCKED
+```
+
+### 13.2 The Append-Only Outcome Ledger (`kit_row_outcomes`)
+
+- **Table Name:** `public.kit_row_outcomes`
+- **Composite Unique Key:** `CONSTRAINT uq_kit_row_outcomes_batch_source_row UNIQUE (batch_id, source_row)`
+  *Guarantees at database engine level that no source row can ever possess more than one terminal outcome.*
+- **Immutability Trigger:** `trg_guard_kit_row_outcomes_immutable` strictly aborts any `UPDATE` or `DELETE` statement.
+- **Allowed Outcomes:** Exactly one of:
+  - `loaded`: Row successfully loaded into target business entity.
+  - `rejected`: Row failed validation, cleaning, or target constraints.
+  - `merged`: Row deterministically linked into a golden master entity.
+  - `skipped`: Row intentionally excluded via operator-approved skip protocol.
+
+### 13.3 Operator-Approved Skip Policy
+
+Per ClearShift Core Rules & Decision KIT-09, row skipping is strictly audited and constrained:
+1. **Timing Window:** Permitted **only before real load** (during `extracting`, `extracted`, `profiled`, `cleaned`, `mapped`, or `dry_run_passed`). Attempting to skip rows during or after load raises `InvalidSkipApprovalError` (HTTP 400).
+2. **Role Authorization:** Only users with `editor`, `migration_admin`, or `platform_admin` roles can approve skips. **A Migration Runner cannot approve its own skip** (HTTP 403 Forbidden).
+3. **Reason Justification:** The operator must supply a substantive explanation of at least **10 non-whitespace characters** (`reason.trim().length >= 10`).
+4. **Policy Audit Trail:** Every skip records:
+   - `actor`: Identifying username / ID of the operator.
+   - `approved_by`: Confirmed approving editor/admin.
+   - `approved_at`: UTC timestamp of approval.
+   - `policy_code`: `'operator_approved_skip'`.
+5. **Dry-Run Token Invalidation:** If a row is skipped while the batch is in `dry_run_passed`, the existing dry-run token is automatically invalidated, requiring a fresh dry-run before real load is permitted.
+6. **Ignored Columns Policy:** Unmapping or ignoring a column NEVER marks a row as skipped. Ignored columns simply pass through without target field mapping; the row itself is processed and recorded as `loaded` or `rejected`.
+
+### 13.4 Mathematical Conservation Equation
+
+All counts derive **strictly from the outcome ledger (`public.kit_row_outcomes`)**, NEVER from target table row counts or dirty heuristic projections:
+
+$$\text{sourceRows} = \text{loadedCount} + \text{rejectedCount} + \text{mergedCount} + \text{skippedCount}$$
+
+$$\text{unaccountedCount} = \text{sourceRows} - (\text{loadedCount} + \text{rejectedCount} + \text{mergedCount} + \text{skippedCount}) = 0$$
+
+- **Balanced State (`OK`):** When $\text{unaccountedCount} = 0$, the batch is certified balanced and signoff is unlocked.
+- **Unbalanced State (`UNBALANCED`):**
+  - **Missing Rows:** If accounted rows are fewer than source rows ($\text{unaccounted} > 0$).
+  - **Double-Count Fixture:** If accounted rows exceed source rows ($\text{unaccounted} < 0$), e.g. from duplicate fixtures or broken concurrency.
+  - In either unbalanced case, the batch state transitions to `reconciliation_failed`, and signoff is blocked with `ReconciliationInvariantError` (HTTP 422).
+
+### 13.5 Reconciliation Verification Queries
+
+To inspect outcome conservation directly in PostgreSQL:
+
+```sql
+-- 1. Derive terminal outcome counts from ledger
+SELECT
+    batch_id,
+    COUNT(*) FILTER (WHERE outcome = 'loaded') AS loaded_count,
+    COUNT(*) FILTER (WHERE outcome = 'rejected') AS rejected_count,
+    COUNT(*) FILTER (WHERE outcome = 'merged') AS merged_count,
+    COUNT(*) FILTER (WHERE outcome = 'skipped') AS skipped_count,
+    COUNT(*) AS total_accounted
+FROM public.kit_row_outcomes
+WHERE batch_id = 'BATCH_UUID'
+GROUP BY batch_id;
+
+-- 2. Compare against batch source total
+SELECT
+    b.id,
+    b.batch_number,
+    b.total_rows AS source_count,
+    COUNT(o.id) AS accounted_count,
+    (b.total_rows - COUNT(o.id)) AS unaccounted_count,
+    CASE
+        WHEN b.total_rows = COUNT(o.id) THEN 'OK'
+        ELSE 'UNBALANCED'
+    END AS reconciliation_status
+FROM public.kit_batches b
+LEFT JOIN public.kit_row_outcomes o ON b.id = o.batch_id
+WHERE b.id = 'BATCH_UUID'
+GROUP BY b.id, b.batch_number, b.total_rows;
+```
+

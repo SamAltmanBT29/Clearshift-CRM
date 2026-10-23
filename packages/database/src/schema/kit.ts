@@ -190,3 +190,27 @@ export const cleanCrm = pgTable("clean_crm", {
   payload: jsonb("payload").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Migration Kit Terminal Outcome Ledger Schema (KIT-09 / SDS §11.1–11.9)
+ * Append-only ledger recording exactly one terminal outcome per source row.
+ * UPDATE and DELETE statements are strictly blocked by database trigger.
+ */
+export const kitRowOutcomes = pgTable("kit_row_outcomes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  sourceRow: integer("source_row").notNull(),
+  outcome: text("outcome").notNull(),
+  targetId: uuid("target_id"),
+  reasonCode: text("reason_code"),
+  reasonMessage: text("reason_message"),
+  actor: text("actor"),
+  policyCode: text("policy_code"),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  idempotencyKey: text("idempotency_key"),
+  metadata: jsonb("metadata").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
