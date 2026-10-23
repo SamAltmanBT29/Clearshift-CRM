@@ -157,6 +157,8 @@ export class Crm4Service {
       all = all.filter((l) => l.name.toLowerCase().includes(q) || (l.description && l.description.toLowerCase().includes(q)));
     }
 
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
     const totalCount = all.length;
@@ -224,6 +226,8 @@ export class Crm4Service {
       const q = params.search.toLowerCase();
       all = all.filter((c) => c.name.toLowerCase().includes(q));
     }
+
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
 
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
@@ -309,6 +313,8 @@ export class Crm4Service {
     if (params.status) {
       all = all.filter((m) => m.status === params.status);
     }
+
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
 
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
