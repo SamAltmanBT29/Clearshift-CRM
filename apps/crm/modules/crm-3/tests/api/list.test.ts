@@ -465,7 +465,8 @@ describe('CRM-3 Support Tickets & Activities: List/Read API & Contracts (Issue #
   // ---------------------------------------------------------------------------
   describe('PATCH /api/v1/crm-tickets/tickets/:id', () => {
     it('updates ticket status and priority successfully', async () => {
-      const ticketId = '30000000-0000-4000-8000-000000000001';
+      // Seed ticket #2 is Open; Open -> Solved is an allowed transition (CRM3-06 / #31).
+      const ticketId = '30000000-0000-4000-8000-000000000002';
       const response = await app.inject({
         method: 'PATCH',
         url: `${CRM3_API_PREFIX}/tickets/${ticketId}`,
