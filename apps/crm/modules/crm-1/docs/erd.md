@@ -6,7 +6,7 @@
 **Schema Version:** 1.0.0
 **Storage Engine:** PostgreSQL 18.6 with Drizzle ORM
 **Target Milestone:** Gate G1 — Design Complete (Sprint 1)
-**Traceability:** ClearShift Project Plan v3.0 §§9.3–9.6, 17; SDS ClearShift CRM v2.0 §4.2, §4.7; Master Architecture Baseline 1.0-A §4.2; Issue `[CRM1-24]`.
+**Traceability:** ClearShift Project Plan v3.0 §§9.3–9.6, 17; SDS ClearShift CRM v2.0 §4.2, §4.7; Master Architecture Baseline 1.0-A §4.2; Issue #117 `[CRM1-24]`.
 
 ---
 

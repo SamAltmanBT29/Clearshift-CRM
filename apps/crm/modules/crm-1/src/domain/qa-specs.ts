@@ -8,7 +8,7 @@
  * - Synthetic Dirty Data Pack Plan with defect distributions and conservation balance sheet
  *
  * Traceability:
- * - Issue: [CRM1-24] CRM-1 Contacts, Companies and Leads: Data dictionary, ERD, traceability and Dirty Data Pack plan
+ * - Issue: #117 [CRM1-24] CRM-1 Contacts, Companies and Leads: Data dictionary, ERD, traceability and Dirty Data Pack plan
  * - ClearShift Project Plan v3.0 §§9.3–9.6, 17
  * - SDS ClearShift CRM v2.0 §4.2, §4.7, §4.11, §4.12
  * - Master Architecture Blueprint Baseline 1.0-A §4.2
