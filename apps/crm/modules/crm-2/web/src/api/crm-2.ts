@@ -230,3 +230,16 @@ export async function updateQuote(
 
   return QuoteSchema.parse(data);
 }
+
+export const crm2Api = {
+  getDeals,
+  getDealById,
+  createDeal,
+  updateDeal,
+  getStages,
+  getQuotes,
+  getQuoteById,
+  createQuote,
+  updateQuote,
+};
+
