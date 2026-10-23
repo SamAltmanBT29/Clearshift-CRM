@@ -1,20 +1,46 @@
 import React from 'react';
+import { TableSkeleton } from '../components/TableSkeleton.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { AccessDeniedView } from '../components/AccessDeniedView.js';
 
 export interface ReconciliationOverviewPageProps {
+  data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
-  error?: string | null;
+  error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
+  onRetry?: (() => void) | undefined;
+  httpStatus?: number;
+  isAccessDenied?: boolean;
+  requiredCapability?: string;
+  requiredRole?: string;
+  currentRole?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: (() => void) | undefined;
 }
 
 /**
  * Reconciliation Overview Page Shell
  * Integrates with /api/v1/crm-control/reconciliation/:batch
+ * Conforms to ClearShift V1 Issue #192 (CRM5-19).
  */
 export const ReconciliationOverviewPage: React.FC<ReconciliationOverviewPageProps> = ({
+  data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  onRetry,
+  httpStatus,
+  isAccessDenied = false,
+  requiredCapability = 'control:read',
+  requiredRole,
+  currentRole,
+  emptyActionLabel = 'Refresh Balance Sheet',
+  onEmptyAction,
 }) => {
+  const accessForbidden = isAccessDenied || httpStatus === 403;
+  const hasNoData = isEmpty || data.length === 0;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -24,33 +50,43 @@ export const ReconciliationOverviewPage: React.FC<ReconciliationOverviewPageProp
         </p>
       </div>
 
-      {isLoading && (
-        <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading reconciliation balance sheet">
-          <div className="cs-skeleton-line" style={{ width: '100%' }} />
-          <div className="cs-skeleton-line" style={{ width: '70%' }} />
-          <p className="cs-loading-text">Loading reconciliation data...</p>
-        </div>
-      )}
+      {accessForbidden ? (
+        <AccessDeniedView
+          requiredCapability={requiredCapability}
+          requiredRole={requiredRole}
+          currentRole={currentRole}
+          resourceName="Conservation Balance Sheet"
+        />
+      ) : (
+        <>
+          {error && (
+            <div className="cs-error-container" style={{ marginBottom: '16px' }}>
+              <ErrorAlert error={error} onRetry={onRetry} />
+            </div>
+          )}
 
-      {!isLoading && error && (
-        <div className="cs-error-card" role="alert">
-          <p className="cs-error-message">Error loading reconciliation: {error}</p>
-        </div>
-      )}
-
-      {!isLoading && !error && isEmpty && (
-        <div className="cs-empty-state" role="status">
-          <h3 className="cs-empty-title">No records found</h3>
-          <p className="cs-empty-text">
-            No reconciliation balance sheets currently available. Batch reports reconcile automatically upon step completion.
-          </p>
-        </div>
-      )}
-
-      {!isLoading && !error && !isEmpty && (
-        <div className="cs-content-placeholder" id="reconciliation-container">
-          <p className="cs-ready-notice">Ready for conservation balance sheet integration.</p>
-        </div>
+          {isLoading ? (
+            <TableSkeleton
+              rowCount={4}
+              columnCount={5}
+              ariaLabel="Loading reconciliation balance sheet..."
+            />
+          ) : !error && hasNoData ? (
+            <div className="cs-table-card" role="status">
+              <EmptyState
+                icon="⚖️"
+                title="No reconciliation balance sheets"
+                description="No reconciliation balance sheets currently available. Batch reports reconcile automatically upon step completion."
+                actionLabel={onEmptyAction ? emptyActionLabel : undefined}
+                onAction={onEmptyAction}
+              />
+            </div>
+          ) : !error && (
+            <div className="cs-content-placeholder" id="reconciliation-container">
+              <p className="cs-ready-notice">Ready for conservation balance sheet integration.</p>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

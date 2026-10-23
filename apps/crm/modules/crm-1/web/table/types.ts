@@ -24,9 +24,33 @@ export interface DataTableColumn<T = Record<string, unknown>> {
 export interface TableFilterState {
   search?: string | undefined;
   leadStatus?: string | undefined;
+  consentStatus?: string | undefined;
+  unsubscribed?: string | undefined;
   companyId?: string | undefined;
   status?: string | undefined;
   entity?: string | undefined;
+  sourceSystem?: string | undefined;
+  [key: string]: string | undefined;
+}
+
+export interface ActiveFilterPill {
+  key: string;
+  label: string;
+  value: string;
+  displayValue: string;
+}
+
+export interface FilterFacetOption {
+  value: string;
+  label: string;
+  count?: number;
+}
+
+export interface FilterFacet {
+  id: string;
+  label: string;
+  paramKey: string;
+  options: FilterFacetOption[];
 }
 
 export interface TableState<T = Record<string, unknown>> {
