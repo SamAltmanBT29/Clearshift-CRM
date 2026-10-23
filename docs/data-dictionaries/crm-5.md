@@ -159,35 +159,51 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 
 ---
 
-## 3. Security, Privacy & Invariant Protections
+## 3. Security, Privacy & Invariant Protections (CRM5-15)
 
-1. **No Raw Secrets:** No passwords, bearer tokens, or full credit card / bank accounts are ever stored in CRM-5 tables.
-2. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
-3. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
-4. **No Direct Target Writes by Caller:** The Migration Kit never writes directly to CRM-5 private tables; data enters strictly through the public API / in-process `TargetAdapter`.
+1. **JWT Authentication & Hub Identity:**
+   * Server validates asymmetric EdDSA (Ed25519) signatures via ClearShift Hub Identity (`@cs/identity`).
+   * Validates issuer (`clearshift-hub`), audience (`clearshift`), and token expiration.
+   * Immediately rejects disabled accounts (`disabled: true` or `status: 'disabled'`) with HTTP 401 Unauthorized.
+2. **Role Capability Enforcement:**
+   * Exact endpoint role enforcement based on SDS ClearShift CRM v2.0 §4.8.
+   * Unauthenticated requests return HTTP 401; authenticated requests with forbidden roles return HTTP 403.
+3. **Field-Level Protection & Masking:**
+   * Bank account and card values are masked to `XXXX-XXXX-7890` (preserving only the terminal 4 digits).
+   * Salary and compensation figures are masked to `XX,XXX` or `'salary hidden'`.
+   * Credentials, passwords, bearer tokens, and secrets are replaced with `[REDACTED]`.
+   * Field restrictions are enforced on the server before serialization and export.
+4. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
+5. **Append-Only Audit Trail:**
+   * `Crm5AuditService` logs immutable audit events for state changes, duplicate resolutions, and chunked load executions.
+   * Audit diffs and metadata are pre-sanitized; raw rows and secrets are never logged.
+6. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
+7. **No Direct Target Writes by Caller:** The Migration Kit never writes directly to CRM-5 private tables; data enters strictly through the public API / in-process `TargetAdapter`.
 
 ---
 
 ## 4. Public API Endpoint Directory (`/api/v1/crm-control`)
 
-| Method | Endpoint | Query / Path Parameters | Bounded Paging | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | None | N/A | Health check returning service status, module ID, and version |
-| `GET` | `/runs` | `module`, `batchId`, `status`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Paginated migration run projections; sorted by `startedAt desc, id asc` |
-| `GET` | `/scores` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
-| `GET` | `/rejects` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
-| `GET` | `/reconciliation/:batch` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
-| `POST` | `/runs` | Body: `CreateRunInput` | N/A | Records migration step projection; idempotent by `idempotencyKey` |
-| `POST` | `/scores` | Body: `CreateScoreInput` | N/A | Records quality score card; computes weighted score automatically |
-| `POST` | `/reconciliation` | Body: `CreateReconciliationInput` | N/A | Records conservation balance sheet; evaluates conservation invariant |
-| `POST` | `/rejects` | Body: `CreateRejectInput` | N/A | Ingests row rejection audit record with payload SHA-256 hash |
-| `POST` | `/duplicates/detect` | Body: `DetectDuplicatesInput` | N/A | Detects exact duplicates using normalized keys; holds candidates for review |
-| `GET` | `/duplicates/held` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
-| `POST` | `/duplicates/resolve` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
-| `GET` | `/duplicates/audit` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
-| `POST` | `/batches/execute-load` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
-| `POST` | `/import/row` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Safely loads mapped row via KIT-08 Target Adapter; commits mutation and receipt in one transaction |
-| `GET` | `/import/receipts` | None | N/A | Returns durable receipts committed alongside migrated target records |
+| Method | Endpoint | Allowed Roles | Query / Path Parameters | Bounded Paging | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/health` | *(Public probe)* | None | N/A | Health check returning service status, module ID, and version |
+| `GET` | `/runs` | `viewer`, `analyst`, `admin` | `module`, `batchId`, `status`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Paginated migration run projections; sorted by `startedAt desc, id asc` |
+| `GET` | `/scores` | `analyst`, `admin` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
+| `GET` | `/rejects` | `analyst`, `admin` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
+| `GET` | `/reconciliation/:batch` | `analyst`, `admin` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
+| `GET` | `/batches/:batch` | `viewer`, `analyst`, `admin` | Path: `:batch` | N/A | Aggregated batch summary and read-model consistency |
+| `POST` | `/runs` | `migration_runner`, `admin` | Body: `CreateRunInput` | N/A | Records migration step projection; idempotent by `idempotencyKey` |
+| `POST` | `/scores` | `migration_runner`, `admin` | Body: `CreateScoreInput` | N/A | Records quality score card; computes weighted score automatically |
+| `POST` | `/reconciliation` | `migration_runner`, `admin` | Body: `CreateReconciliationInput` | N/A | Records conservation balance sheet; evaluates conservation invariant |
+| `POST` | `/rejects` | `migration_runner`, `admin` | Body: `CreateRejectInput` | N/A | Ingests row rejection audit record with payload SHA-256 hash |
+| `POST` | `/duplicates/detect` | `analyst`, `migration_runner`, `admin` | Body: `DetectDuplicatesInput` | N/A | Detects exact duplicates using normalized keys; holds candidates for review |
+| `GET` | `/duplicates/held` | `analyst`, `admin` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
+| `POST` | `/duplicates/resolve` | `editor`, `analyst`, `admin` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
+| `GET` | `/duplicates/audit` | `analyst`, `admin` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
+| `POST` | `/batches/execute-load` | `migration_runner`, `admin` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
+| `POST` | `/import/row` | `migration_runner`, `admin` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Safely loads mapped row via KIT-08 Target Adapter; commits mutation and receipt in one transaction |
+| `POST` | `/import` | `migration_runner`, `admin` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Alias for `/import/row` |
+| `GET` | `/import/receipts` | `viewer`, `analyst`, `admin` | None | N/A | Returns durable receipts committed alongside migrated target records |
 
 ---
 
