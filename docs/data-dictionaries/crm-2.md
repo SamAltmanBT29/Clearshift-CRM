@@ -400,4 +400,50 @@ The main CRM-2 collection screens implement bounded paginated tables with stable
 - `apps/crm/modules/crm-2/web/tests/deals-table.test.ts`: Regression suite verifying orphan deal badges, currency formatting, sort toggle, and accessible column headers.
 - `apps/crm/modules/crm-2/tests/api/list.test.ts`: Integration tests verifying server-side sort parameters (`sort=name&order=asc`, `sort=value&order=desc`, `sort=amount&order=desc`).
 
+---
+
+## 14. Search, Filters and Sorting Controls Specification (CRM2-18)
+
+### 14.1 Debounced Search Bar (300ms Protocol)
+Free-text opportunity discovery is implemented via `SearchInput` and governed by `SearchFilterController`:
+- **Keystroke Debounce**: 300ms delay (`SEARCH_DEBOUNCE_MS = 300`) buffers user typing events to prevent overwhelming the server with intermediate queries.
+- **Search Target Fields**: Matches `crm2_deals.name` and joined CRM-1 contact name (`crm1_contacts.first_name || ' ' || crm1_contacts.last_name`).
+- **Immediate Flush**: Pressing `Enter` immediately cancels pending timers and dispatches the query synchronously.
+- **Immediate Reset**: Pressing `Escape` or clicking the clear button (`×`) wipes the search term and invokes callbacks with empty string.
+
+### 14.2 Faceted Filter Dimensions & Sidebar
+Collection views offer faceted dimension filters matching the data dictionary:
+- **Deals Facets (`CRM2_DEALS_FACETS`)**:
+  - `stage`: Fixed 6 stages (`New`, `Qualified`, `Proposal`, `Negotiation`, `Won`, `Lost`).
+  - `is_orphan`: Boolean orphan indicator (`true` for unlinked deals, `false` for deals linked to contacts).
+  - `source_system`: Source ingest origin (`hubspot`, `salesforce`, `csv_import`, `manual`).
+- **Quotes Facets (`CRM2_QUOTES_FACETS`)**:
+  - `source_system`: Origin systems (`csv_import`, `manual`, `erp_sync`).
+- **Duplicate Review Facets (`CRM2_DUPLICATES_FACETS`)**:
+  - `entity`: (`deal`, `quote`).
+  - `status`: (`pending`, `resolved`, `ignored`).
+
+### 14.3 Active Filter Pill Tags & Removal Lifecycle
+Active filter criteria are rendered as pill tags via `ActiveFilterPills`:
+- **Format**: `[Dimension Label]: [Display Value]` (e.g. `Search: "Cloud Deal"`, `Pipeline Stage: Won`, `Orphan Status: Orphan (Unlinked)`).
+- **Individual Dismissal**: Clicking the `×` button on any pill tag removes only that specific criterion while preserving other active filters and resets pagination to page 1.
+- **Clear All Reset**: Clicking `Clear All` wipes all filter facets and search input simultaneously.
+
+### 14.4 Informative Empty Search/Filter State
+When search or filter criteria return zero matching records:
+- **Visual Presentation**: Styled container (`cs-empty-filter-state`) with search icon (`🔍`).
+- **Header**: "No matching deals found".
+- **Guidance Text**: "No opportunities match your current filter criteria. Try clearing or modifying your filters."
+- **Action Control**: Explicit "Reset All Filters" button (`data-action="clear-all-filters"`) providing direct recovery.
+
+### 14.5 Bidirectional URL Query State Synchronization
+State is bidirectionally synchronized with browser URL query parameters:
+- **Query Keys**: `search`, `stage`, `is_orphan`, `source_system`, `sort`, `order`, `page`, `pageSize`.
+- **Bookmark & Share**: Deep linking reproduces exact filter and sorting states.
+- **Pagination Boundary Invariant**: Any mutation to search input or faceted filters immediately resets `page` to 1 to prevent out-of-bounds pagination errors.
+
+### 14.6 Automated Verification Suites (CRM2-18)
+- `apps/crm/modules/crm-2/tests/web/search-filters.test.ts`: Automated test suite covering 300ms debouncing, Enter flush, cancel on unmount, faceted filter mutation, active pill tags, individual tag removal, Clear All action, empty filter state message, WAI-ARIA accessibility, and DOM rendering.
+- `apps/crm/modules/crm-2/web/tests/search-filters-ui.test.tsx`: Component tests for SearchInput, ActiveFilterPills, FacetedFilterSidebar, and FilterToolbar.
+
 

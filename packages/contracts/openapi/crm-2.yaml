@@ -64,6 +64,18 @@ paths:
           schema:
             $ref: '#/components/schemas/StageName'
           description: Filter deals by pipeline stage
+        - name: is_orphan
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter deals by orphan status (true for unlinked deals, false for linked deals)
+        - name: source_system
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter deals by original ingest source system (e.g. hubspot, salesforce, csv_import, manual)
         - name: sort
           in: query
           required: false
