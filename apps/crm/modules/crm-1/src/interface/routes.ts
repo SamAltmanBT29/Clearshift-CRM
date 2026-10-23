@@ -316,16 +316,16 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/contacts", {
       preHandler: endpointPreHandlers(fastify, "CONTACTS_CREATE")
     }, async (request, reply) => {
+      const body = parseRequest(CRM1ContactCreateSchema, request.body, 422);
       assertObjectMutationAllowed(
         request.user as Crm1TokenClaims,
         {
           resourceType: "contact",
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: false,
         },
         request
       );
-      const body = parseRequest(CRM1ContactCreateSchema, request.body, 422);
       if (body.companyId) {
         const [comp] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, body.companyId)).limit(1);
         if (comp) {
@@ -342,9 +342,10 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.patch("/contacts/:id", {
-      preHandler: endpointPreHandlers(fastify, "CONTACTS_UPDATE", true)
+      preHandler: endpointPreHandlers(fastify, "CONTACTS_UPDATE")
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
+      const body = parseRequest(CRM1ContactPatchSchema, request.body, 422);
       const [existing] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, id)).limit(1);
       if (!existing) {
         throw new AppError("NOT_FOUND", `Contact with ID '${id}' not found`, 404);
@@ -356,12 +357,11 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
           resourceId: id,
           resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
           resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: true,
         },
         request
       );
-      const body = parseRequest(CRM1ContactPatchSchema, request.body, 422);
       if (body.companyId) {
         const [comp] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, body.companyId)).limit(1);
         if (comp) {
@@ -414,25 +414,26 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/companies", {
       preHandler: endpointPreHandlers(fastify, "COMPANIES_CREATE")
     }, async (request, reply) => {
+      const body = parseRequest(CRM1CompanyCreateSchema, request.body, 422);
       assertObjectMutationAllowed(
         request.user as Crm1TokenClaims,
         {
           resourceType: "company",
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: false,
         },
         request
       );
-      const body = parseRequest(CRM1CompanyCreateSchema, request.body, 422);
       const row = await mutations.createCompany(body);
       reply.code(201);
       return serializeCompany(row);
     });
 
     fastify.patch("/companies/:id", {
-      preHandler: endpointPreHandlers(fastify, "COMPANIES_UPDATE", true)
+      preHandler: endpointPreHandlers(fastify, "COMPANIES_UPDATE")
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
+      const body = parseRequest(CRM1CompanyPatchSchema, request.body, 422);
       const [existing] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, id)).limit(1);
       if (!existing) {
         throw new AppError("NOT_FOUND", `Company with ID '${id}' not found`, 404);
@@ -444,12 +445,11 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
           resourceId: id,
           resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
           resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: true,
         },
         request
       );
-      const body = parseRequest(CRM1CompanyPatchSchema, request.body, 422);
       return serializeCompany(await mutations.updateCompany(id, body));
     });
 
@@ -526,16 +526,16 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/leads", {
       preHandler: endpointPreHandlers(fastify, "LEADS_CREATE")
     }, async (request, reply) => {
+      const body = parseRequest(CRM1LeadCreateSchema, request.body, 422);
       assertObjectMutationAllowed(
         request.user as Crm1TokenClaims,
         {
           resourceType: "lead",
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: false,
         },
         request
       );
-      const body = parseRequest(CRM1LeadCreateSchema, request.body, 422);
       if (body.contactId) {
         const [cnt] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, body.contactId)).limit(1);
         if (cnt) {
@@ -552,9 +552,10 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.patch("/leads/:id", {
-      preHandler: endpointPreHandlers(fastify, "LEADS_UPDATE", true)
+      preHandler: endpointPreHandlers(fastify, "LEADS_UPDATE")
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
+      const body = parseRequest(CRM1LeadPatchSchema, request.body, 422);
       const [existing] = await db.select().from(crm1Leads).where(eq(crm1Leads.id, id)).limit(1);
       if (!existing) {
         throw new AppError("NOT_FOUND", `Lead with ID '${id}' not found`, 404);
@@ -566,12 +567,11 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
           resourceId: id,
           resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
           resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: true,
         },
         request
       );
-      const body = parseRequest(CRM1LeadPatchSchema, request.body, 422);
       await mutations.updateLead(id, body);
       return readLeadProjection(db, id);
     });
@@ -579,16 +579,16 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.post("/imports", {
       preHandler: endpointPreHandlers(fastify, "IMPORTS_START")
     }, async (request, reply) => {
+      const body = parseRequest(CRM1ImportCreateSchema, request.body, 422);
       assertObjectMutationAllowed(
         request.user as Crm1TokenClaims,
         {
           resourceType: "import_batch",
-          payload: request.body as Record<string, unknown>,
+          payload: body,
           isUpdate: false,
         },
         request
       );
-      const body = parseRequest(CRM1ImportCreateSchema, request.body, 422);
       const key = parseRequest(
         z.string().trim().min(1).max(256),
         request.headers[CRM1_IDEMPOTENCY_HEADER.toLowerCase()],
