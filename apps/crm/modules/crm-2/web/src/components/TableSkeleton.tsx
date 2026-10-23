@@ -10,7 +10,7 @@ export interface TableSkeletonProps {
 
 /**
  * Animated Table Skeleton Loader Component
- * Conforms to ClearShift V1 Issue #130 (CRM2-17).
+ * Conforms to ClearShift V1 Issue #132 (CRM2-19).
  * Displays accessible table-structured shimmer placeholders during initial data fetching.
  * Serves as companion loading state alongside EmptyState for zero records.
  */

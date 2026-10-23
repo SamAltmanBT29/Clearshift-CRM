@@ -1,74 +1,86 @@
-import React, { useEffect, useState } from 'react';
-import { crm2Api } from '../api/crm-2.js';
+import React from 'react';
 import type { Stage, Deal } from '@clearshift/contracts';
-import { Card, Button, Spinner, Alert, Badge } from '@clearshift/ui';
+import { Card, Button, Badge } from '@clearshift/ui';
+import { TableSkeleton } from '../components/TableSkeleton.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { AccessDeniedView } from '../components/AccessDeniedView.js';
 
 export interface PipelineOverviewPageProps {
   onCreateDeal?: () => void;
   onFilterByStage?: (stageName: string) => void;
+  isLoading?: boolean;
+  isEmpty?: boolean;
+  error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
+  onRetry?: (() => void) | undefined;
+  httpStatus?: number;
+  isAccessDenied?: boolean;
+  requiredCapability?: string;
+  requiredRole?: string;
+  currentRole?: string;
+  stages?: Stage[];
+  deals?: Deal[];
 }
 
 export const PipelineOverviewPage: React.FC<PipelineOverviewPageProps> = ({
   onCreateDeal,
   onFilterByStage,
+  isLoading = false,
+  isEmpty = false,
+  error = null,
+  onRetry,
+  httpStatus,
+  isAccessDenied = false,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  stages = [],
+  deals = [],
 }) => {
-  const [stages, setStages] = useState<Stage[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError(null);
-        const [stagesRes, dealsRes] = await Promise.all([
-          crm2Api.getStages(),
-          crm2Api.getDeals({ page: 1, pageSize: 100 }),
-        ]);
-        if (mounted) {
-          setStages(stagesRes.items || []);
-          setDeals(dealsRes.items || []);
-        }
-      } catch (err: any) {
-        if (mounted) {
-          setError(err.message || 'Failed to load pipeline data');
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    loadData();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  if (loading) {
+  // 1. 403 Forbidden Access Denied State
+  if (isAccessDenied || httpStatus === 403) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-4">
-        <Spinner size="lg" />
-        <p className="text-slate-600 text-sm font-medium">Loading sales pipeline stages...</p>
-      </div>
+      <AccessDeniedView
+        requiredCapability={requiredCapability}
+        requiredRole={requiredRole}
+        currentRole={currentRole}
+        resourceName="Pipeline Stages Overview"
+      />
     );
   }
 
+  // 2. Error State
   if (error) {
     return (
-      <div className="p-6">
-        <Alert variant="error" title="Pipeline Error">
-          {error}
-        </Alert>
+      <div className="cs-error-container p-6">
+        <ErrorAlert error={error} onRetry={onRetry} />
       </div>
     );
   }
 
-  if (stages.length === 0) {
+  // 3. Loading State (Skeleton)
+  if (isLoading) {
     return (
-      <div className="p-12 text-center text-slate-500 bg-white rounded-lg border border-slate-200">
-        <p className="text-base font-semibold text-slate-800">No records found</p>
-        <p className="text-sm text-slate-500 mt-1">Pipeline stages directory is empty.</p>
+      <div className="p-6">
+        <TableSkeleton
+          rowCount={3}
+          columnCount={6}
+          ariaLabel="Loading sales pipeline stages..."
+        />
+      </div>
+    );
+  }
+
+  // 4. Empty State
+  if (isEmpty || stages.length === 0) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          title="No pipeline stages found"
+          description="There are no sales pipeline stages recorded in the system."
+          actionLabel={onCreateDeal ? '+ New Opportunity' : undefined}
+          onAction={onCreateDeal}
+        />
       </div>
     );
   }
@@ -144,4 +156,5 @@ export const PipelineOverviewPage: React.FC<PipelineOverviewPageProps> = ({
     </div>
   );
 };
+
 export default PipelineOverviewPage;

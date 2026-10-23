@@ -881,3 +881,300 @@
   padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
 }
 
+/* ==========================================================================
+   UI Presentation States (CRM2-19)
+   - TableSkeleton (Loading)
+   - EmptyState (Zero Data)
+   - ErrorAlert (Error Banner & Sanitized Messaging)
+   - AccessDeniedView (403 Forbidden)
+   ========================================================================== */
+
+/* Shimmer Animation */
+@keyframes cs-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.cs-skeleton-container {
+  width: 100%;
+}
+
+.cs-skeleton-card {
+  border: 1px solid var(--cs-border, #E2E8F0);
+  border-radius: var(--cs-r-lg, 8px);
+  background: #FFFFFF;
+  overflow: hidden;
+}
+
+.cs-skeleton-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cs-skeleton-line {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: cs-shimmer 1.5s infinite;
+}
+
+.cs-skeleton-header-cell {
+  height: 18px;
+  background: linear-gradient(90deg, #E2E8F0 25%, #CBD5E1 50%, #E2E8F0 75%);
+  background-size: 200% 100%;
+  animation: cs-shimmer 1.5s infinite;
+}
+
+.cs-skeleton-row {
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.cs-skeleton-row:last-child {
+  border-bottom: none;
+}
+
+/* Empty State */
+.cs-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-12, 48px) var(--cs-s-6, 24px);
+  text-align: center;
+  background: #FFFFFF;
+  border: 1px solid var(--cs-border, #E2E8F0);
+  border-radius: var(--cs-r-lg, 8px);
+}
+
+.cs-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cs-text, #1E293B);
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-empty-text {
+  font-size: 0.875rem;
+  color: #64748B;
+  max-width: 440px;
+  margin: 0 0 var(--cs-s-6, 24px) 0;
+  line-height: 1.5;
+}
+
+.cs-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-empty-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--cs-r-md, 6px);
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  transition: all 0.15s ease-in-out;
+}
+
+/* Error Banner */
+.cs-error-container {
+  width: 100%;
+}
+
+.cs-error-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--cs-s-4, 16px);
+  background-color: #FEF2F2;
+  border: 1px solid #F87171;
+  border-radius: var(--cs-r-lg, 8px);
+  gap: var(--cs-s-4, 16px);
+}
+
+.cs-error-banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cs-s-3, 12px);
+  flex: 1;
+}
+
+.cs-error-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cs-error-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cs-error-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #991B1B;
+  margin: 0;
+}
+
+.cs-error-message {
+  font-size: 0.875rem;
+  color: #B91C1C;
+  margin: 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.cs-error-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+  flex-shrink: 0;
+}
+
+.cs-error-retry-btn {
+  background-color: #DC2626;
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--cs-r-md, 6px);
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.cs-error-retry-btn:hover {
+  background-color: #B91C1C;
+}
+
+.cs-error-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: #991B1B;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+  border-radius: 4px;
+}
+
+.cs-error-dismiss-btn:hover {
+  background-color: #FEE2E2;
+}
+
+/* 403 Forbidden Access-Denied View */
+.cs-access-denied-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-12, 48px) var(--cs-s-6, 24px);
+  text-align: center;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--cs-r-lg, 8px);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.cs-access-denied-icon-wrapper {
+  margin-bottom: var(--cs-s-4, 16px);
+}
+
+.cs-access-denied-icon {
+  font-size: 2.5rem;
+}
+
+.cs-access-denied-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 480px;
+}
+
+.cs-access-denied-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #DC2626;
+  background-color: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: 9999px;
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-access-denied-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-access-denied-desc {
+  font-size: 0.9375rem;
+  color: #64748B;
+  line-height: 1.5;
+  margin: 0 0 var(--cs-s-6, 24px) 0;
+}
+
+.cs-access-denied-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: var(--cs-s-6, 24px);
+  text-align: left;
+}
+
+.cs-access-denied-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+}
+
+.cs-meta-label {
+  color: #64748B;
+  font-weight: 500;
+}
+
+.cs-meta-code {
+  font-family: var(--cs-font-mono, monospace);
+  font-size: 0.75rem;
+  background: #E2E8F0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #0F172A;
+}
+
+.cs-current-role {
+  color: #64748B;
+}
+
+.cs-access-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+
