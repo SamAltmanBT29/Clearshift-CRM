@@ -5,7 +5,7 @@ import {
   Button,
   Pagination,
   Alert,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type { CRM4List } from '@clearshift/contracts';
 import { getMarketingLists, Crm4ApiError } from '../api/crm-4.js';
 import { MarketingListsTable } from '../components/MarketingListsTable.js';

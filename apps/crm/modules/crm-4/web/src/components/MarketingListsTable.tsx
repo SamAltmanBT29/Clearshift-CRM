@@ -8,7 +8,7 @@ import {
   TableCell,
   Badge,
   Button,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type { CRM4List } from '@clearshift/contracts';
 
 export interface MarketingListsTableProps {
