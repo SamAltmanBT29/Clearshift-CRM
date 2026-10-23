@@ -1,6 +1,9 @@
 import React from 'react';
 import { DataTable } from '../components/DataTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
+import { TableSkeleton } from '../components/TableSkeleton.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { AccessDeniedView } from '../components/AccessDeniedView.js';
 import { IMPORTS_COLUMNS } from '../table/columns.js';
 import { CRM1_IMPORTS_FACETS } from '../table/facets.js';
 import type {
@@ -15,7 +18,15 @@ export interface ImportsOverviewPageProps {
   data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
-  error?: string | null;
+  error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
+  onRetry?: (() => void) | undefined;
+  httpStatus?: number;
+  isAccessDenied?: boolean;
+  requiredCapability?: string;
+  requiredRole?: string;
+  currentRole?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: (() => void) | undefined;
   sort?: TableSortState | undefined;
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
@@ -34,13 +45,21 @@ export interface ImportsOverviewPageProps {
 /**
  * Imports and Rejections Overview Page Shell
  * Integrates with /api/v1/crm-contacts/imports, FilterToolbar, and paginated DataTable.
- * Conforms to ClearShift V1 Issue #111 (CRM1-18).
+ * Conforms to ClearShift V1 Issue #111 (CRM1-18) and Issue #112 (CRM1-19).
  */
 export const ImportsOverviewPage: React.FC<ImportsOverviewPageProps> = ({
   data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  onRetry,
+  httpStatus,
+  isAccessDenied = false,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  emptyActionLabel = 'Upload Migration Batch',
+  onEmptyAction,
   sort,
   onSortChange,
   pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
@@ -62,6 +81,8 @@ export const ImportsOverviewPage: React.FC<ImportsOverviewPageProps> = ({
     Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
     activePills.length > 0;
 
+  const accessForbidden = isAccessDenied || httpStatus === 403;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -71,53 +92,63 @@ export const ImportsOverviewPage: React.FC<ImportsOverviewPageProps> = ({
         </p>
       </div>
 
-      {onSearchChange && onFilterChange && (
-        <FilterToolbar
-          search={search}
-          onSearchChange={onSearchChange}
-          facets={facets}
-          filters={filters}
-          onFilterChange={onFilterChange}
-          activePills={activePills}
-          onRemoveFilter={onRemoveFilter ?? (() => {})}
-          onClearAll={onClearAllFilters ?? (() => {})}
-          searchPlaceholder="Search imports by batch ID or filename..."
+      {accessForbidden ? (
+        <AccessDeniedView
+          requiredCapability={requiredCapability}
+          requiredRole={requiredRole}
+          currentRole={currentRole}
+          resourceName="Import Batches & Receipts"
         />
-      )}
+      ) : (
+        <>
+          {onSearchChange && onFilterChange && (
+            <FilterToolbar
+              search={search}
+              onSearchChange={onSearchChange}
+              facets={facets}
+              filters={filters}
+              onFilterChange={onFilterChange}
+              activePills={activePills}
+              onRemoveFilter={onRemoveFilter ?? (() => {})}
+              onClearAll={onClearAllFilters ?? (() => {})}
+              searchPlaceholder="Search imports by batch ID or filename..."
+            />
+          )}
 
-      {isLoading && (
-        <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading import history">
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <p className="cs-loading-text">Loading import history...</p>
-        </div>
-      )}
+          {error && (
+            <div className="cs-error-container" style={{ marginBottom: '16px' }}>
+              <ErrorAlert error={error} onRetry={onRetry} />
+            </div>
+          )}
 
-      {!isLoading && error && (
-        <div className="cs-error-card" role="alert">
-          <p className="cs-error-message">Error loading import batches: {error}</p>
-        </div>
-      )}
-
-      {!isLoading && !error && (
-        <DataTable
-          columns={IMPORTS_COLUMNS}
-          data={displayData}
-          loading={false}
-          emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
-          emptyDescription={
-            isFiltersActive
-              ? 'No import batches match your search and filter criteria. Try adjusting your search term or clearing filters.'
-              : 'No migration import batches recorded. Upload CSV or XLSX files via the migration wizard to begin.'
-          }
-          hasActiveFilters={isFiltersActive}
-          onClearFilters={onClearAllFilters}
-          sort={sort}
-          onSortChange={onSortChange}
-          pagination={pagination}
-          onPageChange={onPageChange}
-        />
+          {isLoading ? (
+            <TableSkeleton
+              rowCount={5}
+              columnCount={IMPORTS_COLUMNS.length}
+              ariaLabel="Loading import batches from server..."
+            />
+          ) : !error && (
+            <DataTable
+              columns={IMPORTS_COLUMNS}
+              data={displayData}
+              loading={false}
+              emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
+              emptyDescription={
+                isFiltersActive
+                  ? 'No import batches match your search and filter criteria. Try adjusting your search term or clearing filters.'
+                  : 'No migration import batches recorded. Upload CSV or XLSX files via the migration wizard to begin.'
+              }
+              emptyActionLabel={emptyActionLabel}
+              onEmptyAction={onEmptyAction}
+              hasActiveFilters={isFiltersActive}
+              onClearFilters={onClearAllFilters}
+              sort={sort}
+              onSortChange={onSortChange}
+              pagination={pagination}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
       )}
     </div>
   );
