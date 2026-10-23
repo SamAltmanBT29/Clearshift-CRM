@@ -6,22 +6,44 @@ export const CRM3_API_PREFIX = "/api/v1/crm-tickets";
 // 1. Enums & Statuses (FR-CRM3-03)
 // ---------------------------------------------------------------------------
 
-export const CRM3TicketStatusSchema = z.enum([
+export const CRM3_TICKET_STATUSES = [
   "New",
   "Open",
   "Waiting",
   "Solved",
   "Closed"
-]);
+] as const;
+
+export const CRM3TicketStatusSchema = z.enum(CRM3_TICKET_STATUSES);
 export type CRM3TicketStatus = z.infer<typeof CRM3TicketStatusSchema>;
 
-export const CRM3TicketPrioritySchema = z.enum([
+export const CRM3_TICKET_PRIORITIES = [
   "Low",
   "Normal",
   "High",
   "Urgent"
-]);
+] as const;
+
+export const CRM3TicketPrioritySchema = z.enum(CRM3_TICKET_PRIORITIES);
 export type CRM3TicketPriority = z.infer<typeof CRM3TicketPrioritySchema>;
+
+export function assertValidTicketStatus(status: string): asserts status is CRM3TicketStatus {
+  const result = CRM3TicketStatusSchema.safeParse(status);
+  if (!result.success) {
+    throw new Error(
+      `Domain Invariant Violation: Ticket status '${status}' is not permitted. Status set is exactly: ${CRM3_TICKET_STATUSES.join(", ")}`
+    );
+  }
+}
+
+export function assertValidTicketPriority(priority: string): asserts priority is CRM3TicketPriority {
+  const result = CRM3TicketPrioritySchema.safeParse(priority);
+  if (!result.success) {
+    throw new Error(
+      `Domain Invariant Violation: Ticket priority '${priority}' is not permitted. Priority set is exactly: ${CRM3_TICKET_PRIORITIES.join(", ")}`
+    );
+  }
+}
 
 export const CRM3EntityTypeSchema = z.enum(["ticket", "note"]);
 export type CRM3EntityType = z.infer<typeof CRM3EntityTypeSchema>;
