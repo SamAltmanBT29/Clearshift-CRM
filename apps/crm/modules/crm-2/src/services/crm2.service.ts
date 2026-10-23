@@ -335,12 +335,20 @@ export class Crm2Service {
 
   public async getDeals(query: DealsQueryInput = {}): Promise<DealsListResponse> {
     const parsedQuery = DealsQuerySchema.parse(query);
-    const { page, pageSize, search, stage } = parsedQuery;
+    const { page, pageSize, search, stage, sort, order, is_orphan, source_system } = parsedQuery;
 
     let filtered = [...this.deals];
 
     if (stage) {
       filtered = filtered.filter((d) => d.stage_name === stage);
+    }
+
+    if (is_orphan !== undefined) {
+      filtered = filtered.filter((d) => d.is_orphan === is_orphan);
+    }
+
+    if (source_system && source_system.trim() !== '') {
+      filtered = filtered.filter((d) => d.source_system === source_system);
     }
 
     if (search && search.trim() !== '') {
@@ -352,8 +360,52 @@ export class Crm2Service {
       });
     }
 
-    // Deterministic sort: created_at desc, id asc
+    // Deterministic sort: column sort or default created_at desc, id asc
     filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sort) {
+        switch (sort) {
+          case 'name':
+            comparison = a.name.localeCompare(b.name);
+            break;
+          case 'value':
+            comparison = Number.parseFloat(a.value) - Number.parseFloat(b.value);
+            break;
+          case 'currency':
+            comparison = a.currency.localeCompare(b.currency);
+            break;
+          case 'stage_name':
+          case 'stage':
+            comparison = a.stage_name.localeCompare(b.stage_name);
+            break;
+          case 'close_date':
+            comparison = (a.close_date || '').localeCompare(b.close_date || '');
+            break;
+          case 'contact_name':
+            comparison = (a.contact_name || '').localeCompare(b.contact_name || '');
+            break;
+          case 'source_system':
+            comparison = (a.source_system || '').localeCompare(b.source_system || '');
+            break;
+          case 'created_at':
+            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            break;
+          case 'updated_at':
+            comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+            break;
+          case 'id':
+            comparison = a.id.localeCompare(b.id);
+            break;
+          default:
+            comparison = 0;
+        }
+        if (order === 'desc') {
+          comparison = -comparison;
+        }
+      }
+
+      if (comparison !== 0) return comparison;
+
       const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       if (timeDiff !== 0) return timeDiff;
       return a.id.localeCompare(b.id);
@@ -413,6 +465,9 @@ export class Crm2Service {
       name: validated.name.trim(),
       contact_id: validated.contact_id ?? null,
       contact_name: contactName,
+      contact_email: validated.contact_email ?? null,
+      contact_phone: validated.contact_phone ?? null,
+      probability: validated.probability !== undefined ? validated.probability : null,
       value: validated.value,
       currency: validated.currency,
       stage_id: stageId,
@@ -497,7 +552,7 @@ export class Crm2Service {
 
   public async getQuotes(query: QuotesQueryInput = {}): Promise<QuotesListResponse> {
     const parsedQuery = QuotesQuerySchema.parse(query);
-    const { page, pageSize, deal_id } = parsedQuery;
+    const { page, pageSize, deal_id, sort, order } = parsedQuery;
 
     let filtered = [...this.quotes];
 
@@ -505,8 +560,43 @@ export class Crm2Service {
       filtered = filtered.filter((q) => q.deal_id === deal_id);
     }
 
-    // Deterministic sort: created_at desc, id asc
+    // Deterministic sort: column sort or default created_at desc, id asc
     filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sort) {
+        switch (sort) {
+          case 'quote_number':
+            comparison = a.quote_number.localeCompare(b.quote_number);
+            break;
+          case 'amount':
+            comparison = Number.parseFloat(a.amount) - Number.parseFloat(b.amount);
+            break;
+          case 'currency':
+            comparison = a.currency.localeCompare(b.currency);
+            break;
+          case 'quote_date':
+          case 'date':
+            comparison = (a.date || '').localeCompare(b.date || '');
+            break;
+          case 'source_system':
+            comparison = (a.source_system || '').localeCompare(b.source_system || '');
+            break;
+          case 'created_at':
+            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            break;
+          case 'id':
+            comparison = a.id.localeCompare(b.id);
+            break;
+          default:
+            comparison = 0;
+        }
+        if (order === 'desc') {
+          comparison = -comparison;
+        }
+      }
+
+      if (comparison !== 0) return comparison;
+
       const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       if (timeDiff !== 0) return timeDiff;
       return a.id.localeCompare(b.id);

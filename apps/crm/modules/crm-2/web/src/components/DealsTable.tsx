@@ -10,14 +10,36 @@ import {
   Button,
 } from '@clearshift/ui';
 import type { Deal } from '@clearshift/contracts';
+import type { TableSortState } from '../table/types.js';
+import { TableSkeleton } from './TableSkeleton.js';
+import { EmptyState } from './EmptyState.js';
+import { ErrorAlert } from './ErrorAlert.js';
+import { AccessDeniedView } from './AccessDeniedView.js';
 
 export interface DealsTableProps {
   deals: Deal[];
   loading?: boolean | undefined;
+  loadingRowCount?: number | undefined;
+  error?: string | Error | { code?: string | undefined; message?: string | undefined; details?: unknown } | null | undefined;
+  onRetry?: (() => void) | undefined;
+  isAccessDenied?: boolean | undefined;
+  httpStatus?: number | undefined;
+  requiredCapability?: string | undefined;
+  requiredRole?: string | undefined;
+  currentRole?: string | undefined;
+  resourceName?: string | undefined;
+  onAccessBack?: (() => void) | undefined;
   emptyTitle?: string | undefined;
   emptyDescription?: string | undefined;
+  emptyActionLabel?: string | undefined;
+  onEmptyAction?: (() => void) | undefined;
+  hasActiveFilters?: boolean | undefined;
+  onClearFilters?: (() => void) | undefined;
   onSelectDeal?: ((deal: Deal) => void) | undefined;
   onViewQuotes?: ((deal: Deal) => void) | undefined;
+  sort?: TableSortState | undefined;
+  onSortChange?: ((columnKey: string) => void) | undefined;
+  className?: string | undefined;
 }
 
 /**
@@ -62,38 +84,136 @@ function getStageBadgeVariant(stageName: string): 'stage' | 'success' | 'danger'
 export function DealsTable({
   deals,
   loading = false,
+  loadingRowCount = 5,
+  error = null,
+  onRetry,
+  isAccessDenied = false,
+  httpStatus,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  resourceName = 'Deals & Pipeline',
+  onAccessBack,
   emptyTitle = 'No deals found',
   emptyDescription = 'No sales opportunities are currently recorded in the system.',
+  emptyActionLabel,
+  onEmptyAction,
+  hasActiveFilters = false,
+  onClearFilters,
   onSelectDeal,
   onViewQuotes,
+  sort,
+  onSortChange,
+  className = '',
 }: DealsTableProps) {
-  if (loading) {
+  if (isAccessDenied || httpStatus === 403) {
     return (
-      <div className="p-12 text-center" role="status" aria-label="Loading deals table">
-        <div className="animate-spin inline-block w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-3" />
-        <p className="text-sm font-medium text-slate-600">Loading opportunity data...</p>
+      <AccessDeniedView
+        requiredCapability={requiredCapability}
+        requiredRole={requiredRole}
+        currentRole={currentRole}
+        resourceName={resourceName}
+        onBack={onAccessBack}
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="cs-table-card cs-table-error-wrapper" role="region" aria-label="Table Error">
+        <ErrorAlert error={error} onRetry={onRetry} />
       </div>
     );
   }
 
-  if (deals.length === 0) {
+  if (loading) {
     return (
-      <div className="p-12 text-center" role="status">
-        <h3 className="text-base font-semibold text-slate-900">{emptyTitle}</h3>
-        <p className="text-sm text-slate-500 mt-1">{emptyDescription}</p>
+      <TableSkeleton
+        rowCount={loadingRowCount}
+        columnCount={7}
+        ariaLabel="Loading opportunity records..."
+      />
+    );
+  }
+
+  if (deals.length === 0) {
+    if (hasActiveFilters) {
+      return (
+        <div className="cs-table-card" role="status">
+          <EmptyState
+            className="cs-empty-filter-state"
+            icon="🔍"
+            title={emptyTitle === 'No deals found' ? 'No matching records found' : emptyTitle}
+            description={
+              emptyDescription === 'No sales opportunities are currently recorded in the system.'
+                ? 'No deals matched your search and filter criteria. Try adjusting your search term or clearing filters.'
+                : emptyDescription
+            }
+            actionLabel="Reset All Filters"
+            onAction={onClearFilters}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="cs-table-card" role="status">
+        <EmptyState
+          title={emptyTitle}
+          description={emptyDescription}
+          actionLabel={emptyActionLabel}
+          onAction={onEmptyAction}
+        />
       </div>
     );
   }
+
+  const renderSortableHead = (columnKey: string, label: string, className: string) => {
+    const isSorted = sort?.columnKey === columnKey;
+    const ariaSort = isSorted
+      ? sort.direction === 'asc'
+        ? 'ascending'
+        : 'descending'
+      : onSortChange
+      ? 'none'
+      : undefined;
+
+    return (
+      <TableHead className={className} aria-sort={ariaSort}>
+        {onSortChange ? (
+          <button
+            type="button"
+            className="cs-th-sort-btn flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none focus:underline"
+            onClick={() => onSortChange(columnKey)}
+            aria-label={`Sort by ${label}, currently ${
+              isSorted
+                ? sort.direction === 'asc'
+                  ? 'ascending'
+                  : 'descending'
+                : 'unsorted'
+            }`}
+          >
+            <span>{label}</span>
+            <span className="text-xs" aria-hidden="true">
+              {isSorted ? (sort.direction === 'asc' ? '▲' : '▼') : '↕'}
+            </span>
+          </button>
+        ) : (
+          <span>{label}</span>
+        )}
+      </TableHead>
+    );
+  };
 
   return (
     <Table aria-label="CRM Deals List">
       <TableHeader>
         <TableRow>
-          <TableHead className="w-1/4">Deal Name</TableHead>
-          <TableHead className="w-1/5">Contact / Orphan Status</TableHead>
-          <TableHead className="w-1/6">Value</TableHead>
-          <TableHead className="w-1/6">Pipeline Stage</TableHead>
-          <TableHead className="w-1/6">Close Date</TableHead>
+          {renderSortableHead('name', 'Deal Name', 'w-1/4')}
+          {renderSortableHead('contact_name', 'Contact / Orphan Status', 'w-1/5')}
+          {renderSortableHead('value', 'Value', 'w-1/6')}
+          {renderSortableHead('stage_name', 'Pipeline Stage', 'w-1/6')}
+          {renderSortableHead('close_date', 'Close Date', 'w-1/6')}
           <TableHead className="w-24 text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>

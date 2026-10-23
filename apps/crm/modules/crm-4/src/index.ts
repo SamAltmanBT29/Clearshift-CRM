@@ -15,6 +15,7 @@ export * from './app.js';
 export * from './public.js';
 export * from './domain/qa-specs.js';
 export * from './kit/profiler.js';
+export * from './kit/cleaner.js';
 export * from '../db/schema.js';
 
 export interface ModuleDefinition {
