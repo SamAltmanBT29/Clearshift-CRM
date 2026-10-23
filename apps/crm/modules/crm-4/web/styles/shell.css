@@ -1,5 +1,5 @@
 /* CRM-4 Marketing Lists and Campaign History Shell Styles */
-/* Consumes shared design system tokens from @clearshift/ui */
+/* Consumes shared design system tokens from @cs/ui */
 
 .cs-crm4-shell {
   display: flex;
