@@ -485,3 +485,79 @@ export const Crm2ErrorEnvelopeSchema = z.object({
 });
 export type Crm2ErrorEnvelope = z.infer<typeof Crm2ErrorEnvelopeSchema>;
 
+// ---------------------------------------------------------------------------
+// CRM-2 Chunked Batch Ingestion & Idempotent Retry Contracts (CRM2-13)
+// ---------------------------------------------------------------------------
+
+export const CRM2_DEFAULT_CHUNK_SIZE = 500;
+export const CRM2_DEFAULT_FAILURE_THRESHOLD = 0.10;
+export const CRM2_DEFAULT_MIN_ATTEMPTED_ROWS = 50;
+export const CRM2_DEFAULT_MAX_RETRIES = 3;
+
+export const Crm2BatchExecutionStatusSchema = z.enum([
+  'COMPLETED',
+  'STOPPED_EXCESSIVE_FAILURES',
+  'FAILED',
+]);
+export type Crm2BatchExecutionStatus = z.infer<typeof Crm2BatchExecutionStatusSchema>;
+
+export const Crm2BatchRecordInputSchema = z.object({
+  sourceRow: z.number().int({ message: 'sourceRow must be an integer' }).min(1),
+  idempotencyKey: z.string().min(1, 'idempotencyKey is required').max(128),
+  data: z.record(z.string(), z.unknown()),
+});
+export type Crm2BatchRecordInput = z.infer<typeof Crm2BatchRecordInputSchema>;
+
+export const Crm2ExecuteBatchLoadInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']).default('crm-2'),
+  step: z.enum(['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']).default('load'),
+  chunkSize: z.number().int().min(1).max(1000).default(500),
+  maxRetries: z.number().int().min(0).max(5).default(3),
+  failureThreshold: z.number().min(0).max(1).default(0.10),
+  minAttemptedRows: z.number().int().min(1).default(50),
+  records: z.array(Crm2BatchRecordInputSchema).min(1, 'records must not be empty'),
+});
+export type Crm2ExecuteBatchLoadInput = z.input<typeof Crm2ExecuteBatchLoadInputSchema>;
+export type Crm2ExecuteBatchLoadOutput = z.infer<typeof Crm2ExecuteBatchLoadInputSchema>;
+
+export const Crm2BatchReceiptSchema = z.object({
+  batchId: z.string(),
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  targetId: z.string(),
+  kind: z.enum(['created', 'linked']).default('created'),
+  committedAt: z.coerce.date(),
+});
+export type Crm2BatchReceipt = z.infer<typeof Crm2BatchReceiptSchema>;
+
+export const Crm2FailedRowSchema = z.object({
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  errorCode: z.string(),
+  errorMessage: z.string(),
+  retryAttempts: z.number().int(),
+  payloadHash: z.string().optional(),
+});
+export type Crm2FailedRow = z.infer<typeof Crm2FailedRowSchema>;
+
+export const Crm2BatchExecutionReportSchema = z.object({
+  batchId: z.string(),
+  module: z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']),
+  step: z.enum(['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']),
+  status: Crm2BatchExecutionStatusSchema,
+  totalRecords: z.number().int().nonnegative(),
+  attemptedRecords: z.number().int().nonnegative(),
+  committedRecords: z.number().int().nonnegative(),
+  failedRecords: z.number().int().nonnegative(),
+  chunksProcessed: z.number().int().nonnegative(),
+  chunkSize: z.number().int(),
+  failureRate: z.number().min(0).max(1),
+  haltReason: z.string().nullable().optional(),
+  committedReceipts: z.array(Crm2BatchReceiptSchema),
+  failedRows: z.array(Crm2FailedRowSchema),
+  executedAt: z.coerce.date(),
+});
+export type Crm2BatchExecutionReport = z.infer<typeof Crm2BatchExecutionReportSchema>;
+
+

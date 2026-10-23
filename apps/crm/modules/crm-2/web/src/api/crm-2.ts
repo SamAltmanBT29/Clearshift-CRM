@@ -11,11 +11,15 @@ import {
   type UpdateDealInput,
   type CreateQuoteInput,
   type UpdateQuoteInput,
+  type Crm2ExecuteBatchLoadInput,
+  type Crm2BatchExecutionReport,
+  type Crm2ImportReceipt,
   DealsListResponseSchema,
   StagesListResponseSchema,
   DealSchema,
   QuoteSchema,
   QuotesListResponseSchema,
+  Crm2BatchExecutionReportSchema,
 } from '@clearshift/contracts';
 
 export class Crm2ApiError extends Error {
@@ -230,4 +234,38 @@ export async function updateQuote(
   });
 
   return QuoteSchema.parse(data);
+}
+
+export async function executeBatchLoad(
+  input: Crm2ExecuteBatchLoadInput,
+  options?: RequestOptions
+): Promise<Crm2BatchExecutionReport> {
+  const data = await request<unknown>(`${API_BASE}/batches/execute-load`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    ...options,
+  });
+
+  return Crm2BatchExecutionReportSchema.parse(data);
+}
+
+export async function getBatchReport(
+  batchId: string,
+  options?: RequestOptions
+): Promise<Crm2BatchExecutionReport> {
+  const data = await request<unknown>(`${API_BASE}/batches/${batchId}/report`, {
+    method: 'GET',
+    ...options,
+  });
+
+  return Crm2BatchExecutionReportSchema.parse(data);
+}
+
+export async function getImportReceipts(
+  options?: RequestOptions
+): Promise<{ items: Crm2ImportReceipt[] }> {
+  return request<{ items: Crm2ImportReceipt[] }>(`${API_BASE}/import/receipts`, {
+    method: 'GET',
+    ...options,
+  });
 }

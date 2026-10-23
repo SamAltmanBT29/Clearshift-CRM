@@ -144,3 +144,26 @@ Stores row-level rejections with machine reason codes and privacy-safe diagnosti
 | `reason_code` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(reason_code)) > 0)` | Machine-readable rejection code (e.g. `NEGATIVE_VALUE`). | `NEGATIVE_VALUE` |
 | `message` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(message)) > 0)` | Privacy-safe, non-PII explanation of rejection. | `Deal monetary value must be a non-negative decimal quantity` |
 | `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | UTC Timestamp | Audit creation timestamp. | `2026-10-23T08:01:10.000Z` |
+
+---
+
+## 3. Chunked Batch Ingestion & Partial-Load Stop Behavior (CRM2-13)
+
+### 3.1 500-Row Chunked Processing
+All load operations slice large input datasets into sequential chunks of 500 records (`CRM2_DEFAULT_CHUNK_SIZE = 500`). This bounds PostgreSQL transaction sizes, memory allocation, and connection lock retention.
+
+### 3.2 Idempotent Retry with Bounded Exponential Backoff
+Transient worker or infrastructure failures trigger bounded exponential backoff retries:
+$$\text{delay} = \text{baseBackoffMs} \times 2^{\text{attempt}}$$
+* **Maximum Retries:** Default 3 attempts (`CRM2_DEFAULT_MAX_RETRIES = 3`).
+* **Idempotency Protection:** The unique `idempotencyKey` passed per source row is strictly preserved across all retry attempts and never mutated or corrupted.
+
+### 3.3 10% Partial-Load Stop Policy (`STOPPED_EXCESSIVE_FAILURES`)
+To prevent cascading data corruption:
+$$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemptedRows}}$$
+* When `cumulativeAttemptedRows >= 50` and `failureRate > 0.10` (10%):
+  1. Batch execution ceases immediately.
+  2. Batch status transitions to `STOPPED_EXCESSIVE_FAILURES`.
+  3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
+  4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
+

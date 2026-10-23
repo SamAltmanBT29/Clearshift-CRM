@@ -7,4 +7,5 @@ export * from './pages/DealsListPage.js';
 export * from './pages/DealDetailPage.js';
 export * from './pages/DealFormPage.js';
 export * from './pages/QuoteFormPage.js';
+export * from './pages/BatchLoaderPage.js';
 export * from './App.js';

@@ -112,3 +112,13 @@ export class DuplicateRecordError extends AppError {
     this.name = 'DuplicateRecordError';
   }
 }
+
+export class BatchLoadHaltedError extends AppError {
+  constructor(
+    message = 'Batch execution stopped immediately: row failures exceeded the 10% threshold.',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('STOPPED_EXCESSIVE_FAILURES', message, 422, details);
+    this.name = 'BatchLoadHaltedError';
+  }
+}

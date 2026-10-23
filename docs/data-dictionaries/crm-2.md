@@ -275,6 +275,10 @@ Base route prefix: `/api/v1/crm-deals`
 | `PATCH` | `/quotes/:id` | `editor`, `migration_runner`, `admin` | `200 OK` | Update quote. Enforces quote number uniqueness on alteration. |
 | `GET` | `/deals/:id/summary` | `viewer`, `editor`, `analyst`, `admin` | `200 OK` | Read-model projection: derived quote totals and remaining value. |
 | `GET` | `/pipeline/summary` | `viewer`, `editor`, `analyst`, `admin` | `200 OK` | Read-model projection: pipeline stage counts, aggregate value, and orphan stats. |
+| `POST` | `/import` / `/import/row` | `migration_runner`, `admin` | `201 Created` / `200 OK` | Ingest migration batch rows with idempotency guarantees (KIT-08 Target Adapter). |
+| `GET` | `/import/receipts` | `viewer`, `analyst`, `admin` | `200 OK` | List durable migration import receipts. |
+| `POST` | `/batches/execute-load` | `migration_runner`, `admin` | `200 OK` | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold. |
+| `GET` | `/batches/:batchId/report` | `viewer`, `analyst`, `admin` | `200 OK` | Retrieve batch execution report by batchId. |
 
 ### 9.2 Bounded Paging & Determinism Constraints
 
@@ -293,3 +297,32 @@ Verification suites for CRM-2 API and Contracts:
 - `apps/crm/modules/crm-2/tests/api/crm2-routes.test.ts`: 23 integration tests for routes.
 - `packages/contracts/tests/crm-2.test.ts`: 9 contract tests for OpenAPI 3.1 schema and Zod validation constraints.
 - `apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts`: 18 QA Gate G1 data dictionary conformance tests.
+
+---
+
+## 11. Chunked Batch Ingestion & Partial-Load Stop Behavior (CRM2-13)
+
+### 11.1 Chunked Processing (500 Rows)
+All load operations slice large input datasets into sequential chunks of 500 records (`CRM2_DEFAULT_CHUNK_SIZE = 500`). This bounds database transaction sizes, memory allocation, and lock retention times.
+
+### 11.2 Idempotent Retry with Exponential Backoff
+Transient worker or network failures trigger bounded exponential backoff retries:
+$$\text{delay} = \text{baseBackoffMs} \times 2^{\text{attempt}}$$
+* **Maximum Retries:** Default 3 attempts (`CRM2_DEFAULT_MAX_RETRIES = 3`).
+* **Idempotency Protection:** The unique `idempotencyKey` passed per source row is strictly preserved across all retry attempts and never mutated.
+
+### 11.3 10% Partial-Load Stop Policy (`STOPPED_EXCESSIVE_FAILURES`)
+To prevent cascading data corruption or runaway failure cascades:
+$$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemptedRows}}$$
+* When `cumulativeAttemptedRows >= 50` and `failureRate > 0.10` (10%):
+  1. Batch execution ceases immediately.
+  2. Batch status transitions to `STOPPED_EXCESSIVE_FAILURES`.
+  3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
+  4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
+
+### 11.4 Automated Verification Suites (CRM2-13)
+- `apps/crm/modules/crm-2/tests/domain/batch-loader.test.ts`: Unit tests verifying 500-row chunking, exponential backoff delays, idempotency key conservation across retries, and immediate halt upon exceeding 10% failures after 50 attempts.
+- `apps/crm/modules/crm-2/tests/api/batch-loader.test.ts`: Integration tests for `POST /api/v1/crm-deals/batches/execute-load`, RBAC enforcement (401/403/200), input validation (400), and durable receipts verification.
+- `apps/crm/modules/crm-2/tests/migration/target-adapter.test.ts`: In-process target adapter port tests asserting atomic deal/quote commits, duplicate idempotent replay, and transient 503 error handling.
+- `apps/crm/modules/crm-2/web/tests/batch-loader-ui.test.tsx`: UI component tests asserting chunk metrics display, halt alerts, and receipt durability.
+
