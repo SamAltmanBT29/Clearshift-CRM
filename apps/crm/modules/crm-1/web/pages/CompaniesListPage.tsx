@@ -1,31 +1,34 @@
 import React from 'react';
-import type { CRM1Company } from '@clearshift/contracts/crm-1';
+import { DataTable } from '../components/DataTable.js';
+import { COMPANIES_COLUMNS } from '../table/columns.js';
+import type { TableSortState, TablePaginationState } from '../table/types.js';
 
 export interface CompaniesListPageProps {
-  companies?: readonly CRM1Company[];
-  total?: number;
-  page?: number;
-  pageSize?: number;
+  data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | null;
-  onPageChange?: (page: number) => void;
+  sort?: TableSortState | undefined;
+  onSortChange?: ((columnKey: string) => void) | undefined;
+  pagination?: TablePaginationState | undefined;
+  onPageChange?: ((newPage: number) => void) | undefined;
 }
 
+/**
+ * Companies List Page Shell
+ * Integrates with /api/v1/crm-contacts/companies and paginated DataTable
+ */
 export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
-  companies,
-  total,
-  page = 1,
-  pageSize = 25,
+  data = [],
   isLoading = false,
-  isEmpty = companies === undefined || companies.length === 0,
+  isEmpty = false,
   error = null,
+  sort,
+  onSortChange,
+  pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
   onPageChange,
 }) => {
-  const rows = companies ?? [];
-  const resultCount = total ?? rows.length;
-  const pageCount = Math.max(1, Math.ceil(resultCount / pageSize));
-  const empty = companies === undefined ? isEmpty : companies.length === 0;
+  const displayData = isEmpty ? [] : data;
 
   return (
     <div className="cs-page-container">
@@ -38,8 +41,9 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
 
       {isLoading && (
         <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading companies list">
-          <div className="cs-skeleton-line" style={{ width: '100%' }} />
-          <div className="cs-skeleton-line" style={{ width: '90%' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
           <p className="cs-loading-text">Loading companies from server...</p>
         </div>
       )}
@@ -50,59 +54,18 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
         </div>
       )}
 
-      {!isLoading && !error && empty && (
-        <div className="cs-empty-state" role="status">
-          <h3 className="cs-empty-title">No records found</h3>
-          <p className="cs-empty-text">
-            No company records currently registered. Register an account or import accounts from source files.
-          </p>
-        </div>
-      )}
-
-      {!isLoading && !error && !empty && (
-        <section id="companies-container" aria-label="Companies">
-          <p className="cs-result-count">{resultCount} companies</p>
-          <div className="cs-table-scroll">
-            <table className="cs-data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Company</th>
-                  <th scope="col">Tax number</th>
-                  <th scope="col">Email</th>
-                  <th scope="col">Phone</th>
-                  <th scope="col">Address</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((company) => (
-                  <tr key={company.id}>
-                    <th scope="row">{company.name}</th>
-                    <td>{company.taxNumber ?? 'Not provided'}</td>
-                    <td>{company.email ?? 'Not provided'}</td>
-                    <td>{company.phone ?? 'Not provided'}</td>
-                    <td>{company.address ?? 'Not provided'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {onPageChange && (
-            <nav className="cs-pagination" aria-label="Company list pages">
-              <button type="button" className="cs-action-button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-                Previous
-              </button>
-              <span>Page {page} of {pageCount}</span>
-              <button
-                type="button"
-                className="cs-action-button"
-                disabled={page >= pageCount}
-                onClick={() => onPageChange(page + 1)}
-              >
-                Next
-              </button>
-            </nav>
-          )}
-        </section>
+      {!isLoading && !error && (
+        <DataTable
+          columns={COMPANIES_COLUMNS}
+          data={displayData}
+          loading={false}
+          emptyTitle="No records found"
+          emptyDescription="No company records currently registered. Register an account or import accounts from source files."
+          sort={sort}
+          onSortChange={onSortChange}
+          pagination={pagination}
+          onPageChange={onPageChange}
+        />
       )}
     </div>
   );

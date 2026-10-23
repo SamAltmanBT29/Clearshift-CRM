@@ -288,7 +288,55 @@ All domain mutations, migration executions, and privileged actions produce appen
 
 ---
 
-## 8. Exact Duplicate Key Policies (Deterministic Only)
+## 8. Frontend Module Routes, Navigation & Layout Shell (CRM1-16)
+
+### Module Route Registration
+CRM-1 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-1/contacts` | `crm1-contacts` | Contacts Directory | Contacts | `module.read` |
+| `/crm-1/companies` | `crm1-companies` | Companies Directory | Companies | `module.read` |
+| `/crm-1/leads` | `crm1-leads` | Leads Pipeline | Leads | `module.read` |
+| `/crm-1/duplicates` | `crm1-duplicates` | Exact Duplicate Candidate Review | Duplicate Review | `module.read` |
+| `/crm-1/imports` | `crm1-imports` | Import Batches & Receipts | Imports | `module.read` |
+
+### Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `module.read` capability. Users lacking this capability are redirected to `/access-denied?required=module.read`.
+
+### Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-1 - <View Title>`.
+
+---
+
+## 9. Main Paginated Data Table Specification (CRM1-17)
+
+### Column Schemas & Alignment
+The main CRM-1 collection screens implement bounded paginated tables with stable column keys matching the database schema:
+
+- **Contacts (`CONTACTS_COLUMNS`)**: `id`, `firstName`, `lastName`, `email`, `phone`, `companyId`, `leadStatus`, `goldenId`, `consentStatus`, `unsubscribed`, `createdAt`
+- **Companies (`COMPANIES_COLUMNS`)**: `id`, `name`, `taxNumber`, `email`, `phone`, `address`, `sourceSystem`, `sourceId`, `createdAt`
+- **Leads (`LEADS_COLUMNS`)**: `id`, `contactId`, `status`, `sourceSystem`, `sourceId`, `createdAt`
+- **Duplicates (`DUPLICATES_COLUMNS`)**: `id`, `entity`, `matchKey`, `matchType`, `existingId`, `incomingId`, `status`, `detectedAt`
+- **Imports (`IMPORTS_COLUMNS`)**: `id`, `sourceSystem`, `status`, `loadedCount`, `rejectedCount`, `createdAt`, `completedAt`
+
+### Bounded Pagination & Server-Side Query Binding
+- **Default Page Size**: 25 records (configurable up to `MAX_PAGE_SIZE = 100`).
+- **Query Parameter Serialization**: Encodes `page`, `pageSize`, `limit`, `sort`, `order` into API query parameters.
+- **Boundaries**: Page clamping prevents out-of-bounds navigation and DOM degradation.
+
+### Sorting Controls & ARIA Landmarks
+- **Header Sorting**: Clicking sortable column headers predictably toggles between `asc` and `desc`, resetting the active page to 1.
+- **WAI-ARIA Conformance**: Accessible `<table role="table">`, `<th aria-sort="...">`, sort toggle `<button aria-label="Sort by ...">`, and pagination toolbar (`<nav aria-label="Table Pagination">`).
+
+---
+
+## 10. Exact Duplicate Key Policies (Deterministic Only)
 
 As mandated by CRM SDS v2.0 and Gate G1 constraints, duplicate evaluation is **strictly deterministic**:
 - **Contact Exact Email Key**: Normalized email (`normalizeEmail(email)`: lowercase, trimmed, whitespace stripped).
@@ -299,7 +347,7 @@ As mandated by CRM SDS v2.0 and Gate G1 constraints, duplicate evaluation is **s
 
 ---
 
-## 9. Lead Status Workflow Transitions (SDS Allowlist)
+## 11. Lead Status Workflow Transitions (SDS Allowlist)
 
 Permitted state transitions strictly enforce the directed acyclic graph:
 - `New` -> `['Working', 'Qualified', 'Closed']`
@@ -311,7 +359,7 @@ Disallowed transitions (e.g. regressions, skips, or transitions originating from
 
 ---
 
-## 10. Domain Event Taxonomy (Redis Streams & Outbox)
+## 12. Domain Event Taxonomy (Redis Streams & Outbox)
 
 | Event Type | Aggregate | Description | Cross-Module Consumers |
 |---|---|---|---|
@@ -327,7 +375,15 @@ Disallowed transitions (e.g. regressions, skips, or transitions originating from
 
 ---
 
-## 11. Gate G1 Sign-Off Review
+## 13. Deterministic Mock Server (`crm1MockServerPlugin`)
+
+Available in `@clearshift/contracts` for downstream module development and contract testing:
+- **State Store**: `Crm1MockStateStore` seeds deterministic synthetic contacts, companies, leads, and import batches.
+- **Fastify Plugin**: `crm1MockServerPlugin` serves all 15 endpoints under `/api/v1/crm-contacts` with Zod validation, deterministic error envelopes, duplicate rejection, and lead transition enforcement.
+
+---
+
+## 14. Gate G1 Sign-Off Review
 
 | Sign-Off Role | Signee | Status | Date |
 | :--- | :--- | :---: | :---: |
