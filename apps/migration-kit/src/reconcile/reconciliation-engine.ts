@@ -26,7 +26,12 @@ export class ReconciliationService {
     totalSourceRows: number,
     batchStatus?: KitBatchStatus
   ): Promise<KitReconciliationReport> {
-    if (batchStatus && (batchStatus === 'load_failed_partial' || batchStatus === 'failed')) {
+    if (
+      batchStatus &&
+      (batchStatus === 'load_failed_partial' ||
+        batchStatus === 'failed' ||
+        batchStatus === 'stopped_excessive_failures')
+    ) {
       throw new ReconciliationBlockedByBatchStateError(batchId, batchStatus);
     }
 
@@ -61,7 +66,12 @@ export class ReconciliationService {
    * - ReconciliationInvariantError if unaccounted != 0 or status is UNBALANCED
    */
   public assertCanSignoff(report: KitReconciliationReport, batchStatus?: KitBatchStatus): void {
-    if (batchStatus && (batchStatus === 'load_failed_partial' || batchStatus === 'failed')) {
+    if (
+      batchStatus &&
+      (batchStatus === 'load_failed_partial' ||
+        batchStatus === 'failed' ||
+        batchStatus === 'stopped_excessive_failures')
+    ) {
       throw new ReconciliationBlockedByBatchStateError(report.batchId, batchStatus);
     }
 

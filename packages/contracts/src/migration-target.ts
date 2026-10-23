@@ -29,6 +29,7 @@ export type KitBatchSuccessStatus = z.infer<typeof KitBatchSuccessStatusSchema>;
 export const KitBatchSideStatusSchema = z.enum([
   'failed',
   'load_failed_partial',
+  'stopped_excessive_failures',
   'rollback_pending',
   'rollback_blocked',
   'rolled_back',
@@ -52,6 +53,7 @@ export const KitBatchStatusSchema = z.enum([
   // Side states
   'failed',
   'load_failed_partial',
+  'stopped_excessive_failures',
   'rollback_pending',
   'rollback_blocked',
   'rolled_back',
@@ -130,8 +132,9 @@ export const KIT_BATCH_TRANSITIONS_MAP: Record<KitBatchStatus, readonly KitBatch
 
   // Step 6: Loading
   dry_run_passed: ['loading', 'failed'],
-  loading: ['loaded', 'failed', 'load_failed_partial'],
+  loading: ['loaded', 'failed', 'load_failed_partial', 'stopped_excessive_failures'],
   load_failed_partial: ['loading', 'failed', 'rollback_pending'],
+  stopped_excessive_failures: ['loading', 'failed', 'rollback_pending'],
 
   // Step 7: Validation
   loaded: ['validating', 'failed'],
@@ -176,6 +179,7 @@ export const STATUS_TO_STEP_NAME: Partial<Record<KitBatchStatus, KitBatchStepNam
   loading: 'load',
   loaded: 'load',
   load_failed_partial: 'load',
+  stopped_excessive_failures: 'load',
   validating: 'validate',
   validated: 'validate',
   reconciled: 'reconcile',
@@ -195,6 +199,7 @@ export const STATUS_TO_CHECKPOINT: Record<KitBatchStatus, string> = {
   loading: 'loading',
   loaded: 'loaded',
   load_failed_partial: 'load_checkpoint',
+  stopped_excessive_failures: 'load_checkpoint',
   validating: 'validating',
   validated: 'validated',
   reconciled: 'reconciled',
@@ -211,7 +216,7 @@ export function computeNextCheckpoint(
   targetStatus: KitBatchStatus,
   previousCheckpoint: string
 ): string {
-  if (targetStatus === 'load_failed_partial') {
+  if (targetStatus === 'load_failed_partial' || targetStatus === 'stopped_excessive_failures') {
     return 'load_checkpoint';
   }
 
@@ -347,7 +352,7 @@ export function isKitBatchTerminalStatus(status: KitBatchStatus): boolean {
  * Identifies resumable / retryable states
  */
 export function isKitBatchResumableStatus(status: KitBatchStatus): boolean {
-  return status === 'failed' || status === 'load_failed_partial';
+  return status === 'failed' || status === 'load_failed_partial' || status === 'stopped_excessive_failures';
 }
 
 /**
@@ -1652,4 +1657,67 @@ export class MaxTargetWriteRetriesExceededError extends Error {
     this.name = 'MaxTargetWriteRetriesExceededError';
   }
 }
+
+/**
+ * Batch Excessive Failures Halt Error (HTTP 422)
+ * Raised when cumulative row failure rate exceeds 10% during chunked load (KIT-12).
+ * Halts processing immediately, transitions batch to STOPPED_EXCESSIVE_FAILURES,
+ * preserves committed records/receipts without rollback saga, and outputs standard error envelope.
+ */
+export class BatchExcessiveFailuresHaltError extends Error {
+  public readonly statusCode = 422;
+  public readonly code = 'STOPPED_EXCESSIVE_FAILURES' as const;
+
+  constructor(
+    public readonly batchId: string,
+    public readonly failedRows: number,
+    public readonly attemptedRows: number,
+    public readonly failureRate: number,
+    public readonly threshold: number = 10.0,
+    public readonly lastCommittedRow: number = 0,
+    reason?: string
+  ) {
+    const formattedRate = (failureRate <= 1 ? failureRate * 100 : failureRate).toFixed(1);
+    const msg =
+      reason ??
+      `Batch '${batchId}' exceeded maximum allowable cumulative failure rate (${formattedRate}% > ${threshold}%: ${failedRows} failed out of ${attemptedRows} attempted rows). Pipeline immediately stopped further writes. Already committed rows (up to row ${lastCommittedRow}) remain durable.`;
+    super(msg);
+    this.name = 'BatchExcessiveFailuresHaltError';
+  }
+
+  public toEnvelope() {
+    return {
+      code: this.code,
+      message: this.message,
+      details: {
+        batchId: this.batchId,
+        failedRows: this.failedRows,
+        attemptedRows: this.attemptedRows,
+        failureRate: this.failureRate,
+        threshold: this.threshold,
+        lastCommittedRow: this.lastCommittedRow,
+      },
+    };
+  }
+}
+
+/**
+ * Outbox event payload for batch.stopped_excessive_failures
+ */
+export const KitBatchStoppedExcessiveFailuresEventSchema = z.object({
+  eventId: z.string().uuid(),
+  eventType: z.literal('batch.stopped_excessive_failures'),
+  batchId: z.string().min(1).max(128),
+  failedRows: z.number().int().min(0),
+  attemptedRows: z.number().int().min(0),
+  failureRate: z.number().min(0),
+  threshold: z.number().default(10.0),
+  lastCommittedRow: z.number().int().min(0),
+  checkpoint: z.literal('load_checkpoint').default('load_checkpoint'),
+  haltedAt: z.coerce.date().default(() => new Date()),
+});
+export type KitBatchStoppedExcessiveFailuresEvent = z.infer<
+  typeof KitBatchStoppedExcessiveFailuresEventSchema
+>;
+
 

@@ -1,6 +1,7 @@
 import {
   BULLMQ_DEFAULT_ATTEMPTS,
   MaxTargetWriteRetriesExceededError,
+  isKitBatchResumableStatus,
   type WorkerCheckpoint,
   type MigrationTargetAdapter,
   type MigrationTargetAdapterResult,
@@ -42,6 +43,10 @@ export class PartialLoadRecoveryService {
 
   public getCheckpointStore(): ICheckpointStore {
     return this.checkpointStore;
+  }
+
+  public getOutcomeLedger(): IRowOutcomeLedger | undefined {
+    return this.outcomeLedger;
   }
 
   /**
@@ -142,6 +147,16 @@ export class PartialLoadRecoveryService {
         resumedFromRow: 0,
         resumedFromChunk: 0,
         canResume: true,
+      };
+    }
+
+    const canResume =
+      isKitBatchResumableStatus(checkpoint.status) || checkpoint.status === 'loading';
+    if (!canResume) {
+      return {
+        resumedFromRow: checkpoint.lastCommittedRow,
+        resumedFromChunk: checkpoint.lastCommittedChunk,
+        canResume: false,
       };
     }
 

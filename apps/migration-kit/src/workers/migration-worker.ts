@@ -3,6 +3,7 @@ import {
   computeStableIdempotencyKey,
   type KitBatchStatus,
   type MigrationTargetAdapter,
+  BatchExcessiveFailuresHaltError,
 } from '@clearshift/contracts';
 import {
   MigrationWorkerHealthMonitor,
@@ -21,6 +22,7 @@ import {
   PartialLoadRecoveryService,
   InMemoryCheckpointStore,
 } from './partial-load-recovery.js';
+import { BatchSafetyMonitor } from './batch-safety.js';
 import type {
   MigrationJobData,
   MigrationJobResult,
@@ -33,6 +35,8 @@ export class MigrationWorker {
   private scheduler: ChunkScheduler;
   private recoveryService: PartialLoadRecoveryService;
   private healthMonitor: MigrationWorkerHealthMonitor;
+  private safetyMonitor: BatchSafetyMonitor;
+  private continueOnRowError: boolean;
   private crashHook: CrashInjectionHook | undefined;
   private concurrency: number;
 
@@ -40,16 +44,27 @@ export class MigrationWorker {
     checkpointStore?: ICheckpointStore | undefined;
     outcomeLedger?: IRowOutcomeLedger | undefined;
     healthMonitor?: MigrationWorkerHealthMonitor | undefined;
+    safetyMonitor?: BatchSafetyMonitor | undefined;
+    failureThresholdPercentage?: number | undefined;
+    continueOnRowError?: boolean | undefined;
     chunkSize?: number | undefined;
     concurrency?: number | undefined;
     crashHook?: CrashInjectionHook | undefined;
   } = {}) {
+    const store = options.checkpointStore ?? new InMemoryCheckpointStore();
     this.concurrency = options.concurrency ?? DEFAULT_BULLMQ_JOB_OPTIONS.concurrency;
     this.scheduler = new ChunkScheduler(options.chunkSize ?? DEFAULT_CHUNK_SIZE);
     this.recoveryService = new PartialLoadRecoveryService(
-      options.checkpointStore ?? new InMemoryCheckpointStore(),
+      store,
       options.outcomeLedger
     );
+    this.safetyMonitor =
+      options.safetyMonitor ??
+      new BatchSafetyMonitor({
+        checkpointStore: store,
+        failureThresholdPercentage: options.failureThresholdPercentage,
+      });
+    this.continueOnRowError = options.continueOnRowError ?? false;
     this.healthMonitor = options.healthMonitor ?? migrationWorkerHealth;
     this.crashHook = options.crashHook;
   }
@@ -60,6 +75,10 @@ export class MigrationWorker {
 
   public getRecoveryService(): PartialLoadRecoveryService {
     return this.recoveryService;
+  }
+
+  public getSafetyMonitor(): BatchSafetyMonitor {
+    return this.safetyMonitor;
   }
 
   public getConcurrency(): number {
@@ -140,30 +159,69 @@ export class MigrationWorker {
 
         if (row.skipped) {
           chunkSkipped++;
+          this.safetyMonitor.recordSkipped(data.batchId);
           continue;
         }
 
         chunkAttempted++;
 
-        // Execute target row write with bounded retries (up to 3)
-        // If retries are exhausted, it throws MaxTargetWriteRetriesExceededError
-        // and transitions batch to 'load_failed_partial' without marking row as rejected
-        const result = await this.recoveryService.executeWriteWithBoundedRetries(
-          adapter,
-          data.batchId,
-          row.sourceRow,
-          idempKey,
-          row.data,
-          {
-            chunkIndex: chunk.chunkIndex,
-            lastCommittedRow,
-          }
-        );
+        try {
+          // Execute target row write with bounded retries (up to 3)
+          // If retries are exhausted, it throws MaxTargetWriteRetriesExceededError
+          // and transitions batch to 'load_failed_partial' without marking row as rejected
+          const result = await this.recoveryService.executeWriteWithBoundedRetries(
+            adapter,
+            data.batchId,
+            row.sourceRow,
+            idempKey,
+            row.data,
+            {
+              chunkIndex: chunk.chunkIndex,
+              lastCommittedRow,
+            }
+          );
 
-        if (result.ok) {
-          chunkLoaded++;
-          lastCommittedRow = row.sourceRow;
-          processedRows++;
+          if (result.ok) {
+            chunkLoaded++;
+            lastCommittedRow = row.sourceRow;
+            processedRows++;
+            await this.safetyMonitor.recordSuccess(
+              data.batchId,
+              row.sourceRow,
+              chunk.chunkIndex
+            );
+          }
+        } catch (err) {
+          if (err instanceof BatchExcessiveFailuresHaltError) {
+            throw err;
+          }
+
+          chunkRejected++;
+
+          // Continuous failure percentage tracking and immediate stop threshold check (KIT-12)
+          await this.safetyMonitor.recordFailure(
+            data.batchId,
+            row.sourceRow,
+            lastCommittedRow,
+            chunk.chunkIndex,
+            err
+          );
+
+          const shouldContinue =
+            data.continueOnRowError ?? this.continueOnRowError;
+
+          if (shouldContinue) {
+            if (this.recoveryService.getOutcomeLedger()) {
+              await this.recoveryService.getOutcomeLedger()!.recordOutcome({
+                batchId: data.batchId,
+                sourceRow: row.sourceRow,
+                outcome: 'rejected',
+                idempotencyKey: idempKey,
+              });
+            }
+          } else {
+            throw err;
+          }
         }
       }
 

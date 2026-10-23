@@ -1057,5 +1057,107 @@ WHERE b.id = 'BATCH_UUID'
 GROUP BY b.id, b.total_rows;
 ```
 
+---
+
+## 16. V1 Batch Safety: Stop Threshold, Retry Guard & Resumable Failed-Run State (KIT-12)
+
+### 16.1 Continuous Cumulative Failure Monitoring
+
+During chunked target load (Step 5), the worker tracks cumulative row failures across all processed chunks:
+
+$$\text{failureRate} = \left(\frac{\text{failedRows}}{\text{attemptedRows}}\right) \times 100$$
+
+- **Threshold Guard:** If $\text{failureRate} > 10.0\%$ after minimum attempted rows, the pipeline halts immediately.
+- **Zero Rollback Saga Invariant:** V1 strictly prohibits compensating rollback sagas upon batch halt. Already committed target business records and durable import receipts remain durable in PostgreSQL.
+
+```
+[ Chunked Row Writes ] ──► [ Continuous Failure Monitor ]
+                                   │
+                                   ├── Failure Rate <= 10.0% ──► Continue Loading
+                                   │
+                                   └── Failure Rate > 10.0% ──► [ IMMEDIATE HALT ]
+                                                                      │
+                                                                      ├── 1. Freeze writes
+                                                                      ├── 2. Preserve committed rows & receipts in PostgreSQL
+                                                                      ├── 3. Save checkpoint: 'stopped_excessive_failures'
+                                                                      ├── 4. Emit outbox event: 'batch.stopped_excessive_failures'
+                                                                      └── 5. Output envelope: 'STOPPED_EXCESSIVE_FAILURES'
+```
+
+### 16.2 Standard Error Envelope & Versioned Outbox Event
+
+Upon reaching the halt threshold, the pipeline outputs a standardized error envelope:
+
+```json
+{
+  "code": "STOPPED_EXCESSIVE_FAILURES",
+  "message": "Batch 'BATCH_UUID' exceeded maximum allowable cumulative failure rate (27.3% > 10.0%: 3 failed out of 11 attempted rows). Pipeline immediately stopped further writes. Already committed rows (up to row 8) remain durable.",
+  "details": {
+    "batchId": "BATCH_UUID",
+    "failedRows": 3,
+    "attemptedRows": 11,
+    "failureRate": 27.27,
+    "threshold": 10.0,
+    "lastCommittedRow": 8
+  }
+}
+```
+
+The transactional outbox atomically captures the event for auditing and telemetry:
+- **Event Type:** `batch.stopped_excessive_failures`
+- **Schema:** `KitBatchStoppedExcessiveFailuresEventSchema`
+
+### 16.3 Resumption Protocol (Preserving `batchId`)
+
+To resume a stopped batch after resolving source data constraints or target configuration:
+1. Trigger resumption using the **exact same `batchId`** (preserving batch identity and audit trail).
+2. The recovery service verifies resumability via `isKitBatchResumableStatus('stopped_excessive_failures')`.
+3. The latest committed checkpoint (`load_checkpoint`) supplies `lastCommittedRow`.
+4. Writes resume starting strictly from `lastCommittedRow + 1`. All previous committed rows are skipped without duplicate writes.
+
+### 16.4 Reconciliation Blocking Invariant
+
+Reconciliation is strictly blocked while a batch remains in `stopped_excessive_failures`:
+- Calling `reconcileBatch()` or `assertCanSignoff()` on a batch with status `stopped_excessive_failures` immediately throws `ReconciliationBlockedByBatchStateError` (HTTP 422).
+- Final reconciliation is permitted only once the resumed batch completes all remaining rows and enters `loaded` status with exact row conservation:
+  $$\text{source} = \text{loaded} + \text{rejected} + \text{merged} + \text{skipped}, \quad \text{unaccounted} = 0$$
+
+### 16.5 Operational Verification Queries
+
+```sql
+-- 1. Check batches currently stopped due to excessive failures
+SELECT
+    id AS batch_id,
+    batch_number,
+    status,
+    checkpoint,
+    total_rows,
+    updated_at
+FROM public.kit_batches
+WHERE status = 'stopped_excessive_failures';
+
+-- 2. Inspect durable committed receipts up to halt checkpoint
+SELECT
+    batch_id,
+    COUNT(*) AS durable_committed_rows,
+    MAX(source_row) AS last_committed_row
+FROM public.kit_import_receipts
+WHERE batch_id = 'BATCH_UUID'
+GROUP BY batch_id;
+
+-- 3. Verify outbox event emissions for halted batches
+SELECT
+    id AS event_id,
+    event_type,
+    payload->>'batchId' AS batch_id,
+    payload->>'failureRate' AS failure_rate,
+    payload->>'lastCommittedRow' AS last_committed_row,
+    created_at
+FROM public.kit_outbox_events
+WHERE event_type = 'batch.stopped_excessive_failures'
+ORDER BY created_at DESC;
+```
+
+
 
 

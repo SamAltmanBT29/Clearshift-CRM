@@ -19,6 +19,7 @@ export interface MigrationJobData {
   endRow?: number;
   checkpoint?: string;
   attempt?: number;
+  continueOnRowError?: boolean;
   rows?: Array<{ sourceRow: number; data: Record<string, unknown>; skipped?: boolean }>;
   metadata?: Record<string, unknown>;
 }
