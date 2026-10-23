@@ -569,3 +569,79 @@ Upon completing Step 4:
      }
    }
    ```
+
+---
+
+## 11. Step 6: Shared Target Validation & Post-Load Integrity Engine (KIT-06)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.8 (FR-VA-01–04), §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #73 `[KIT-06]`.
+
+### 11.1 Pipeline Stage Overview
+
+Step 6 (**Validate**) runs module-declared validation rules against ingested, cleaned, and loaded datasets to verify both business-level and database-level integrity before signoff and reconciliation.
+
+```
+       [public.clean_crm] / Target Domain Records
+                           │
+                           ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Shared Target Validation Engine                              │
+    │ 1. Pre-Load Business Checks (Formats, Enums, Required)       │
+    │ 2. Post-Load Referential Link Integrity (Foreign Key Target) │
+    │ 3. Domain Rules (Freshness Timestamps, Cross-Field Balance)  │
+    │ 4. Deterministic Checksum & Failure Attribution             │
+    └──────────────────────┬───────────────────────────────────────┘
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+      [All Rules Pass]            [Failures Detected]
+      - State: `validated`        - State: `failed`
+      - Emit `batch.validated`   - Reconciliation strictly BLOCKED
+      - Proceed to Step 7         - Detailed failure report with ruleId,
+                                    sourceRow, targetId, reasonCode
+```
+
+### 11.2 Typed Validation Rule Types
+
+The validation engine supports five standardized, typed rule categories:
+
+| Rule Type | Scope | Example | Behavior on Failure |
+| :--- | :---: | :--- | :--- |
+| **`required_field`** | Pre-Load | `CRM1-VAL-REQ-01`: `contacts.first_name` cannot be empty. | Fails row with `REQUIRED_FIELD_MISSING`. |
+| **`format`** | Pre-Load | `CRM1-VAL-FMT-01`: `contacts.email` must match RFC email regex. | Fails row with `INVALID_FORMAT`. |
+| **`enum`** | Pre-Load | `CRM1-VAL-ENUM-01`: `contacts.lead_status` in `['New', 'Working', 'Qualified', 'Closed']`. | Fails row with `INVALID_ENUM_VALUE`. |
+| **`relationship`** | Post-Load | `CRM1-VAL-REL-01`: `contacts.company_id` must exist in `crm1_companies`. | Fails row with `RELATIONSHIP_NOT_FOUND` (Link integrity error). |
+| **`domain`** | Pre/Post | `CRM1-VAL-DOM-01`: Non-unknown consent must have `consent_updated_at`. | Fails row with `DOMAIN_RULE_VIOLATION`. |
+
+### 11.3 Strict Referential Link Integrity Gate
+
+A critical non-negotiable invariant of ClearShift data reliability:
+1. Every loaded record's external entity references (e.g. `order -> customer`, `deal -> contact`, `contact -> company`) are checked in post-load validation.
+2. If any link integrity failure is detected:
+   - The failure is explicitly recorded with `ruleId`, `sourceRow`, `targetId`, and reason `RELATIONSHIP_NOT_FOUND`.
+   - The validation report is marked `isValid: false`.
+   - The batch status in `public.kit_batches` transitions to `'failed'`.
+   - **Reconciliation & Signoff Gate:** `ValidationService.assertBatchCanReconcile()` strictly blocks execution of Step 7 (Reconcile). No batch with failed link integrity can be signed off as successful.
+
+### 11.4 Deterministic Output & Audit Trail
+
+- **Determinism:** Validation failures are always sorted by `sourceRow ASC`, then `ruleId ASC`, then `field ASC`.
+- **SHA-256 Checksum:** Every report calculates a cryptographic hash over the failure array. Repeated executions against the same dataset produce identical checksums.
+- **Outbox Event (`batch.validated`):**
+  ```json
+  {
+    "eventType": "batch.validated",
+    "aggregateType": "kit_batch",
+    "aggregateId": "BATCH_UUID",
+    "payload": {
+      "batch_id": "BATCH_UUID",
+      "module": "crm-1",
+      "total_checked": 500,
+      "validation_failures": 0,
+      "is_valid": true,
+      "checksum": "a3f5c7...",
+      "timestamp": "2026-10-23T22:30:00.000Z"
+    }
+  }
+  ```
+

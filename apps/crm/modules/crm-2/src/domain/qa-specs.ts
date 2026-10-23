@@ -1031,14 +1031,14 @@ export const CRM2_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
   },
   {
     reqId: 'MIG-CRM2-03',
-    requirement: 'Stop migration execution when failure count exceeds 10% of attempted rows in a batch.',
+    requirement: 'Bounded batching (500 rows), bounded exponential backoff retries, and immediate halt when failure count exceeds 10% of attempted rows in a batch.',
     priority: 'Must',
     sourceDoc: 'ClearShift Core Migration Rules',
     category: 'Migration',
     testType: 'unit',
-    testFile: 'apps/crm/modules/crm-2/tests/domain/qa-g1-design.test.ts',
-    testSuite: 'CRM-2 QA Gate G1 Design Specifications',
-    verificationEvidence: 'Failure threshold trigger safely halts batch processing, preserving already-committed receipts.',
+    testFile: 'apps/crm/modules/crm-2/tests/domain/batch-loader.test.ts',
+    testSuite: 'CRM-2 Chunked Batch Ingestion & Idempotent Retry (CRM2-13)',
+    verificationEvidence: 'Batch loader transitions to STOPPED_EXCESSIVE_FAILURES, preserving already-committed receipts without destructive rollback.',
   },
 ];
 
