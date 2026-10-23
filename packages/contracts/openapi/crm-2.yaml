@@ -418,6 +418,91 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /import/row:
+    post:
+      summary: Ingest single migration row with idempotency guarantees (KIT-08 Target Adapter)
+      operationId: importSingleRow
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Stable idempotency key for exactly-once processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Crm2ImportRow'
+      responses:
+        '201':
+          description: Row processed and target mutation committed with receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportResult'
+        '200':
+          description: Idempotent replay; original receipt returned without second mutation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportResult'
+        '400':
+          description: Invalid import payload or missing Idempotency-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied (requires MIGRATION_RUNNER or ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Idempotency conflict (key reused with different payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Domain validation failure or unresolved cross-module reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /import/batch:
+    post:
+      summary: Batch ingest migration rows using type-safe UPSERT operations (KIT-08 loadBatch)
+      operationId: loadBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Crm2BatchImportRequest'
+      responses:
+        '200':
+          description: Batch execution complete with loaded results and error ledger
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2BatchImportResponse'
+        '400':
+          description: Invalid batch payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied (requires MIGRATION_RUNNER or ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /import/receipts:
     get:
       summary: List durable migration import receipts
@@ -431,6 +516,80 @@ paths:
                 $ref: '#/components/schemas/Crm2ImportReceiptsResponse'
         '403':
           description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /import/receipts/{idempotencyKey}:
+    get:
+      summary: Retrieve a single durable import receipt by idempotency key
+      operationId: getImportReceiptByKey
+      parameters:
+        - name: idempotencyKey
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Idempotency key of the receipt
+      responses:
+        '200':
+          description: Durable import receipt details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportReceipt'
+        '404':
+          description: Receipt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /batches/execute-load:
+    post:
+      summary: Execute chunked batch load with bounded retries and stop threshold
+      description: Slices input into 500-row chunks, retries transient failures with exponential backoff while preserving idempotency keys, and stops immediately if failures exceed 10%.
+      operationId: executeBatchLoad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteBatchLoadInput'
+      responses:
+        '200':
+          description: Batch load execution report with status (COMPLETED or STOPPED_EXCESSIVE_FAILURES)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExecutionReport'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Domain Validation Error or Halted Batch
           content:
             application/json:
               schema:
@@ -940,24 +1099,25 @@ components:
       required:
         - batchId
         - sourceRow
-        - sourceSystem
         - entity
         - idempotencyKey
         - data
       properties:
         batchId:
           type: string
-          format: uuid
         sourceRow:
           type: integer
           minimum: 1
         sourceSystem:
           type: string
+          default: kit_import
         entity:
           type: string
           enum:
             - deal
             - quote
+            - stage
+            - quote_line
         idempotencyKey:
           type: string
         data:
@@ -982,7 +1142,6 @@ components:
           format: uuid
         batchId:
           type: string
-          format: uuid
         sourceRow:
           type: integer
         entity:
@@ -998,6 +1157,16 @@ components:
           type: string
         payloadHash:
           type: string
+        kind:
+          type: string
+          enum:
+            - created
+            - linked
+        outcome:
+          type: string
+          enum:
+            - created
+            - linked
         createdAt:
           type: string
           format: date-time
@@ -1019,6 +1188,60 @@ components:
         correlation_id:
           type: string
 
+    Crm2BatchImportRequest:
+      type: object
+      required:
+        - batchId
+        - rows
+      properties:
+        batchId:
+          type: string
+        sourceSystem:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/Crm2ImportRow'
+
+    Crm2BatchImportResponse:
+      type: object
+      required:
+        - batchId
+        - loadedCount
+        - rejectedCount
+        - loaded
+        - errors
+      properties:
+        batchId:
+          type: string
+        loadedCount:
+          type: integer
+        rejectedCount:
+          type: integer
+        loaded:
+          type: array
+          items:
+            $ref: '#/components/schemas/Crm2ImportResult'
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+              - sourceRow
+              - error
+            properties:
+              sourceRow:
+                type: integer
+              error:
+                type: object
+                properties:
+                  reasonCode:
+                    type: string
+                  message:
+                    type: string
+                  field:
+                    type: string
+
     Crm2ImportReceiptsResponse:
       type: object
       required:
@@ -1028,6 +1251,176 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Crm2ImportReceipt'
+        correlation_id:
+          type: string
+
+    BatchExecutionStatus:
+      type: string
+      enum: [COMPLETED, STOPPED_EXCESSIVE_FAILURES, FAILED]
+
+    BatchRecordInput:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - data
+      properties:
+        sourceRow:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+        data:
+          type: object
+
+    ExecuteBatchLoadInput:
+      type: object
+      required:
+        - batchId
+        - records
+      properties:
+        batchId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+          default: crm-2
+        step:
+          type: string
+          enum: [extract, profile, clean, map, load, validate, reconcile]
+          default: load
+        chunkSize:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 500
+        maxRetries:
+          type: integer
+          minimum: 0
+          maximum: 5
+          default: 3
+        failureThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.10
+        minAttemptedRows:
+          type: integer
+          minimum: 1
+          default: 50
+        records:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BatchRecordInput'
+
+    ImportReceiptItem:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - idempotencyKey
+        - targetId
+        - kind
+        - committedAt
+      properties:
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        targetId:
+          type: string
+        kind:
+          type: string
+          enum: [created, linked]
+        committedAt:
+          type: string
+          format: date-time
+
+    FailedRowItem:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - errorCode
+        - errorMessage
+        - retryAttempts
+      properties:
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryAttempts:
+          type: integer
+        payloadHash:
+          type: string
+
+    BatchExecutionReport:
+      type: object
+      required:
+        - batchId
+        - module
+        - step
+        - status
+        - totalRecords
+        - attemptedRecords
+        - committedRecords
+        - failedRecords
+        - chunksProcessed
+        - chunkSize
+        - failureRate
+        - committedReceipts
+        - failedRows
+        - executedAt
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+          enum: [extract, profile, clean, map, load, validate, reconcile]
+        status:
+          $ref: '#/components/schemas/BatchExecutionStatus'
+        totalRecords:
+          type: integer
+        attemptedRecords:
+          type: integer
+        committedRecords:
+          type: integer
+        failedRecords:
+          type: integer
+        chunksProcessed:
+          type: integer
+        chunkSize:
+          type: integer
+        failureRate:
+          type: number
+        haltReason:
+          type: string
+          nullable: true
+        committedReceipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportReceiptItem'
+        failedRows:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailedRowItem'
+        executedAt:
+          type: string
+          format: date-time
         correlation_id:
           type: string
 
@@ -1143,4 +1536,3 @@ components:
           type: string
         currency:
           type: string
-

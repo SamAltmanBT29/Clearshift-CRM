@@ -187,6 +187,8 @@ export const DealSchema = z.object({
     message: 'Close date must be in YYYY-MM-DD format',
   }),
   is_orphan: z.boolean(),
+  source_system: z.string().nullable().optional(),
+  source_id: z.string().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
@@ -202,6 +204,8 @@ export const CreateDealInputSchema = z.object({
   close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'Close date must be in YYYY-MM-DD format',
   }),
+  source_system: z.string().max(64).nullable().optional(),
+  source_id: z.string().max(128).nullable().optional(),
 });
 export type CreateDealInput = z.infer<typeof CreateDealInputSchema>;
 
@@ -221,6 +225,8 @@ export const QuoteSchema = z.object({
   amount: DecimalStringSchema,
   currency: CurrencyCodeSchema,
   note: z.string().nullable().optional(),
+  source_system: z.string().nullable().optional(),
+  source_id: z.string().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
@@ -236,12 +242,42 @@ export const CreateQuoteInputSchema = z.object({
   amount: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),
   note: z.string().nullable().optional(),
+  source_system: z.string().max(64).nullable().optional(),
+  source_id: z.string().max(128).nullable().optional(),
 });
 export type CreateQuoteInput = z.infer<typeof CreateQuoteInputSchema>;
 
 // Update Quote Input Schema
 export const UpdateQuoteInputSchema = CreateQuoteInputSchema.partial();
 export type UpdateQuoteInput = z.infer<typeof UpdateQuoteInputSchema>;
+
+// Quote Line Schema
+export const QuoteLineSchema = z.object({
+  id: z.string().uuid(),
+  quote_id: z.string().uuid(),
+  line_number: z.number().int().positive(),
+  product_id: z.string().uuid().nullable().optional(),
+  description: z.string().min(1, 'Description is required'),
+  quantity: z.string().default('1.0000'),
+  unit_price: DecimalStringSchema,
+  line_total: DecimalStringSchema,
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+export type QuoteLine = z.infer<typeof QuoteLineSchema>;
+
+// Create Quote Line Input Schema
+export const CreateQuoteLineInputSchema = z.object({
+  quote_id: z.string().uuid('Invalid Quote UUID'),
+  line_number: z.number().int().positive('line_number must be > 0'),
+  product_id: z.string().uuid().nullable().optional(),
+  description: z.string().min(1, 'Description is required'),
+  quantity: z.string().regex(/^\d+(\.\d{1,4})?$/).default('1.0000'),
+  unit_price: DecimalStringSchema,
+  line_total: DecimalStringSchema.optional(),
+});
+export type CreateQuoteLineInput = z.infer<typeof CreateQuoteLineInputSchema>;
+
 
 /**
  * Standard Contract Labels, Helper Text and Error Messages for CRM-2
@@ -439,32 +475,34 @@ export type QuotesListResponse = z.infer<typeof QuotesListResponseSchema>;
 
 // CRM-2 Import Ingestion Schemas (KIT Integration & Mutation API)
 export const Crm2ImportRowSchema = z.object({
-  batchId: z.string().uuid(),
+  batchId: z.string().min(1, 'batchId is required').max(128),
   sourceRow: z.number().int().positive(),
-  sourceSystem: z.string().min(1),
-  entity: z.enum(['deal', 'quote']),
+  sourceSystem: z.string().min(1).default('kit_import'),
+  entity: z.enum(['deal', 'quote', 'stage', 'quote_line', 'deals', 'quotes', 'stages', 'quote_lines']),
   idempotencyKey: z.string().min(1),
   data: z.record(z.unknown()),
 });
 export type Crm2ImportRow = z.infer<typeof Crm2ImportRowSchema>;
 
 export const Crm2ImportBatchSchema = z.object({
-  batchId: z.string().uuid(),
-  sourceSystem: z.string().min(1),
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  sourceSystem: z.string().min(1).default('kit_import'),
   rows: z.array(Crm2ImportRowSchema),
 });
 export type Crm2ImportBatch = z.infer<typeof Crm2ImportBatchSchema>;
 
 export const Crm2ImportReceiptSchema = z.object({
   id: z.string().uuid(),
-  batchId: z.string().uuid(),
+  batchId: z.string().min(1).max(128),
   sourceRow: z.number().int().positive(),
-  entity: z.enum(['deal', 'quote']),
+  entity: z.enum(['deal', 'quote', 'stage', 'quote_line', 'deals', 'quotes', 'stages', 'quote_lines']),
   sourceSystem: z.string().min(1),
   sourceId: z.string().min(1),
   targetId: z.string().uuid(),
   idempotencyKey: z.string().min(1),
   payloadHash: z.string(),
+  kind: z.enum(['created', 'linked']).optional(),
+  outcome: z.enum(['created', 'linked']).optional(),
   createdAt: z.string(),
 });
 export type Crm2ImportReceipt = z.infer<typeof Crm2ImportReceiptSchema>;
@@ -484,6 +522,83 @@ export const Crm2ErrorEnvelopeSchema = z.object({
   correlation_id: z.string().optional(),
 });
 export type Crm2ErrorEnvelope = z.infer<typeof Crm2ErrorEnvelopeSchema>;
+
+export { Crm2TargetEntitySchema, type Crm2TargetEntity } from './import-target.js';
+
+// ---------------------------------------------------------------------------
+// CRM-2 Chunked Batch Ingestion & Idempotent Retry Contracts (CRM2-13)
+// ---------------------------------------------------------------------------
+
+export const CRM2_DEFAULT_CHUNK_SIZE = 500;
+export const CRM2_DEFAULT_FAILURE_THRESHOLD = 0.10;
+export const CRM2_DEFAULT_MIN_ATTEMPTED_ROWS = 50;
+export const CRM2_DEFAULT_MAX_RETRIES = 3;
+
+export const Crm2BatchExecutionStatusSchema = z.enum([
+  'COMPLETED',
+  'STOPPED_EXCESSIVE_FAILURES',
+  'FAILED',
+]);
+export type Crm2BatchExecutionStatus = z.infer<typeof Crm2BatchExecutionStatusSchema>;
+
+export const Crm2BatchRecordInputSchema = z.object({
+  sourceRow: z.number().int({ message: 'sourceRow must be an integer' }).min(1),
+  idempotencyKey: z.string().min(1, 'idempotencyKey is required').max(128),
+  data: z.record(z.string(), z.unknown()),
+});
+export type Crm2BatchRecordInput = z.infer<typeof Crm2BatchRecordInputSchema>;
+
+export const Crm2ExecuteBatchLoadInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']).default('crm-2'),
+  step: z.enum(['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']).default('load'),
+  chunkSize: z.number().int().min(1).max(1000).default(500),
+  maxRetries: z.number().int().min(0).max(5).default(3),
+  failureThreshold: z.number().min(0).max(1).default(0.10),
+  minAttemptedRows: z.number().int().min(1).default(50),
+  records: z.array(Crm2BatchRecordInputSchema).min(1, 'records must not be empty'),
+});
+export type Crm2ExecuteBatchLoadInput = z.input<typeof Crm2ExecuteBatchLoadInputSchema>;
+export type Crm2ExecuteBatchLoadOutput = z.infer<typeof Crm2ExecuteBatchLoadInputSchema>;
+
+export const Crm2BatchReceiptSchema = z.object({
+  batchId: z.string(),
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  targetId: z.string(),
+  kind: z.enum(['created', 'linked']).default('created'),
+  committedAt: z.coerce.date(),
+});
+export type Crm2BatchReceipt = z.infer<typeof Crm2BatchReceiptSchema>;
+
+export const Crm2FailedRowSchema = z.object({
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  errorCode: z.string(),
+  errorMessage: z.string(),
+  retryAttempts: z.number().int(),
+  payloadHash: z.string().optional(),
+});
+export type Crm2FailedRow = z.infer<typeof Crm2FailedRowSchema>;
+
+export const Crm2BatchExecutionReportSchema = z.object({
+  batchId: z.string(),
+  module: z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']),
+  step: z.enum(['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']),
+  status: Crm2BatchExecutionStatusSchema,
+  totalRecords: z.number().int().nonnegative(),
+  attemptedRecords: z.number().int().nonnegative(),
+  committedRecords: z.number().int().nonnegative(),
+  failedRecords: z.number().int().nonnegative(),
+  chunksProcessed: z.number().int().nonnegative(),
+  chunkSize: z.number().int(),
+  failureRate: z.number().min(0).max(1),
+  haltReason: z.string().nullable().optional(),
+  committedReceipts: z.array(Crm2BatchReceiptSchema),
+  failedRows: z.array(Crm2FailedRowSchema),
+  executedAt: z.coerce.date(),
+});
+export type Crm2BatchExecutionReport = z.infer<typeof Crm2BatchExecutionReportSchema>;
 
 // CRM-2 Exact Duplicate Key Policy Contracts & Normalizers (CRM2-12)
 export * from './crm-2-duplicates.js';

@@ -14,6 +14,11 @@ import {
   CreateDealInputSchema,
   CreateQuoteInputSchema,
   DealsQuerySchema,
+  CRM2_DEFAULT_CHUNK_SIZE,
+  CRM2_DEFAULT_FAILURE_THRESHOLD,
+  Crm2BatchExecutionStatusSchema,
+  Crm2ExecuteBatchLoadInputSchema,
+  Crm2BatchExecutionReportSchema,
 } from '../src/crm-2.js';
 
 const crm2OpenApi = readFileSync(new URL('../openapi/crm-2.yaml', import.meta.url), 'utf8');
@@ -28,6 +33,8 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
       expect(crm2OpenApi).toContain('/stages:');
       expect(crm2OpenApi).toContain('/quotes:');
       expect(crm2OpenApi).toContain('/quotes/{id}:');
+      expect(crm2OpenApi).toContain('/batches/execute-load:');
+      expect(crm2OpenApi).toContain('executeBatchLoad');
       expect(crm2OpenApi).toContain('getQuoteById');
       expect(crm2OpenApi).toContain('/duplicates/detect:');
       expect(crm2OpenApi).toContain('/duplicates/held:');
@@ -159,6 +166,41 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
         expect(parsedLimit.data.pageSize).toBe(50);
         expect(parsedLimit.data.limit).toBe(50);
       }
+    });
+
+    it('validates CRM-2 batch load schemas and constants (CRM2-13)', () => {
+      expect(CRM2_DEFAULT_CHUNK_SIZE).toBe(500);
+      expect(CRM2_DEFAULT_FAILURE_THRESHOLD).toBe(0.10);
+
+      expect(Crm2BatchExecutionStatusSchema.safeParse('COMPLETED').success).toBe(true);
+      expect(Crm2BatchExecutionStatusSchema.safeParse('STOPPED_EXCESSIVE_FAILURES').success).toBe(true);
+      expect(Crm2BatchExecutionStatusSchema.safeParse('FAILED').success).toBe(true);
+      expect(Crm2BatchExecutionStatusSchema.safeParse('UNKNOWN').success).toBe(false);
+
+      const validBatchInput = {
+        batchId: 'batch-crm2-001',
+        records: [
+          {
+            sourceRow: 1,
+            idempotencyKey: 'k-001',
+            data: { name: 'Synthetic Deal 1', value: '1000.00' },
+          },
+        ],
+      };
+
+      const parsedBatch = Crm2ExecuteBatchLoadInputSchema.safeParse(validBatchInput);
+      expect(parsedBatch.success).toBe(true);
+      if (parsedBatch.success) {
+        expect(parsedBatch.data.module).toBe('crm-2');
+        expect(parsedBatch.data.chunkSize).toBe(500);
+        expect(parsedBatch.data.maxRetries).toBe(3);
+        expect(parsedBatch.data.failureThreshold).toBe(0.10);
+      }
+
+      // Rejects empty records array
+      expect(
+        Crm2ExecuteBatchLoadInputSchema.safeParse({ ...validBatchInput, records: [] }).success
+      ).toBe(false);
     });
   });
 });
