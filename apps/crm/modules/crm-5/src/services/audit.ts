@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { audit } from '@cs/db';
 import { redactSensitiveObject, maskSensitiveLog } from '../policies/masking.js';
+
+let cachedAuditTable: any = null;
+async function getAuditTable(): Promise<any> {
+  if (!cachedAuditTable) {
+    const dbModule = await import('@cs/db');
+    cachedAuditTable = dbModule.audit;
+  }
+  return cachedAuditTable;
+}
 
 export interface AuditEventInput {
   actor: string;
@@ -70,7 +78,8 @@ export class Crm5AuditService {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         const validEntityId = input.entityId && uuidRegex.test(input.entityId) ? input.entityId : null;
 
-        await (this.db as any).insert(audit).values({
+        const auditTable = await getAuditTable();
+        await (this.db as any).insert(auditTable).values({
           id: record.id,
           actor: record.actor,
           action: record.action,
