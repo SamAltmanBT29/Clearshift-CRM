@@ -215,3 +215,28 @@ $$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemp
   3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
   4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
 
+---
+
+## 5. Main Paginated Data Table Specification (CRM2-17)
+
+### 5.1 Column Schemas & Alignment
+The main CRM-2 collection screens implement bounded paginated tables with stable column keys matching the database schema and data dictionary:
+
+- **Deals (`DEALS_COLUMNS`)**: `id`, `name`, `contact_name`, `value`, `currency`, `stage_name`, `close_date`, `source_system`, `created_at`
+- **Quotes (`QUOTES_COLUMNS`)**: `id`, `quote_number`, `deal_id`, `quote_date`, `amount`, `currency`, `note`, `source_system`, `created_at`
+- **Pipeline Stages (`STAGES_COLUMNS`)**: `id`, `position`, `name`, `is_won`
+- **Quote Lines (`QUOTE_LINES_COLUMNS`)**: `id`, `quote_id`, `product_id`, `description`, `quantity`, `unit_price`, `total_price`
+- **Duplicates Review (`DUPLICATES_COLUMNS`)**: `id`, `entityType`, `matchKey`, `confidenceScore`, `status`, `detectedAt`
+- **Imports (`IMPORTS_COLUMNS`)**: `id`, `sourceSystem`, `status`, `loadedCount`, `rejectedCount`, `createdAt`, `completedAt`
+
+### 5.2 Bounded Pagination & Server-Side Query Binding
+- **Default Page Size**: 25 records (configurable up to `MAX_PAGE_SIZE = 100`, bounded ceiling preventing DOM bloat).
+- **Query Parameter Serialization**: Encodes `page`, `pageSize`, `limit`, `sort`, `order` into API query parameters.
+- **Boundaries**: Page clamping (`Math.max(1, Math.min(newPage, totalPages))`) prevents out-of-bounds navigation and DOM degradation.
+
+### 5.3 Sorting Controls & ARIA Landmarks
+- **Header Sorting**: Clicking sortable column headers predictably toggles between `asc` and `desc`, resetting the active page to 1.
+- **WAI-ARIA Conformance**: Accessible `<table role="table">`, `<th scope="col" aria-sort="...">`, sort toggle buttons with accessible labels, and pagination toolbar (`<nav aria-label="Table Pagination">`).
+- **Semantic UI States**: Full representation for skeleton loading, zero-data empty state with filter reset, error banner with sanitized message and retry, and 403 Forbidden access-denied view.
+
+
