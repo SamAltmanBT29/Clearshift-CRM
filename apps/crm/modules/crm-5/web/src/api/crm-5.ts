@@ -16,14 +16,17 @@ import {
   type PaginatedRejectsResponse,
   type ReconciliationReport,
   type CreateRunInput,
+  type UpdateRunInput,
   MigrationRunSchema,
   PaginatedRunsResponseSchema,
   ScoresResponseSchema,
   PaginatedRejectsResponseSchema,
   ReconciliationReportSchema,
   CreateRunInputSchema,
+  UpdateRunInputSchema,
   CRM5_API_PREFIX,
 } from '@clearshift/contracts';
+import type { BatchSummary } from '../../../src/domain/relationships.js';
 
 // ---------------------------------------------------------------------------
 // 1. Error Type
@@ -293,4 +296,72 @@ export async function createRun(
   }
 
   return parsed.data;
+}
+
+/**
+ * GET /api/v1/crm-control/runs/:id
+ * Fetches a single migration run projection by ID.
+ */
+export async function getRunById(
+  runId: string,
+  options: RequestOptions = {}
+): Promise<MigrationRun> {
+  const endpoint = `${API_BASE}/runs/${encodeURIComponent(runId)}`;
+  const raw = await request<unknown>(endpoint, { method: 'GET', ...options });
+
+  const parsed = MigrationRunSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Crm5ApiError(
+      502,
+      'CONTRACT_VALIDATION_ERROR',
+      'Server returned invalid run projection schema',
+      parsed.error.flatten()
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * PATCH /api/v1/crm-control/runs/:id
+ * Updates allowlisted fields on a migration run projection with concurrency checking.
+ */
+export async function updateRun(
+  runId: string,
+  input: UpdateRunInput,
+  options: RequestOptions = {}
+): Promise<MigrationRun> {
+  const validatedInput = UpdateRunInputSchema.parse(input);
+  const endpoint = `${API_BASE}/runs/${encodeURIComponent(runId)}`;
+
+  const raw = await request<unknown>(endpoint, {
+    method: 'PATCH',
+    body: JSON.stringify(validatedInput),
+    ...options,
+  });
+
+  const parsed = MigrationRunSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Crm5ApiError(
+      502,
+      'CONTRACT_VALIDATION_ERROR',
+      'Server returned invalid updated run schema',
+      parsed.error.flatten()
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * GET /api/v1/crm-control/batches/:batch
+ * Fetches aggregated batch summary across runs, scores, rejects, and reconciliation.
+ */
+export async function getBatchSummary(
+  batchId: string,
+  options: RequestOptions = {}
+): Promise<BatchSummary> {
+  const endpoint = `${API_BASE}/batches/${encodeURIComponent(batchId)}`;
+  const raw = await request<BatchSummary>(endpoint, { method: 'GET', ...options });
+  return raw;
 }

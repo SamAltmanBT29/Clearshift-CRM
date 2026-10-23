@@ -3,8 +3,8 @@
 **Module ID:** `CRM-4`
 **Module Name:** Marketing Lists and Campaign History
 **Owning Team:** Team `crm-marketing` (Group 4 — Role 4 Data / QA Lead)
-**Target Milestone:** Gate G1 — Design Complete (Sprint 1)
-**Traceability:** ClearShift Project Plan v3.0 §§9.3–9.6, 17; SDS ClearShift CRM v2.0 §4.5, §4.11, §4.12; Master Architecture Baseline 1.0-A §4.2; Issue #177 `[CRM4-24]`.
+**Target Milestone:** Sprint 2 — Gate G2
+**Traceability:** ClearShift Project Plan v3.0 §§9.3–9.6, 17; SDS ClearShift CRM v2.0 §4.5, §4.11, §4.12; Master Architecture Baseline 1.0-A §4.2; Issues #177 `[CRM4-24]` and #178 `[CRM4-25]`.
 
 ---
 
@@ -24,21 +24,21 @@ The Dirty Data Pack Plan establishes the synthetic test fixture strategy for **C
 
 ---
 
-## 2. Dataset Sizing & Balance Sheet Specifications
+## 2. Canonical Module Fixture Specifications (100 Rows)
 
-Two standardized test packs are defined:
-1. **Canonical Module Pack (100 Rows):** Fast, targeted module test pack executed during unit and contract test suites.
-2. **Canonical Integration Pack (1,000 Rows):** Full cross-module integration dataset conforming to SDS §4.11 / §4.12.
+- **Fixture File Location:** [`apps/crm/modules/crm-4/tests/fixtures/dirty-pack-100.csv`](../tests/fixtures/dirty-pack-100.csv)
+- **Manifest Location:** [`apps/crm/modules/crm-4/tests/fixtures/manifest.json`](../tests/fixtures/manifest.json)
+- **Sample Data Mirror:** [`sample-data/crm-4/dirty-pack-100.csv`](../../../../sample-data/crm-4/dirty-pack-100.csv)
+- **SHA-256 Checksum:** `aceed5c310863ea01ed33f649a93c0bbcc4de51316ab15af1e7ead57f77162e9`
+- **Verification Suite:** [`apps/crm/modules/crm-4/tests/fixtures/dirty-pack.test.ts`](../tests/fixtures/dirty-pack.test.ts)
 
 ### Conservation Balance Sheet Target Values
 
-| Metric | Module Pack (100 Rows) | Canonical Pack (1,000 Rows) | Description & Accounting Justification |
+| Metric | Module Pack (100 Rows) | Canonical Pack (1,000 Rows Target) | Description & Accounting Justification |
 | :--- | :---: | :---: | :--- |
 | **`source_count`** | **100** | **1,000** | Total raw source rows parsed from the input CSV/XLSX file. |
-| **`loaded_count`** | **75** | **780** | Valid, clean records committed to target PostgreSQL tables with durable receipts. |
-| **`rejected_count`** | **17** | **140** | Rows with unrecoverable defects (missing name, invalid date, invalid status, monotonic violation, broken FKs). |
-| **`merged_count`** | **8** | **80** | Rows matching exact duplicate keys; merged into surviving golden records via deterministic exact matching. |
-| **`skipped_count`** | **0** | **0** | Explicitly bypassed rows with approved business justification (0 in V1 baseline). |
+| **`clean_count`** | **50** | **520** | Clean, valid records committing successfully to target PostgreSQL tables. |
+| **`defective_count`** | **50** | **480** | Seeded defect rows covering syntax errors, missing fields, duplicates, and rule violations. |
 | **`unaccounted_count`**| **0** | **0** | Missing or unexplained rows. **Must strictly equal 0**. |
 | **Conservation Status**| **OK** | **OK** | Evaluates `source == loaded + rejected + merged + skipped`. |
 
@@ -46,22 +46,24 @@ Two standardized test packs are defined:
 
 ## 3. Seeded Defect Distribution by Category
 
-In accordance with SDS ClearShift CRM v2.0 §4.11 ("Known problems in the Dirty Data Pack"), the 100-row and 1,000-row packs seed defects across specific anomaly categories:
+In accordance with SDS ClearShift CRM v2.0 §4.11 and Issues #177 / #178 `[CRM4-25]`, the 100-row canonical pack seeds defects across specific anomaly categories:
 
-| Category ID | Category Name | Primary Target Entity | Count in 100-Pack | Count in 1,000-Pack | Expected Outcome | Stable Reason Code |
-| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| `CAT-01` | **Clean Golden Records (Marketing Lists)** | List | 25 | 260 | `loaded` | None (Success) |
-| `CAT-02` | **Clean Golden Records (Campaigns)** | Campaign | 25 | 260 | `loaded` | None (Success) |
-| `CAT-03` | **Clean Golden Records (Campaign Members)** | Member | 15 | 160 | `loaded` | None (Success) |
-| `CAT-04` | **Clean Golden Records (Consents)** | Consent | 10 | 100 | `loaded` | None (Success) |
-| `CAT-05` | **Exact Duplicate Lists** | List | 4 (2 pairs) | 40 (20 pairs) | `merged` | `EXACT_LIST_DUPLICATE` |
-| `CAT-06` | **Exact Duplicate Campaign Members** | Member | 4 (2 pairs) | 40 (20 pairs) | `merged` | `EXACT_MEMBER_DUPLICATE` |
-| `CAT-07` | **Omitted Mandatory Name** | List | 3 | 25 | `rejected` | `EMPTY_MANDATORY_FIELD` |
-| `CAT-08` | **Invalid Campaign Date Format** | Campaign | 3 | 25 | `rejected` | `INVALID_DATE_FORMAT` |
-| `CAT-09` | **Invalid Member Status** | Member | 4 | 30 | `rejected` | `INVALID_MEMBER_STATUS` |
-| `CAT-10` | **Monotonic Opt-Out Violation (BR-CRM4-01)** | Consent | 4 | 35 | `rejected` | `MONOTONIC_OPT_OUT_VIOLATION` |
-| `CAT-11` | **Referential Orphan List Link** | Campaign | 3 | 25 | `rejected` | `ORPHAN_LIST_REFERENCE` |
-| **Total** | | | **100** | **1,000** | | |
+| Category ID | Category Name | Primary Target Entity | Count in 100-Pack | Expected Outcome | Stable Reason Code |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| `CAT-01` | **Clean Golden Records (Marketing Lists)** | List | 15 | `valid` | None (Success with UTF-8 support) |
+| `CAT-02` | **Clean Golden Records (Campaigns)** | Campaign | 15 | `valid` | None (Success with ISO dates) |
+| `CAT-03` | **Clean Golden Records (Campaign Members)** | Member | 12 | `valid` | None (Success with sent/opened/clicked) |
+| `CAT-04` | **Clean Golden Records (Consents)** | Consent | 8 | `valid` | None (Success with subscribed/unsubscribed) |
+| `CAT-05` | **Missing Mandatory Fields** | List/Member/Consent | 7 | `null_required` | `EMPTY_MANDATORY_FIELD` |
+| `CAT-06` | **Exact Key Duplicates** | List/Member/Consent | 6 | `exact_duplicate` | `EXACT_DUPLICATE_KEY` |
+| `CAT-07` | **Referential Orphan References** | Campaign/Member | 6 | `foreign_key_missing` | `FOREIGN_KEY_MISSING` |
+| `CAT-08` | **Invalid Member Status** | Member | 6 | `malformed` | `INVALID_MEMBER_STATUS` |
+| `CAT-09` | **Monotonic Opt-Out Reversals** | Consent | 5 | `malformed` | `MONOTONIC_OPT_OUT_VIOLATION` |
+| `CAT-10` | **Date Format Variants** | Campaign | 6 | `malformed` | `INVALID_DATE_FORMAT` |
+| `CAT-11` | **Boundary Numbers** | List/Campaign | 5 | `malformed` | `BOUNDARY_NUMBER_ERROR` |
+| `CAT-12` | **Whitespace Padding** | List/Member/Consent | 5 | `whitespace_padding` | `WHITESPACE_PADDING` |
+| `CAT-13` | **Formula Injection Payloads** | List/Campaign | 4 | `malformed` | `FORMULA_INJECTION_RISK` |
+| **Total** | | | **100** | | |
 
 ---
 

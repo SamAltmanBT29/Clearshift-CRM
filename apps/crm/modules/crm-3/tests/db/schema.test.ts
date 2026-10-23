@@ -224,4 +224,21 @@ databaseSuite("CRM-3 PostgreSQL schema and invariants", () => {
     // Clean up receipt
     await pool.query("DELETE FROM crm3.crm3_import_receipts WHERE id = $1", [receiptId]);
   });
+
+  it("accepts every V1 batch status including stopped_excessive_failures (CRM3-13) and rejects others", async () => {
+    for (const status of ["pending", "processing", "completed", "failed", "stopped_excessive_failures"]) {
+      await pool.query("UPDATE crm3.crm3_import_batches SET status = $1 WHERE id = $2", [status, batchId]);
+      const { rows } = await pool.query<{ status: string }>(
+        "SELECT status FROM crm3.crm3_import_batches WHERE id = $1",
+        [batchId]
+      );
+      expect(rows[0]?.status).toBe(status);
+    }
+
+    await expectCheckFailure(
+      "crm3_import_batches_status_check",
+      "UPDATE crm3.crm3_import_batches SET status = 'load_halted' WHERE id = $1",
+      [batchId]
+    );
+  });
 });
