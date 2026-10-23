@@ -192,6 +192,8 @@ export const DataTable = <T extends Record<string, unknown>>({
                   const rawVal = row[col.key];
                   const formatted = col.format
                     ? col.format(rawVal, row)
+                    : React.isValidElement(rawVal)
+                    ? rawVal
                     : rawVal !== null && rawVal !== undefined
                     ? String(rawVal)
                     : '—';
