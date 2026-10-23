@@ -108,3 +108,54 @@ export const kitProfileReports = pgTable("kit_profile_reports", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Migration Kit Cleaning Audit Log Schema (KIT-04)
+ * Stores every field-level mutation with rule ID, version, and masked values.
+ */
+export const kitCleanLog = pgTable("kit_clean_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  sourceRow: integer("source_row").notNull(),
+  fieldName: text("field_name").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  ruleId: text("rule_id").notNull(),
+  ruleVersion: text("rule_version").notNull().default("1.0.0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Migration Kit Rejects Schema (KIT-04 / SDS §4.10)
+ * Stores row-level rejection decisions with stable reason codes, human-readable explanations, and raw payload.
+ */
+export const kitRejects = pgTable("kit_rejects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  sourceRow: integer("source_row").notNull(),
+  entity: text("entity").notNull(),
+  reasonCode: text("reason_code").notNull(),
+  reasonText: text("reason_text").notNull(),
+  rawJson: jsonb("raw_json").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Migration Kit Staging Table (KIT-04 / SDS §3.3 stg_<module>)
+ * Stores intermediate staged records with cleaning outcome, cleaned payload, and reject reason.
+ */
+export const stgRows = pgTable("stg_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  sourceRow: integer("source_row").notNull(),
+  status: text("status").notNull().default("cleaned"),
+  payload: jsonb("payload").notNull().default({}),
+  rejectReason: text("reject_reason"),
+  goldenId: text("golden_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

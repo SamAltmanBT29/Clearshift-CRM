@@ -6,3 +6,4 @@ export * from "./logging/index.js";
 export * from "./audit/index.js";
 export * from "./observability/index.js";
 export * from "./auth/permissions.js";
+export * from "./cleaning/index.js";
