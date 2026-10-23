@@ -153,3 +153,24 @@ Source of truth: `CRM3_TICKET_STATUS_TRANSITIONS` in `packages/contracts/src/crm
 - `GET /tickets/{id}` and the module's public `Crm3ReferenceResolver` read the same authoritative store, so status, contact link and order reference agree immediately after a successful write.
 - A contact that can no longer be resolved is shown with `contactName`/`contactEmail` = `null`; the ticket is still returned.
 - The public resolver projects only `id, subject, status, priority, contactId` (no note text, no contact PII).
+
+## 6. Authorization Policy (CRM3-15 / #148)
+
+Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/roles.ts`. Every route runs the shared Hub `jwtPlugin` (`@cs/identity`): EdDSA signature, `exp`, issuer `clearshift-hub` and audience `clearshift` are verified. `admin` passes every check.
+
+| Route | viewer | editor | migration_runner | analyst | admin | no token |
+|---|---|---|---|---|---|---|
+| `GET /tickets` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}/notes` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `POST /tickets` | 403 | 201 | 201 | 403 | 201 | 401 |
+| `PATCH /tickets/{id}` | 403 | 200 | 403 | 403 | 200 | 401 |
+| `POST /notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+| `POST /tickets/{id}/notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+
+- 401 `UNAUTHORIZED` and 403 `FORBIDDEN` use the standard envelope `{ code, message, details, correlation_id }`.
+- Roles, not `@cs/rbac` capabilities, decide access: the SDS lets `migration_runner` create tickets although that role has no `module.write` capability.
+- **Fail closed:** registering the routes with auth enabled but without the Hub `jwtPlugin` throws at startup instead of serving unauthenticated routes. `enforceAuth: false` exists only for isolated tests.
+- **Note author:** always the authenticated user (`sub`). A body `authorId` naming someone else returns 403 `AUTHOR_MISMATCH` (detail code `author_mismatch`) and nothing is written.
+- **Protected fields:** `PATCH /tickets/{id}` rejects `id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId` with 400 (strict schema); nothing is written.
+- **Multi-tenancy:** V1 has no tenant or owner column on tickets, so there is no tenant isolation rule to enforce.
