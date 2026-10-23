@@ -1,9 +1,17 @@
 import React from 'react';
+import { DataTable } from '../components/DataTable.js';
+import { DUPLICATES_COLUMNS } from '../table/columns.js';
+import type { TableSortState, TablePaginationState } from '../table/types.js';
 
 export interface DuplicateReviewPageProps {
+  data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | null;
+  sort?: TableSortState | undefined;
+  onSortChange?: ((columnKey: string) => void) | undefined;
+  pagination?: TablePaginationState | undefined;
+  onPageChange?: ((newPage: number) => void) | undefined;
 }
 
 /**
@@ -11,10 +19,17 @@ export interface DuplicateReviewPageProps {
  * Enforces exact key matches and human-reviewed resolution (no fuzzy auto-merging)
  */
 export const DuplicateReviewPage: React.FC<DuplicateReviewPageProps> = ({
+  data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  sort,
+  onSortChange,
+  pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
+  onPageChange,
 }) => {
+  const displayData = isEmpty ? [] : data;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -26,8 +41,9 @@ export const DuplicateReviewPage: React.FC<DuplicateReviewPageProps> = ({
 
       {isLoading && (
         <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading duplicate review candidates">
-          <div className="cs-skeleton-line" style={{ width: '100%' }} />
-          <div className="cs-skeleton-line" style={{ width: '90%' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
+          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
           <p className="cs-loading-text">Loading candidate records...</p>
         </div>
       )}
@@ -38,19 +54,18 @@ export const DuplicateReviewPage: React.FC<DuplicateReviewPageProps> = ({
         </div>
       )}
 
-      {!isLoading && !error && isEmpty && (
-        <div className="cs-empty-state" role="status">
-          <h3 className="cs-empty-title">No records found</h3>
-          <p className="cs-empty-text">
-            No duplicate candidates requiring human resolution. All entities are distinct and reconciled.
-          </p>
-        </div>
-      )}
-
-      {!isLoading && !error && !isEmpty && (
-        <div className="cs-content-placeholder" id="duplicate-review-container">
-          <p className="cs-ready-notice">Ready for duplicate candidate review queue integration.</p>
-        </div>
+      {!isLoading && !error && (
+        <DataTable
+          columns={DUPLICATES_COLUMNS}
+          data={displayData}
+          loading={false}
+          emptyTitle="No records found"
+          emptyDescription="No duplicate candidates requiring human resolution. All entities are distinct and reconciled."
+          sort={sort}
+          onSortChange={onSortChange}
+          pagination={pagination}
+          onPageChange={onPageChange}
+        />
       )}
     </div>
   );
