@@ -1,7 +1,13 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, Suspense } from 'react';
 import type { MappingTemplate, TargetEntityDefinition } from '@clearshift/contracts';
 import { CRM5_TARGET_ENTITIES } from '@clearshift/contracts';
-import { MappingScreen } from '../../../../../migration-kit/web/src/pages/MappingScreen.js';
+import type { MappingScreenProps } from '../../../../../migration-kit/web/src/pages/MappingScreen.js';
+
+const MappingScreen = React.lazy(() =>
+  import('../../../../../migration-kit/web/src/pages/MappingScreen.js').then((mod) => ({
+    default: mod.MappingScreen,
+  }))
+);
 
 export type Crm5TargetEntityKey =
   | 'crm5_runs'
@@ -166,19 +172,21 @@ export const WizardMappingPage: React.FC<WizardMappingPageProps> = ({
       </div>
 
       {/* Shared Migration Kit Mapping Screen with dynamically injected CRM-5 metadata */}
-      <MappingScreen
-        batchId={batchId}
-        module="crm-5"
-        sourceColumns={sourceColumns}
-        sourceColumnTypes={sourceColumnTypes}
-        sampleData={sampleData}
-        targetFields={currentEntity.fields}
-        templates={templates}
-        activeTemplate={activeTemplate}
-        isLoading={isLoading}
-        onSaveTemplate={onSaveTemplate}
-        onApplyMapping={onApplyMapping}
-      />
+      <Suspense fallback={<div className="cs-loading-indicator" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Loading mapping wizard...</div>}>
+        <MappingScreen
+          batchId={batchId}
+          module="crm-5"
+          sourceColumns={sourceColumns}
+          sourceColumnTypes={sourceColumnTypes}
+          sampleData={sampleData}
+          targetFields={currentEntity.fields}
+          templates={templates}
+          activeTemplate={activeTemplate}
+          isLoading={isLoading}
+          onSaveTemplate={onSaveTemplate}
+          onApplyMapping={onApplyMapping}
+        />
+      </Suspense>
     </div>
   );
 };
