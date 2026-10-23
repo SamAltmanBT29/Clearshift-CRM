@@ -19,6 +19,8 @@
     "@cs/core": "*",
     "@cs/kit": "*",
     "@cs/db": "*",
+    "@cs/identity": "*",
+    "@cs/rbac": "*",
     "fastify": "5.12.7"
   },
   "devDependencies": {
