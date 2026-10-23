@@ -16,7 +16,7 @@ import {
   Button,
   Alert,
   Badge,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type { CRM4Consent, CRM4ConsentSet } from '@clearshift/contracts';
 import { CRM4_CONSENT_STATUSES } from '@clearshift/contracts';
 

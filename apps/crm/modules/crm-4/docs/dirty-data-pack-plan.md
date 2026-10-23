@@ -4,7 +4,7 @@
 **Module Name:** Marketing Lists and Campaign History
 **Owning Team:** Team `crm-marketing` (Group 4 — Role 4 Data / QA Lead)
 **Target Milestone:** Sprint 2 — Gate G2
-**Traceability:** ClearShift Project Plan v3.0 §§9.3–9.6, 17; SDS ClearShift CRM v2.0 §4.5, §4.11, §4.12; Master Architecture Baseline 1.0-A §4.2; Issue #178 `[CRM4-25]`.
+**Traceability:** ClearShift Project Plan v3.0 §§9.3–9.6, 17; SDS ClearShift CRM v2.0 §4.5, §4.11, §4.12; Master Architecture Baseline 1.0-A §4.2; Issues #177 `[CRM4-24]` and #178 `[CRM4-25]`.
 
 ---
 
@@ -14,12 +14,12 @@ The Dirty Data Pack Plan establishes the synthetic test fixture strategy for **C
 
 ### Non-Negotiable Fixture Principles:
 1. **100% Synthetic Data:** Zero real personal, customer, or employee data. All list names, campaign descriptions, contact identifiers, and consent assertions are generated deterministically using synthetic dictionaries.
-2. **Stable Deterministic Generation:** Fixtures are generated with a fixed PRNG seed ensuring byte-for-byte reproducibility across test runs.
+2. **Stable Deterministic Generation:** Fixtures are generated with a fixed PRNG seed (Seed 44) ensuring byte-for-byte reproducibility across test runs.
 3. **1-Indexed Source Rows:** Every source row is labeled with a stable 1-indexed `source_row` integer that persists through staging, profiling, cleaning, mapping, and audit logging.
 4. **Conservation Accounting Invariant:**
    $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{merged\_count} + \text{skipped\_count} \quad \text{and} \quad \text{unaccounted\_count} = 0$$
    Every parsed source row must reach exactly one terminal outcome. No row is ever silently dropped.
-5. **Deterministic Deduplication:** Duplicate matching evaluates exact normalized keys only. Fuzzy auto-merging is strictly prohibited.
+5. **Deterministic Deduplication:** Duplicate matching evaluates exact normalized keys only (`buildListExactKey`, `buildCampaignExactKey`, `buildMemberExactKey`, `buildConsentExactKey`). Fuzzy auto-merging is strictly prohibited.
 6. **Monotonic Opt-Out Invariant (BR-CRM4-01):** Any migration row attempting to re-subscribe an already unsubscribed contact is detected as a fatal defect, logged in `crm4_import_rejects`, and rejected without overwriting the existing opt-out state.
 
 ---
@@ -32,7 +32,7 @@ The Dirty Data Pack Plan establishes the synthetic test fixture strategy for **C
 - **SHA-256 Checksum:** `aceed5c310863ea01ed33f649a93c0bbcc4de51316ab15af1e7ead57f77162e9`
 - **Verification Suite:** [`apps/crm/modules/crm-4/tests/fixtures/dirty-pack.test.ts`](../tests/fixtures/dirty-pack.test.ts)
 
-### Dataset Partitioning
+### Conservation Balance Sheet Target Values
 
 | Metric | Module Pack (100 Rows) | Canonical Pack (1,000 Rows Target) | Description & Accounting Justification |
 | :--- | :---: | :---: | :--- |
@@ -46,7 +46,7 @@ The Dirty Data Pack Plan establishes the synthetic test fixture strategy for **C
 
 ## 3. Seeded Defect Distribution by Category
 
-In accordance with SDS ClearShift CRM v2.0 §4.11 and Issue #178 `[CRM4-25]`, the 100-row pack seeds defects across specific anomaly categories:
+In accordance with SDS ClearShift CRM v2.0 §4.11 and Issues #177 / #178 `[CRM4-25]`, the 100-row canonical pack seeds defects across specific anomaly categories:
 
 | Category ID | Category Name | Primary Target Entity | Count in 100-Pack | Expected Outcome | Stable Reason Code |
 | :--- | :--- | :---: | :---: | :---: | :--- |

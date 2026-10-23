@@ -123,3 +123,54 @@ CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
 * **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
 * **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
 * **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.
+
+## 5. Ticket Status Transitions & Relationship Integrity (CRM3-06 / #31)
+
+### Status transition map (user edits via `PATCH /tickets/{id}`)
+Source of truth: `CRM3_TICKET_STATUS_TRANSITIONS` in `packages/contracts/src/crm-3.ts`.
+
+| From | Allowed next statuses |
+|---|---|
+| `New` | `Open` |
+| `Open` | `Waiting`, `Solved` |
+| `Waiting` | `Open`, `Solved` |
+| `Solved` | `Closed`, `Open` (reopen) |
+| `Closed` | none (terminal) |
+
+- Setting the same status again is an idempotent no-op and is accepted.
+- An illegal transition returns `422 INVALID_TICKET_STATUS_TRANSITION` (detail code `invalid_transition`, message lists the allowed next statuses). The rule is checked before any write, so the stored ticket is unchanged.
+- Edits to the same ticket are serialized in the service, so two concurrent edits cannot both validate against the same stale status.
+- The map applies to edits only. Ticket creation (API and Migration Kit import) may use any valid status, because legacy history contains `Solved` and `Closed` tickets.
+
+### Relationship rules
+| Relationship | Rule | Failure |
+|---|---|---|
+| Ticket → CRM-1 contact (`contact_id`) | Required. Checked on create and on any edit that changes it, through the `ReferenceResolver` port (decision C7). No cross-schema foreign key; CRM-3 never reads or writes CRM-1 tables. | `422 VALIDATION_ERROR`, detail code `invalid_contact_reference`; nothing is written |
+| Note → ticket (`ticket_id`) | The ticket must exist in this module before the note is written. | `404 NOT_FOUND`, detail code `ticket_not_found` |
+| Ticket → ERP order (`order_ref`) | Plain text in V1, not validated against ERP. | — |
+
+### Read-model consistency
+- `GET /tickets/{id}` and the module's public `Crm3ReferenceResolver` read the same authoritative store, so status, contact link and order reference agree immediately after a successful write.
+- A contact that can no longer be resolved is shown with `contactName`/`contactEmail` = `null`; the ticket is still returned.
+- The public resolver projects only `id, subject, status, priority, contactId` (no note text, no contact PII).
+
+## 6. Authorization Policy (CRM3-15 / #148)
+
+Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/roles.ts`. Every route runs the shared Hub `jwtPlugin` (`@cs/identity`): EdDSA signature, `exp`, issuer `clearshift-hub` and audience `clearshift` are verified. `admin` passes every check.
+
+| Route | viewer | editor | migration_runner | analyst | admin | no token |
+|---|---|---|---|---|---|---|
+| `GET /tickets` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}/notes` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `POST /tickets` | 403 | 201 | 201 | 403 | 201 | 401 |
+| `PATCH /tickets/{id}` | 403 | 200 | 403 | 403 | 200 | 401 |
+| `POST /notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+| `POST /tickets/{id}/notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+
+- 401 `UNAUTHORIZED` and 403 `FORBIDDEN` use the standard envelope `{ code, message, details, correlation_id }`.
+- Roles, not `@cs/rbac` capabilities, decide access: the SDS lets `migration_runner` create tickets although that role has no `module.write` capability.
+- **Fail closed:** registering the routes with auth enabled but without the Hub `jwtPlugin` throws at startup instead of serving unauthenticated routes. `enforceAuth: false` exists only for isolated tests.
+- **Note author:** always the authenticated user (`sub`). A body `authorId` naming someone else returns 403 `AUTHOR_MISMATCH` (detail code `author_mismatch`) and nothing is written.
+- **Protected fields:** `PATCH /tickets/{id}` rejects `id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId` with 400 (strict schema); nothing is written.
+- **Multi-tenancy:** V1 has no tenant or owner column on tickets, so there is no tenant isolation rule to enforce.
