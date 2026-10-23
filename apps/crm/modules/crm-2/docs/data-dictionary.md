@@ -215,3 +215,125 @@ $$\text{failureRate} = \frac{\text{cumulativeFailedRows}}{\text{cumulativeAttemp
   3. **Durability Guarantee:** Already committed rows and durable receipts are preserved.
   4. **No Destructive Rollback:** V2 compensating rollback sagas are explicitly out-of-scope; committed data remains intact.
 
+---
+
+## 5. Main Paginated Data Table Specification (CRM2-17)
+
+### 5.1 Column Schemas & Alignment
+The main CRM-2 collection screens implement bounded paginated tables with stable column keys matching the database schema and data dictionary:
+
+- **Deals (`DEALS_COLUMNS`)**: `id`, `name`, `contact_name`, `value`, `currency`, `stage_name`, `close_date`, `source_system`, `created_at`
+- **Quotes (`QUOTES_COLUMNS`)**: `id`, `quote_number`, `deal_id`, `quote_date`, `amount`, `currency`, `note`, `source_system`, `created_at`
+- **Pipeline Stages (`STAGES_COLUMNS`)**: `id`, `position`, `name`, `is_won`
+- **Quote Lines (`QUOTE_LINES_COLUMNS`)**: `id`, `quote_id`, `product_id`, `description`, `quantity`, `unit_price`, `total_price`
+- **Duplicates Review (`DUPLICATES_COLUMNS`)**: `id`, `entityType`, `matchKey`, `confidenceScore`, `status`, `detectedAt`
+- **Imports (`IMPORTS_COLUMNS`)**: `id`, `sourceSystem`, `status`, `loadedCount`, `rejectedCount`, `createdAt`, `completedAt`
+
+### 5.2 Bounded Pagination & Server-Side Query Binding
+- **Default Page Size**: 25 records (configurable up to `MAX_PAGE_SIZE = 100`, bounded ceiling preventing DOM bloat).
+- **Query Parameter Serialization**: Encodes `page`, `pageSize`, `limit`, `sort`, `order` into API query parameters.
+- **Boundaries**: Page clamping (`Math.max(1, Math.min(newPage, totalPages))`) prevents out-of-bounds navigation and DOM degradation.
+
+### 5.3 Sorting Controls & ARIA Landmarks
+- **Header Sorting**: Clicking sortable column headers predictably toggles between `asc` and `desc`, resetting the active page to 1.
+- **WAI-ARIA Conformance**: Accessible `<table role="table">`, `<th scope="col" aria-sort="...">`, sort toggle buttons with accessible labels, and pagination toolbar (`<nav aria-label="Table Pagination">`).
+- **Semantic UI States**: Full representation for skeleton loading, zero-data empty state with filter reset, error banner with sanitized message and retry, and 403 Forbidden access-denied view.
+
+---
+
+## 6. Search, Filters and Sorting Controls Specification (CRM2-18)
+
+### 6.1 Debounced Search Bar (300ms Protocol)
+Free-text opportunity discovery is implemented via `SearchInput` and governed by `SearchFilterController`:
+- **Keystroke Debounce**: 300ms delay (`SEARCH_DEBOUNCE_MS = 300`) buffers typing events to prevent overloading server APIs.
+- **Search Target Fields**: Matches `crm2_deals.name` and joined contact name (`crm1_contacts.first_name || ' ' || crm1_contacts.last_name`).
+- **Immediate Flush**: Pressing `Enter` immediately cancels pending timers and dispatches query synchronously.
+- **Immediate Reset**: Pressing `Escape` or clicking clear (`×`) wipes search and dispatches empty query.
+
+### 6.2 Faceted Filter Dimensions & Sidebar
+Collection views provide faceted dimension filters matching the data dictionary:
+- **Deals Facets (`CRM2_DEALS_FACETS`)**:
+  - `stage`: Fixed 6 stages (`New`, `Qualified`, `Proposal`, `Negotiation`, `Won`, `Lost`).
+  - `is_orphan`: Boolean orphan indicator (`true` for unlinked deals, `false` for deals linked to contacts).
+  - `source_system`: Source origin (`hubspot`, `salesforce`, `csv_import`, `manual`).
+- **Quotes Facets (`CRM2_QUOTES_FACETS`)**:
+  - `source_system`: (`csv_import`, `manual`, `erp_sync`).
+- **Duplicate Review Facets (`CRM2_DUPLICATES_FACETS`)**:
+  - `entity`: (`deal`, `quote`).
+  - `status`: (`pending`, `resolved`, `ignored`).
+
+### 6.3 Active Filter Pill Tags & Removal Lifecycle
+Active filter criteria are rendered as pill tags via `ActiveFilterPills`:
+- **Format**: `[Dimension Label]: [Display Value]` (e.g. `Search: "Cloud Deal"`, `Pipeline Stage: Won`, `Orphan Status: Orphan (Unlinked)`).
+- **Individual Dismissal**: Clicking `×` removes that single filter criterion and resets pagination to page 1.
+- **Clear All Reset**: Clicking `Clear All` wipes all filter facets and search input simultaneously.
+
+### 6.4 Informative Empty Search/Filter State
+When search or filter criteria return zero matching records:
+- **Visual Presentation**: Styled container (`cs-empty-filter-state`) with search icon (`🔍`).
+- **Header**: "No matching deals found".
+- **Guidance Text**: "No opportunities match your current filter criteria. Try clearing or modifying your filters."
+- **Action Control**: Explicit "Reset All Filters" button (`data-action="clear-all-filters"`).
+
+### 6.5 Bidirectional URL Query State Synchronization
+State is bidirectionally synchronized with browser URL query parameters:
+- **Query Keys**: `search`, `stage`, `is_orphan`, `source_system`, `sort`, `order`, `page`, `pageSize`.
+- **Deep Linking**: Preserves exact filter and sorting states.
+- **Pagination Boundary Invariant**: Any mutation to search input or faceted filters immediately resets `page` to 1.
+
+
+
+
+---
+
+## 6. Create Form with Field-Level Validation (CRM2-20 / Issue #133)
+
+### 6.1 Zod Form Schema & Invariants (`CreateDealFormSchema`)
+The entity creation workflow enforces strict client-side validation using Zod:
+- **Required Fields**:
+  - `name`: 1–255 characters, non-empty after trimming.
+  - `value`: Non-negative decimal string (up to 4 decimal places).
+  - `closeDate`: Valid YYYY-MM-DD date string.
+  - `currency`: Explicit 3-letter ISO uppercase code (default `USD`).
+  - `stageName`: One of the 6 fixed stages (`New`, `Qualified`, `Proposal`, `Negotiation`, `Won`, `Lost`).
+- **Format Validation**:
+  - `contactEmail`: RFC-compliant email address regex pattern.
+  - `contactPhone`: International phone format (`+?[0-9\s\-().]{7,20}`) with minimum 7 digits.
+  - `contactId`: Standard UUIDv4 format linking to CRM-1 contact.
+- **Decimal Range Validation**:
+  - `probability`: Bounded decimal strictly between `0.00` and `1.00`.
+
+### 6.2 Inflight Request Double-Submit Prevention
+- When form submission is initiated, the submit button is immediately disabled (`disabled={inFlight}`) with `aria-busy="true"`.
+- Button label transitions to "Creating Deal..." alongside an animated spinner (`.cs-spinner-sm`), completely preventing double submission or race conditions.
+
+### 6.3 Server Error Mapping Protocol (`parseServerErrorToFieldErrors`)
+- Conforms to ClearShift HTTP 400 standard error envelope:
+  ```json
+  {
+    "statusCode": 400,
+    "code": "VALIDATION_ERROR",
+    "message": "Request payload validation failed",
+    "details": [
+      { "path": ["name"], "message": "Deal name already exists in active partition" },
+      { "path": ["contactPhone"], "message": "Phone country prefix unverified" }
+    ]
+  }
+  ```
+- Errors map directly to individual input fields with `.cs-input-error`, `aria-invalid="true"`, and accessible field error text.
+- Top-level `FormValidationSummary` banner renders accessible summary with `role="alert"` and `aria-live="polite"`.
+
+### 6.4 Modal Lifecycle & Table Cache Synchronization
+- **CreateDealModal (`CreateDealModal.tsx`)**:
+  - WAI-ARIA accessible modal dialog (`role="dialog"`, `aria-modal="true"`).
+  - Supports keyboard `Escape` dismissal, backdrop overlay click, and document body scroll locking.
+- **Table Cache Updates (`DataTableController`)**:
+  - `addRecordToCache(record)`: Prepends newly created deal record directly to table cache and increments total count.
+  - `getCachedData()` / `setCachedData()`: Read and write bounded in-memory collections.
+  - `updateRecordInCache()` / `removeRecordFromCache()` / `clearCache()`: Maintain cache coherence across lifecycle operations.
+- **Confirmation Toast (`ConfirmationToast.tsx`)**:
+  - Accessible notification banner (`role="status"`, `aria-live="polite"`).
+  - Renders success confirmation message with 5000ms auto-dismissal and manual close button.
+
+### 6.5 Automated Verification Suites (CRM2-20)
+- `apps/crm/modules/crm-2/tests/web/create-form.test.ts`: 40 comprehensive tests verifying Zod schema rules, client-side validation helpers, server 400 error mapping, FormValidationSummary accessibility, ConfirmationToast lifecycle, CreateDealModal behavior, DataTableController cache methods, double-submit button disabling, and DealsListPage integration.

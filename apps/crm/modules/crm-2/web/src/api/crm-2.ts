@@ -130,6 +130,22 @@ export async function getDeals(
     searchParams.set('stage', query.stage);
   }
 
+  if (query.sort) {
+    searchParams.set('sort', query.sort);
+  }
+
+  if (query.order) {
+    searchParams.set('order', query.order);
+  }
+
+  if ((query as any).is_orphan !== undefined && (query as any).is_orphan !== '') {
+    searchParams.set('is_orphan', String((query as any).is_orphan));
+  }
+
+  if ((query as any).source_system) {
+    searchParams.set('source_system', (query as any).source_system);
+  }
+
   const data = await request<unknown>(`${API_BASE}/deals?${searchParams.toString()}`, {
     method: 'GET',
     ...options,
@@ -196,6 +212,8 @@ export async function getQuotes(
   if (query.page) searchParams.set('page', String(query.page));
   if (query.pageSize) searchParams.set('pageSize', String(query.pageSize));
   if (query.deal_id) searchParams.set('deal_id', query.deal_id);
+  if (query.sort) searchParams.set('sort', query.sort);
+  if (query.order) searchParams.set('order', query.order);
 
   const data = await request<unknown>(`${API_BASE}/quotes?${searchParams.toString()}`, {
     method: 'GET',

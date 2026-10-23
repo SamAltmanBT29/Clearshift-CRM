@@ -8,3 +8,4 @@ export * from './table/DataTableController.js';
 export * from './table/facets.js';
 export * from './table/SearchFilterController.js';
 export * from './src/index.js';
+export * from './pages/MappingTemplatesPage.js';

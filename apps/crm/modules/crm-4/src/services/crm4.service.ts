@@ -16,14 +16,46 @@ import {
 } from '@clearshift/contracts';
 import { sanitizeCsvField, redactSensitiveObject } from '../policies/masking.js';
 
+export interface ImportReceipt {
+  id: string;
+  batchId?: string | undefined;
+  sourceRow?: number | undefined;
+  targetEntityId: string;
+  action: 'loaded' | 'merged' | 'rejected' | 'skipped';
+  idempotencyKey: string;
+  result: unknown;
+  createdAt: string;
+}
+
+export interface IdempotencyContext {
+  key?: string | undefined;
+  batchId?: string | undefined;
+  sourceRow?: number | undefined;
+}
+
 export class Crm4Service {
   private lists: Map<string, CRM4List> = new Map();
   private campaigns: Map<string, CRM4Campaign> = new Map();
   private members: Map<string, CRM4Member> = new Map();
   private consents: Map<string, CRM4Consent> = new Map(); // Keyed by contactId
+  private receipts: Map<string, ImportReceipt> = new Map(); // Keyed by idempotencyKey
 
   constructor() {
     this.seedSyntheticData();
+  }
+
+  public getReceipt(key: string): ImportReceipt | undefined {
+    return this.receipts.get(key);
+  }
+
+  public recordReceipt(key: string, receipt: Omit<ImportReceipt, 'id' | 'createdAt'>): ImportReceipt {
+    const full: ImportReceipt = {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      ...receipt,
+    };
+    this.receipts.set(key, full);
+    return full;
   }
 
   /**
@@ -34,6 +66,7 @@ export class Crm4Service {
     this.campaigns.clear();
     this.members.clear();
     this.consents.clear();
+    this.receipts.clear();
 
     const nowIso = new Date().toISOString();
 
@@ -157,6 +190,8 @@ export class Crm4Service {
       all = all.filter((l) => l.name.toLowerCase().includes(q) || (l.description && l.description.toLowerCase().includes(q)));
     }
 
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
     const totalCount = all.length;
@@ -183,27 +218,51 @@ export class Crm4Service {
     return list;
   }
 
-  public async createList(data: CRM4ListCreate): Promise<CRM4List> {
+  public async createList(data: CRM4ListCreate, idempotency?: IdempotencyContext): Promise<CRM4List> {
+    if (!data.name || data.name.trim().length === 0) {
+      throw new AppError('UNPROCESSABLE_ENTITY', 'List name cannot be blank', 422, [{ field: 'name', message: 'Name cannot be blank' }]);
+    }
+    if (idempotency?.key) {
+      const existing = this.receipts.get(idempotency.key);
+      if (existing) {
+        return existing.result as CRM4List;
+      }
+    }
     const nowIso = new Date().toISOString();
     const list: CRM4List = {
       id: randomUUID(),
-      name: data.name,
-      description: data.description ?? null,
+      name: data.name.trim(),
+      description: data.description ? data.description.trim() : null,
       campaignCount: 0,
       memberCount: 0,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
     this.lists.set(list.id, list);
+
+    if (idempotency?.key) {
+      this.recordReceipt(idempotency.key, {
+        batchId: idempotency.batchId,
+        sourceRow: idempotency.sourceRow,
+        targetEntityId: list.id,
+        action: 'loaded',
+        idempotencyKey: idempotency.key,
+        result: list,
+      });
+    }
+
     return list;
   }
 
   public async patchList(id: string, data: CRM4ListPatch): Promise<CRM4List> {
     const existing = await this.getListById(id);
+    if (data.name !== undefined && data.name.trim().length === 0) {
+      throw new AppError('UNPROCESSABLE_ENTITY', 'List name cannot be blank', 422, [{ field: 'name', message: 'Name cannot be blank' }]);
+    }
     const updated: CRM4List = {
       ...existing,
-      ...(data.name ? { name: data.name } : {}),
-      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(data.name ? { name: data.name.trim() } : {}),
+      ...(data.description !== undefined ? { description: data.description ? data.description.trim() : null } : {}),
       updatedAt: new Date().toISOString(),
     };
     this.lists.set(id, updated);
@@ -224,6 +283,8 @@ export class Crm4Service {
       const q = params.search.toLowerCase();
       all = all.filter((c) => c.name.toLowerCase().includes(q));
     }
+
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
 
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
@@ -251,7 +312,17 @@ export class Crm4Service {
     return campaign;
   }
 
-  public async createCampaign(data: CRM4CampaignCreate): Promise<CRM4Campaign> {
+  public async createCampaign(data: CRM4CampaignCreate, idempotency?: IdempotencyContext): Promise<CRM4Campaign> {
+    if (!data.name || data.name.trim().length === 0) {
+      throw new AppError('UNPROCESSABLE_ENTITY', 'Campaign name cannot be blank', 422, [{ field: 'name', message: 'Name cannot be blank' }]);
+    }
+    if (idempotency?.key) {
+      const existing = this.receipts.get(idempotency.key);
+      if (existing) {
+        return existing.result as CRM4Campaign;
+      }
+    }
+
     // Verify referenced list exists
     const list = this.lists.get(data.listId);
     if (!list) {
@@ -261,7 +332,7 @@ export class Crm4Service {
     const nowIso = new Date().toISOString();
     const campaign: CRM4Campaign = {
       id: randomUUID(),
-      name: data.name,
+      name: data.name.trim(),
       campaignDate: data.campaignDate,
       listId: data.listId,
       listName: list.name,
@@ -272,6 +343,18 @@ export class Crm4Service {
 
     this.campaigns.set(campaign.id, campaign);
     list.campaignCount += 1;
+
+    if (idempotency?.key) {
+      this.recordReceipt(idempotency.key, {
+        batchId: idempotency.batchId,
+        sourceRow: idempotency.sourceRow,
+        targetEntityId: campaign.id,
+        action: 'loaded',
+        idempotencyKey: idempotency.key,
+        result: campaign,
+      });
+    }
+
     return campaign;
   }
 
@@ -282,10 +365,13 @@ export class Crm4Service {
     if (data.listId && data.listId !== existing.listId) {
       throw new AppError('FORBIDDEN', 'Campaign listId is immutable and cannot be modified after creation', 403);
     }
+    if (data.name !== undefined && data.name.trim().length === 0) {
+      throw new AppError('UNPROCESSABLE_ENTITY', 'Campaign name cannot be blank', 422, [{ field: 'name', message: 'Name cannot be blank' }]);
+    }
 
     const updated: CRM4Campaign = {
       ...existing,
-      ...(data.name ? { name: data.name } : {}),
+      ...(data.name ? { name: data.name.trim() } : {}),
       ...(data.campaignDate ? { campaignDate: data.campaignDate } : {}),
       updatedAt: new Date().toISOString(),
     };
@@ -310,6 +396,8 @@ export class Crm4Service {
       all = all.filter((m) => m.status === params.status);
     }
 
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+
     const page = params.page && params.page > 0 ? params.page : 1;
     const pageSize = params.pageSize && params.pageSize > 0 ? Math.min(params.pageSize, 100) : 25;
     const totalCount = all.length;
@@ -328,7 +416,14 @@ export class Crm4Service {
     };
   }
 
-  public async addCampaignMember(data: CRM4MemberCreate): Promise<CRM4Member> {
+  public async addCampaignMember(data: CRM4MemberCreate, idempotency?: IdempotencyContext): Promise<CRM4Member> {
+    if (idempotency?.key) {
+      const existing = this.receipts.get(idempotency.key);
+      if (existing) {
+        return existing.result as CRM4Member;
+      }
+    }
+
     const campaign = await this.getCampaignById(data.campaignId);
 
     // Assert status invariant: strictly sent, opened, clicked
@@ -357,6 +452,18 @@ export class Crm4Service {
 
     this.members.set(member.id, member);
     campaign.memberCount += 1;
+
+    if (idempotency?.key) {
+      this.recordReceipt(idempotency.key, {
+        batchId: idempotency.batchId,
+        sourceRow: idempotency.sourceRow,
+        targetEntityId: member.id,
+        action: 'loaded',
+        idempotencyKey: idempotency.key,
+        result: member,
+      });
+    }
+
     return member;
   }
 
@@ -372,7 +479,14 @@ export class Crm4Service {
     return consent;
   }
 
-  public async setConsent(data: CRM4ConsentSet): Promise<CRM4Consent> {
+  public async setConsent(data: CRM4ConsentSet, idempotency?: IdempotencyContext): Promise<CRM4Consent> {
+    if (idempotency?.key) {
+      const existing = this.receipts.get(idempotency.key);
+      if (existing) {
+        return existing.result as CRM4Consent;
+      }
+    }
+
     const existing = this.consents.get(data.contactId);
 
     // Enforce BR-CRM4-01: A known opt-out / unsubscribe cannot be overwritten with subscribed
@@ -408,6 +522,17 @@ export class Crm4Service {
           m.unsubscribed = true;
         }
       }
+    }
+
+    if (idempotency?.key) {
+      this.recordReceipt(idempotency.key, {
+        batchId: idempotency.batchId,
+        sourceRow: idempotency.sourceRow,
+        targetEntityId: consent.id,
+        action: existing ? 'merged' : 'loaded',
+        idempotencyKey: idempotency.key,
+        result: consent,
+      });
     }
 
     return consent;
