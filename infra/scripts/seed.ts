@@ -9,9 +9,72 @@
  */
 
 import pg from 'pg';
-import { waitForDatabase, maskDatabaseUrl } from './db-migrate.js';
 
 const { Pool } = pg;
+
+/**
+ * Masks database credentials from connection strings for safe logging.
+ */
+export function maskDatabaseUrl(urlStr: string): string {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.password) {
+      parsed.password = '****';
+    }
+    return parsed.toString();
+  } catch {
+    return urlStr.replace(/:[^:@]+@/, ':****@');
+  }
+}
+
+/**
+ * Polls the PostgreSQL connection until healthy or timeout expires.
+ */
+export async function waitForDatabase(
+  databaseUrl: string,
+  timeoutMs: number = 30000,
+  intervalMs: number = 1000,
+  silent: boolean = false
+): Promise<boolean> {
+  const maskedUrl = maskDatabaseUrl(databaseUrl);
+  if (!silent) {
+    console.log(`🔌 Checking database readiness at ${maskedUrl}...`);
+  }
+
+  const startTime = Date.now();
+  let attempts = 0;
+
+  while (Date.now() - startTime < timeoutMs) {
+    attempts++;
+    const testPool = new Pool({
+      connectionString: databaseUrl,
+      connectionTimeoutMillis: Math.min(3000, intervalMs * 2),
+    });
+
+    try {
+      const client = await testPool.connect();
+      try {
+        await client.query('SELECT 1');
+        if (!silent) {
+          console.log(`✅ Database is healthy and ready (connected after ${attempts} attempt(s)).`);
+        }
+        return true;
+      } finally {
+        client.release();
+        await testPool.end();
+      }
+    } catch {
+      await testPool.end().catch(() => {});
+      const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+      if (!silent) {
+        console.log(`⏳ Waiting for database to become healthy... (${elapsedSec}s elapsed)`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+
+  throw new Error(`Database at ${maskedUrl} failed to become healthy within ${timeoutMs}ms.`);
+}
 
 const ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'postgres'];
 const ALLOWED_DB_NAMES = ['clearshift', 'clearshift_test', 'clearshift_dev'];
