@@ -4,7 +4,10 @@ import { Crm1TargetAdapter } from '../../src/migration/target-adapter.js';
 import { Crm1Service } from '../../src/services/crm1.service.js';
 import type { ImportRowInput } from '@clearshift/contracts';
 
-describe('CRM-1 Target Adapter & Durable Import Receipts (KIT-08 & Decision C4)', () => {
+const databaseUrl = process.env["DATABASE_URL_TEST"];
+const suite = databaseUrl ? describe : describe.skip;
+
+suite('CRM-1 Target Adapter & Durable Import Receipts (KIT-08 & Decision C4)', () => {
   let service: Crm1Service;
   let adapter: Crm1TargetAdapter;
   let app: ReturnType<typeof buildApp>;
