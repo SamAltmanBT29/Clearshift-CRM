@@ -113,6 +113,16 @@ export class DuplicateRecordError extends AppError {
   }
 }
 
+export class BatchLoadHaltedError extends AppError {
+  constructor(
+    message = 'Batch execution stopped immediately: row failures exceeded the 10% threshold.',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('STOPPED_EXCESSIVE_FAILURES', message, 422, details);
+    this.name = 'BatchLoadHaltedError';
+  }
+}
+
 export class AutoMergeForbiddenError extends AppError {
   constructor(
     message = 'Automatic fuzzy or unreviewed merging is forbidden in V1. Duplicate candidates must be held for authorized human review.',
