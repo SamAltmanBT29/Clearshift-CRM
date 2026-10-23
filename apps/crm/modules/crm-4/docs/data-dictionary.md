@@ -1,135 +1,148 @@
-# CRM-4 Marketing Lists & Campaign History — Field-Level Data Dictionary
+# ClearShift CRM — Data Dictionary: CRM-4 Marketing Lists and Campaign History
 
-**Document:** `apps/crm/modules/crm-4/docs/data-dictionary.md`  
 **Module ID:** `CRM-4`  
-**Module Name:** Marketing Lists and Campaign History (Group 4)  
-**Schema:** PostgreSQL 18.6 schema `crm4`  
-**Traceability:** Issue #36 `[CRM4-01]`, SDS ClearShift CRM v2.0 §4.4, §7.4, Project Plan v3.0 §7.4, PLT-03.
+**Module Name:** Marketing Lists and Campaign History  
+**Owning Team:** Team `crm-marketing` (Group 4)  
+**Schema Version:** 1.0.0  
+**Storage Engine:** PostgreSQL 18.6 with Drizzle ORM (schema `crm4`)  
+**Target Milestone:** Gate G4 Release Candidate (Weeks 7–8)  
+**Access Pattern:** Authenticated module API `/api/v1/crm-marketing` with EdDSA JWTs & RBAC. Zero direct cross-module SQL mutations.  
+**Traceability:** ClearShift Project Plan v3.0 §7.4, §9; SDS ClearShift CRM v2.0 §4, §7.1; V1: FR-CRM4-01..05; BR-CRM4-01; Issues #36 `[CRM4-01]`, #45 `[CRM4-10]`.
 
 ---
 
-## 1. Overview & Architectural Boundaries
+## 1. Entity Relationship Overview
 
-All tables in this module reside in the dedicated PostgreSQL schema `crm4`. Master data ownership is strictly enforced:
-- **Primary Keys:** Surrogate UUIDs generated via `gen_random_uuid()` (PostgreSQL v4 UUID).
-- **Timestamps:** UTC timestamps with timezone (`timestamptz`), defaulting to `now()`.
-- **Cross-Module Boundaries (PLT-03):** No cross-schema foreign keys are permitted to external module tables.
-  - References to CRM-1 contacts (`contact_id`) are stored as UUIDs; referential validity is asserted through CRM-1's public reference resolver API.
-- **BR-CRM4-01 (Monotonic Opt-Out):** Once a contact's consent is set to `unsubscribed`, neither migration imports nor standard UI actions may revert the status to `subscribed`.
-- **Campaign History Only:** No outbound delivery (email/SMS dispatch, SMTP, or messaging queue) in V1.
+CRM-4 maintains core tables in the `crm4` PostgreSQL schema to record marketing segmentation lists, campaign history, participant activity, contact consent records, and migration receipts:
+
+```
+┌──────────────────────────────────────┐
+│             crm4_lists               │
+│ (Marketing Lists & Segmentation)     │
+└──────────────────┬───────────────────┘
+                   │
+         1:N       │ (list_id — IMMUTABLE)
+                   ▼
+┌──────────────────────────────────────┐       ┌──────────────────────────────────────┐
+│           crm4_campaigns             │       │            crm4_consents             │
+│   (Historical Campaign Headers)      │       │      (Contact Consent Registry)      │
+└──────────────────┬───────────────────┘       └──────────────────┬───────────────────┘
+                   │                                              │
+         1:N       │ (campaign_id)                                │ (action-time check)
+                   ▼                                              │
+┌──────────────────────────────────────┐                          │
+│            crm4_members              │ ◄────────────────────────┘
+│    (Campaign Participant Records)    │
+└──────────────────────────────────────┘
+```
 
 ---
 
-## 2. Table Specifications
+## 2. Table Specifications (Field-Level Data Dictionary)
 
-### 2.1 `crm4.crm4_lists` (Marketing Lists)
+### 2.1 Table: `crm4_lists`
+**Description:** Marketing segment and recipient list headers.
 
-Marketing audience segments and target groupings.
-
-| Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID primary key. | `44444444-1111-4444-8444-000000000001` |
-| `name` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(name)) > 0)`<br>`INDEX (lower(name))` | Marketing list name; non-empty trimmed text. Max 255 chars. | `Q4 Enterprise Prospects` |
-| `description` | `TEXT` | YES | `NULL` | None | Human-readable list purpose or description. | `Target enterprise leads for Q4 outreach` |
-| `campaign_count` | `INTEGER` | **NO** | `0` | `CHECK (campaign_count >= 0)` | Computed count of campaigns targeting this list. | `2` |
-| `member_count` | `INTEGER` | **NO** | `0` | `CHECK (member_count >= 0)` | Computed total participants across linked campaigns. | `150` |
-| `source_system` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)`<br>`CHECK (pair check with source_id)` | Legacy origin system tag for migration traceability. | `hubspot_legacy` |
-| `source_id` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)`<br>`CHECK (pair check with source_system)` | Legacy record primary key. Paired uniqueness prevents duplicate import. | `list_9041` |
-| `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | `INDEX (created_at DESC)` | Creation audit timestamp. | `2026-10-23T08:00:00.000Z` |
-| `updated_at` | `TIMESTAMPTZ` | **NO** | `now()` | None | Last mutation audit timestamp. | `2026-10-23T08:30:00.000Z` |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID. | `44444444-1111-4444-8444-000000000001` |
+| `name` | `text` | No | — | `length(btrim(name)) > 0`, max 255 | Descriptive list name. | `Q1 Enterprise Outreach` |
+| `description` | `text` | Yes | `NULL` | — | Optional description of audience criteria. | `Strategic Fortune 500 accounts` |
+| `campaign_count`| `integer` | No | `0` | `>= 0` | Computed number of associated campaigns. | `3` |
+| `member_count` | `integer` | No | `0` | `>= 0` | Computed count of members across campaigns. | `150` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Creation audit timestamp. | `2026-10-01T00:00:00.000Z` |
+| `updated_at` | `timestamptz` | No | `now()` | Read-only | Last modification timestamp. | `2026-10-01T00:00:00.000Z` |
 
 ---
 
-### 2.2 `crm4.crm4_campaigns` (Campaign History)
+### 2.2 Table: `crm4_campaigns`
+**Description:** Marketing campaign execution records and historical metadata.
 
-Historical campaigns recorded against marketing lists.
-
-| Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID primary key. | `44444444-2222-4444-8444-000000000001` |
-| `name` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(name)) > 0)` | Campaign name; non-empty trimmed text. Max 255 chars. | `Q4 Product Launch Announcement` |
-| `campaign_date` | `DATE` | **NO** | *None* | `INDEX (campaign_date)` | Recorded execution or reference date (YYYY-MM-DD). | `2026-11-01` |
-| `list_id` | `UUID` | **NO** | *None* | `FK -> crm4_lists(id) ON DELETE RESTRICT`<br>`INDEX (list_id)` | Linked marketing list. **IMMUTABLE after creation**. | `44444444-1111-4444-8444-000000000001` |
-| `member_count` | `INTEGER` | **NO** | `0` | `CHECK (member_count >= 0)` | Recorded number of campaign participants. | `150` |
-| `source_system` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)`<br>`CHECK (pair check with source_id)` | Legacy origin system tag. | `hubspot_legacy` |
-| `source_id` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)`<br>`CHECK (pair check with source_system)` | Legacy campaign identifier. | `camp_1204` |
-| `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | `INDEX (created_at DESC)` | Creation audit timestamp. | `2026-10-23T08:00:00.000Z` |
-| `updated_at` | `TIMESTAMPTZ` | **NO** | `now()` | None | Last mutation audit timestamp. | `2026-10-23T08:30:00.000Z` |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID. | `44444444-2222-4444-8444-000000000001` |
+| `name` | `text` | No | — | `length(btrim(name)) > 0`, max 255 | Human-readable campaign name. | `Q1 Launch Blitz` |
+| `campaign_date`| `date` | No | — | Format `YYYY-MM-DD` | Execution date or reference timeline. | `2026-11-01` |
+| `list_id` | `uuid` | No | — | FK to `crm4_lists.id` ON DELETE RESTRICT | **IMMUTABLE after creation**. Cannot be reassigned. | `44444444-1111-4444-8444-000000000001` |
+| `member_count` | `integer` | No | `0` | `>= 0` | Recorded count of campaign participants. | `2` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Creation audit timestamp. | `2026-10-10T00:00:00.000Z` |
+| `updated_at` | `timestamptz` | No | `now()` | Read-only | Last update timestamp. | `2026-10-10T00:00:00.000Z` |
 
 ---
 
-### 2.3 `crm4.crm4_members` (Campaign Membership & Status)
+### 2.3 Table: `crm4_members`
+**Description:** Individual contact participation and response logging for a campaign.
 
-Recorded engagement status for contacts participating in a campaign.
-
-| Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID primary key. | `44444444-3333-4444-8444-000000000001` |
-| `campaign_id` | `UUID` | **NO** | *None* | `FK -> crm4_campaigns(id) ON DELETE CASCADE`<br>`INDEX (campaign_id)` | Parent campaign reference. Deleting campaign cascades to members. | `44444444-2222-4444-8444-000000000001` |
-| `contact_id` | `UUID` | **NO** | *None* | `INDEX (contact_id)` | CRM-1 contact reference. Validated via CRM-1 resolver API. | `11111111-1111-4111-8111-000000000001` |
-| `status` | `TEXT` | **NO** | `'sent'` | `CHECK (status IN ('sent', 'opened', 'clicked'))`<br>`INDEX (status)` | Participant engagement status. No arbitrary statuses allowed. | `opened` |
-| `unsubscribed` | `BOOLEAN` | **NO** | `false` | None | Indicates whether contact opted out during or via campaign. | `false` |
-| `source_system` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)` | Legacy origin system tag. | `hubspot_legacy` |
-| `source_id` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)` | Legacy membership record primary key. | `mem_501` |
-| `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | `INDEX (created_at DESC)` | Membership creation timestamp. | `2026-10-23T08:00:00.000Z` |
-
-**Table Invariants:**
-- `UNIQUE (campaign_id, contact_id)`: A contact cannot be added more than once to the same campaign.
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID. | `44444444-3333-4444-8444-000000000001` |
+| `campaign_id` | `uuid` | No | — | FK to `crm4_campaigns.id` ON DELETE CASCADE | Parent campaign reference. | `44444444-2222-4444-8444-000000000001` |
+| `contact_id` | `uuid` | No | — | Valid CRM-1 contact UUID | Contact recipient identifier. | `11111111-1111-4111-8111-000000000001` |
+| `status` | `text` | No | `'sent'` | IN `('sent', 'opened', 'clicked')` | Restricted to strict engagement allowlist. | `opened` |
+| `unsubscribed` | `boolean` | No | `false` | — | Whether recipient unsubscribed during this campaign. | `false` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Record insertion timestamp. | `2026-10-15T00:00:00.000Z` |
 
 ---
 
-### 2.4 `crm4.crm4_consents` (Contact Consent Ledger)
+### 2.4 Table: `crm4_consents`
+**Description:** Contact communication consent registry enforcing global privacy mandates.
 
-Contact marketing consent state and audit trail.
-
-| Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID primary key. | `44444444-4444-4444-8444-000000000001` |
-| `contact_id` | `UUID` | **NO** | *None* | `UNIQUE (contact_id)` | Unique reference to CRM-1 contact. One consent record per contact. | `11111111-1111-4111-8111-000000000001` |
-| `status` | `TEXT` | **NO** | *None* | `CHECK (status IN ('subscribed', 'unsubscribed'))`<br>`INDEX (status)` | Consent status. **BR-CRM4-01**: `unsubscribed` is monotonic and cannot revert. | `subscribed` |
-| `consent_date` | `TIMESTAMPTZ` | **NO** | `now()` | None | Exact timestamp of consent grant or withdrawal. | `2026-10-23T08:00:00.000Z` |
-| `source` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(source)) > 0)` | Channel or origin of consent assertion (e.g. web form, CSV import). | `web_form` |
-| `source_system` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)` | Legacy origin system tag. | `hubspot_legacy` |
-| `source_id` | `TEXT` | YES | `NULL` | `UNIQUE (source_system, source_id)` | Legacy consent identifier. | `consent_991` |
-| `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | None | Creation audit timestamp. | `2026-10-23T08:00:00.000Z` |
-| `updated_at` | `TIMESTAMPTZ` | **NO** | `now()` | `INDEX (updated_at DESC)` | Last update audit timestamp. | `2026-10-23T08:30:00.000Z` |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID. | `44444444-4444-4444-8444-000000000001` |
+| `contact_id` | `uuid` | No | — | Unique Index | CRM-1 contact identifier. Exactly one active record. | `11111111-1111-4111-8111-000000000001` |
+| `status` | `text` | No | `'subscribed'` | IN `('subscribed', 'unsubscribed')` | **BR-CRM4-01: Once `unsubscribed`, cannot revert to `subscribed`**. | `unsubscribed` |
+| `consent_date` | `timestamptz` | No | `now()` | — | Timestamp of the consent assertion. | `2026-10-02T00:00:00.000Z` |
+| `source` | `text` | No | — | `length(btrim(source)) > 0` | Origin channel (e.g. `web_form`, `unsubscribe_link`). | `unsubscribe_link` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Record creation timestamp. | `2026-10-02T00:00:00.000Z` |
+| `updated_at` | `timestamptz` | No | `now()` | Read-only | Last modification timestamp. | `2026-10-02T00:00:00.000Z` |
 
 ---
 
-### 2.5 `crm4.crm4_import_batches` (Migration Kit Batches)
+### 2.5 Table: `crm4_import_batches`
+**Description:** Tracks migration batches loaded into CRM-4.
 
-Tracks migration batches loaded into CRM-4.
-
-| Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID primary key. | `44444444-5555-4444-8444-000000000001` |
-| `source_system` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(source_system)) > 0)` | Source system identifier. | `hubspot` |
-| `status` | `TEXT` | **NO** | `'pending'` | `CHECK (status IN ('pending', 'processing', 'completed', 'failed'))` | Batch lifecycle status. | `completed` |
-| `idempotency_key` | `TEXT` | YES | `NULL` | `UNIQUE (idempotency_key)` | Batch-level idempotency key. | `batch-crm4-20261023-01` |
-| `request_hash` | `TEXT` | YES | `NULL` | None | SHA-256 payload digest. | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
-| `loaded_count` | `INTEGER` | **NO** | `0` | `CHECK (loaded_count >= 0)` | Count of successfully ingested records. | `100` |
-| `rejected_count` | `INTEGER` | **NO** | `0` | `CHECK (rejected_count >= 0)` | Count of rejected records. | `0` |
-| `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | `INDEX (created_at DESC)` | Ingestion initiation timestamp. | `2026-10-23T08:00:00.000Z` |
-| `updated_at` | `TIMESTAMPTZ` | **NO** | `now()` | None | Last update timestamp. | `2026-10-23T08:05:00.000Z` |
-| `completed_at` | `TIMESTAMPTZ` | YES | `NULL` | None | Batch completion timestamp. | `2026-10-23T08:05:00.000Z` |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID. | `44444444-5555-4444-8444-000000000001` |
+| `source_system` | `text` | No | — | `length(btrim(source_system)) > 0` | Source system identifier. | `hubspot` |
+| `status` | `text` | No | `'pending'` | IN `('pending', 'processing', 'completed', 'failed')` | Batch lifecycle status. | `completed` |
+| `idempotency_key`| `text` | Yes | `NULL` | Unique Index | Batch-level idempotency key. | `batch-crm4-01` |
+| `request_hash` | `text` | Yes | `NULL` | — | SHA-256 payload digest. | `e3b0c442...` |
+| `loaded_count` | `integer` | No | `0` | `>= 0` | Count of ingested records. | `100` |
+| `rejected_count`| `integer` | No | `0` | `>= 0` | Count of rejected records. | `0` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Ingestion start timestamp. | `2026-10-23T08:00:00.000Z` |
+| `updated_at` | `timestamptz` | No | `now()` | Read-only | Ingestion update timestamp. | `2026-10-23T08:05:00.000Z` |
+| `completed_at` | `timestamptz` | Yes | `NULL` | — | Completion timestamp. | `2026-10-23T08:05:00.000Z` |
 
 ---
 
-### 2.6 `crm4.crm4_import_receipts` (Durable Ingestion Receipts)
+### 2.6 Table: `crm4_import_receipts`
+**Description:** Row-level transaction receipts providing durable idempotency.
 
-Row-level transaction receipts providing durable idempotency.
-
-| Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable receipt UUID. | `44444444-6666-4444-8444-000000000001` |
-| `batch_id` | `UUID` | **NO** | *None* | `FK -> crm4_import_batches(id) ON DELETE CASCADE` | Associated batch identifier. | `44444444-5555-4444-8444-000000000001` |
-| `source_row` | `INTEGER` | **NO** | *None* | `CHECK (source_row > 0)` | 1-based source spreadsheet/CSV row number. | `1` |
-| `entity` | `TEXT` | **NO** | *None* | `CHECK (entity IN ('list', 'campaign', 'member', 'consent'))` | Ingested target entity type. | `consent` |
-| `source_system` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(source_system)) > 0)` | Source system identifier. | `hubspot` |
-| `source_id` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(source_id)) > 0)` | Source record identifier. | `con_1001` |
-| `target_id` | `UUID` | **NO** | *None* | `INDEX (target_id)` | UUID of the committed target entity record. | `44444444-4444-4444-8444-000000000001` |
-| `idempotency_key` | `TEXT` | **NO** | *None* | `UNIQUE (idempotency_key)` | Deterministic composite hash key. | `rcpt-crm4-hubspot-con_1001` |
-| `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | `INDEX (created_at DESC)` | Receipt persistence timestamp. | `2026-10-23T08:05:00.000Z` |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable receipt UUID. | `44444444-6666-4444-8444-000000000001` |
+| `batch_id` | `uuid` | No | — | FK to `crm4_import_batches.id` | Associated batch ID. | `44444444-5555-4444-8444-000000000001` |
+| `source_row` | `integer` | No | — | `source_row > 0` | 1-based source row number. | `1` |
+| `entity` | `text` | No | — | IN `('list', 'campaign', 'member', 'consent')` | Ingested target entity type. | `consent` |
+| `source_system` | `text` | No | — | `length(btrim(source_system)) > 0` | Source system identifier. | `hubspot` |
+| `source_id` | `text` | No | — | `length(btrim(source_id)) > 0` | Source record identifier. | `con_1001` |
+| `target_id` | `uuid` | No | — | Index | UUID of the committed target entity record. | `44444444-4444-4444-8444-000000000001` |
+| `idempotency_key`| `text` | No | — | Unique Index | Deterministic composite hash key. | `rcpt-con_1001` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Receipt timestamp. | `2026-10-23T08:05:00.000Z` |
 
-**Table Invariants:**
-- `UNIQUE (batch_id, source_row, entity)`: Ensures exactly one outcome receipt per source row and entity in a batch.
+---
+
+## 3. Business Invariants & Integrity Constraints
+
+1. **BR-CRM4-01 Monotonic Opt-Out Invariant**:
+   * An opt-out assertion (`status = 'unsubscribed'`) is permanent and monotonically non-decreasing.
+   * Neither standard updates, migration batch loads, nor bulk actions may revert a contact's consent to `'subscribed'`.
+   * Any update attempting this transition is rejected with `HTTP 409 Conflict`.
+2. **Campaign List Immutability**:
+   * A campaign's parent `list_id` cannot be modified after initial creation. Attempted mutations return `HTTP 403 Forbidden`.
+3. **Engagement Status Allowlist**:
+   * Member status is strictly confined to `'sent'`, `'opened'`, and `'clicked'`. Any other status string fails schema validation (`HTTP 400 Bad Request`).
+4. **Formula Injection Sanitization**:
+   * Any CSV exported from CRM-4 sanitizes fields starting with `=`, `+`, `-`, `@`, `\t`, or `\r` by prepending a single quote (`'`).
