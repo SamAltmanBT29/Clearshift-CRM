@@ -220,3 +220,25 @@ CRM-1 registers 5 primary sub-views under the common ClearShift layout shell:
 * **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
 * **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight`, `Home`, and `End` navigation for full keyboard-driven operation.
 * **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-1 - <View Title>`.
+
+---
+
+## Main Paginated Data Table Specification (CRM1-17)
+
+### Column Schemas & Alignment
+The main CRM-1 collection screens implement bounded paginated tables with stable column keys matching the database schema:
+
+- **Contacts (`CONTACTS_COLUMNS`)**: `id`, `firstName`, `lastName`, `email`, `phone`, `companyId`, `leadStatus`, `goldenId`, `consentStatus`, `unsubscribed`, `createdAt`
+- **Companies (`COMPANIES_COLUMNS`)**: `id`, `name`, `taxNumber`, `email`, `phone`, `address`, `sourceSystem`, `sourceId`, `createdAt`
+- **Leads (`LEADS_COLUMNS`)**: `id`, `contactId`, `status`, `sourceSystem`, `sourceId`, `createdAt`
+- **Duplicates (`DUPLICATES_COLUMNS`)**: `id`, `entity`, `matchKey`, `matchType`, `existingId`, `incomingId`, `status`, `detectedAt`
+- **Imports (`IMPORTS_COLUMNS`)**: `id`, `sourceSystem`, `status`, `loadedCount`, `rejectedCount`, `createdAt`, `completedAt`
+
+### Bounded Pagination & Server-Side Query Binding
+- **Default Page Size**: 25 records (configurable up to `MAX_PAGE_SIZE = 100`).
+- **Query Parameter Serialization**: Encodes `page`, `pageSize`, `limit`, `sort`, `order` into API query parameters.
+- **Boundaries**: Page clamping prevents out-of-bounds navigation and DOM degradation.
+
+### Sorting Controls & ARIA Landmarks
+- **Header Sorting**: Clicking sortable column headers predictably toggles between `asc` and `desc`, resetting the active page to 1.
+- **WAI-ARIA Conformance**: Accessible `<table role="table">`, `<th aria-sort="...">`, sort toggle `<button aria-label="Sort by ...">`, and pagination toolbar (`<nav aria-label="Table Pagination">`).
