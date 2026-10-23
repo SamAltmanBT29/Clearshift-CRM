@@ -120,64 +120,6 @@ export const crm4Consents = crm4Schema.table(
 );
 
 // ---------------------------------------------------------------------------
-// 5. CRM-4 Import Batches (Migration Kit integration)
-// ---------------------------------------------------------------------------
-export const crm4ImportBatches = crm4Schema.table(
-  'crm4_import_batches',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    sourceSystem: text('source_system').notNull(),
-    status: text('status').notNull().default('pending'),
-    idempotencyKey: text('idempotency_key'),
-    requestHash: text('request_hash'),
-    loadedCount: integer('loaded_count').notNull().default(0),
-    rejectedCount: integer('rejected_count').notNull().default(0),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-  },
-  (table) => [
-    check('chk_crm4_import_batches_source_nonempty', sql`length(btrim(${table.sourceSystem})) > 0`),
-    check('chk_crm4_import_batches_status', sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`),
-    check('chk_crm4_import_batches_loaded_count', sql`${table.loadedCount} >= 0`),
-    check('chk_crm4_import_batches_rejected_count', sql`${table.rejectedCount} >= 0`),
-    uniqueIndex('idx_crm4_import_batches_idempotency_key').on(table.idempotencyKey),
-    index('idx_crm4_import_batches_created_at').on(sql`${table.createdAt} DESC`),
-  ]
-);
-
-// ---------------------------------------------------------------------------
-// 6. CRM-4 Import Receipts (Durable idempotency receipts)
-// ---------------------------------------------------------------------------
-export const crm4ImportReceipts = crm4Schema.table(
-  'crm4_import_receipts',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    batchId: uuid('batch_id')
-      .notNull()
-      .references(() => crm4ImportBatches.id, { onDelete: 'cascade' }),
-    sourceRow: integer('source_row').notNull(),
-    entity: text('entity').notNull(),
-    sourceSystem: text('source_system').notNull(),
-    sourceId: text('source_id').notNull(),
-    targetId: uuid('target_id').notNull(),
-    idempotencyKey: text('idempotency_key').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    check('chk_crm4_import_receipts_source_row', sql`${table.sourceRow} > 0`),
-    check('chk_crm4_import_receipts_entity', sql`${table.entity} IN ('list', 'campaign', 'member', 'consent')`),
-    check('chk_crm4_import_receipts_source_system_nonempty', sql`length(btrim(${table.sourceSystem})) > 0`),
-    check('chk_crm4_import_receipts_source_id_nonempty', sql`length(btrim(${table.sourceId})) > 0`),
-    check('chk_crm4_import_receipts_idempotency_key_nonempty', sql`length(btrim(${table.idempotencyKey})) > 0`),
-    uniqueIndex('idx_crm4_import_receipts_idempotency_key').on(table.idempotencyKey),
-    uniqueIndex('idx_crm4_import_receipts_batch_row_entity').on(table.batchId, table.sourceRow, table.entity),
-    index('idx_crm4_import_receipts_target_id').on(table.targetId),
-    index('idx_crm4_import_receipts_created_at').on(sql`${table.createdAt} DESC`),
-  ]
-);
-
-// ---------------------------------------------------------------------------
 // 5. Migration Import Batches (crm4_import_batches)
 // ---------------------------------------------------------------------------
 export const crm4ImportBatches = crm4Schema.table(
