@@ -123,7 +123,28 @@
 
 ---
 
-## 5. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
+## 5. OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-4.yaml`)
+
+* **Base URL:** `/api/v1/crm-marketing`
+* **Specification Version:** `1.0.0` (OpenAPI `3.1.0`)
+* **Authentication Scheme:** `bearerAuth` (HTTP Bearer JWT)
+* **Endpoints:**
+  - `GET  /api/v1/crm-marketing/lists`: List and search marketing lists (server-paginated)
+  - `POST /api/v1/crm-marketing/lists`: Create a marketing list record
+  - `PATCH /api/v1/crm-marketing/lists/{id}`: Partial update of marketing list name/description
+  - `GET  /api/v1/crm-marketing/campaigns`: List campaigns with optional listId filter
+  - `POST /api/v1/crm-marketing/campaigns`: Create campaign with linked marketing list
+  - `GET  /api/v1/crm-marketing/campaigns/{id}`: Fetch single campaign by UUID
+  - `PATCH /api/v1/crm-marketing/campaigns/{id}`: Update campaign name and/or date (listId immutable)
+  - `GET  /api/v1/crm-marketing/campaigns/{id}/members`: List campaign members with status filtering
+  - `POST /api/v1/crm-marketing/campaigns/{id}/members`: Add contact member to campaign
+  - `POST /api/v1/crm-marketing/consents`: Set or update contact consent status (enforces BR-CRM4-01)
+  - `GET  /api/v1/crm-marketing/consents/{contact}`: Fetch contact consent record by contact UUID
+* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), and `409` (Conflict / Monotonic Opt-Out Invariant Violation).
+
+---
+
+## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
 
 In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseline 1.0-A §4.2, and Issue #177 `[CRM4-24]`, CRM-4 Marketing Lists and Campaign History establishes production-grade design specifications for Gate G1:
 
@@ -133,7 +154,7 @@ In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseli
 4. **Dirty Data Pack Plan:** Synthetic edge-case strategy covering 11 anomaly categories, seeded defect distributions, and 100-row & 1,000-row conservation balance sheets documented in [`apps/crm/modules/crm-4/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-4/docs/dirty-data-pack-plan.md).
 5. **Executable QA Invariants:** Reusable data structures, candidate key builders, and conservation assertion helpers implemented in [`apps/crm/modules/crm-4/src/domain/qa-specs.ts`](../../apps/crm/modules/crm-4/src/domain/qa-specs.ts).
 
-### 5.1 Versioned Change Record & Gate G1 Sign-off
+### 6.1 Versioned Change Record & Gate G1 Sign-off
 * **Change Record ID:** `CR-CRM4-G1-001`
 * **Milestone:** Gate G1 — Design Complete (Sprint 1)
 * **Date:** 2026-10-23
