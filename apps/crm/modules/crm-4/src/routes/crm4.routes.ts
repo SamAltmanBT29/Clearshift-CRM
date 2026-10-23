@@ -14,7 +14,7 @@ import {
 import { AppError } from '@cs/kernel';
 import { z } from 'zod';
 import type { RoleType } from '@cs/identity';
-import { Crm4Service, crm4Service } from '../services/crm4.service.js';
+import { Crm4Service, crm4Service, type IdempotencyContext } from '../services/crm4.service.js';
 import { Crm4AuditService, crm4Audit } from '../services/audit.js';
 import { crm4MappingService } from '../services/crm4-mapping.service.js';
 import { CRM4_ENDPOINT_ROLES } from '../policies/roles.js';
@@ -33,6 +33,32 @@ function getCorrelationId(request: FastifyRequest): string {
     (request.headers['correlation-id'] as string) ||
     `corr-${Date.now()}-${randomUUID().slice(0, 8)}`
   );
+}
+
+function extractIdempotencyContext(request: FastifyRequest): IdempotencyContext | undefined {
+  const key =
+    (request.headers['idempotency-key'] as string) ||
+    (request.headers['x-idempotency-key'] as string) ||
+    (typeof request.body === 'object' && request.body !== null && 'idempotencyKey' in request.body
+      ? (request.body as any).idempotencyKey
+      : undefined);
+
+  if (!key) return undefined;
+
+  const batchId =
+    (request.headers['x-batch-id'] as string) ||
+    (typeof request.body === 'object' && request.body !== null && 'batchId' in request.body
+      ? (request.body as any).batchId
+      : undefined);
+
+  const rawRow =
+    (request.headers['x-source-row'] as string) ||
+    (typeof request.body === 'object' && request.body !== null && 'sourceRow' in request.body
+      ? (request.body as any).sourceRow
+      : undefined);
+  const sourceRow = rawRow !== undefined ? Number(rawRow) : undefined;
+
+  return { key, batchId, sourceRow };
 }
 
 function endpointPreHandlers(
@@ -79,11 +105,20 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.LISTS_CREATE, authEnabled),
     },
     async (request, reply) => {
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(201).send(existingReceipt.result);
+        }
+      }
+
       const parsed = CRM4ListCreateSchema.safeParse(request.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid list creation body', 400, parsed.error.issues);
       }
-      const list = await service.createList(parsed.data);
+      const list = await service.createList(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -168,11 +203,20 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.CAMPAIGNS_CREATE, authEnabled),
     },
     async (request, reply) => {
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(201).send(existingReceipt.result);
+        }
+      }
+
       const parsed = CRM4CampaignCreateSchema.safeParse(request.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid campaign creation body', 400, parsed.error.issues);
       }
-      const campaign = await service.createCampaign(parsed.data);
+      const campaign = await service.createCampaign(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -288,12 +332,21 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(201).send(existingReceipt.result);
+        }
+      }
+
       const body = { ...(request.body as Record<string, unknown>), campaignId: id };
       const parsed = CRM4MemberCreateSchema.safeParse(body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid member creation body', 400, parsed.error.issues);
       }
-      const member = await service.addCampaignMember(parsed.data);
+      const member = await service.addCampaignMember(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -319,11 +372,20 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.CONSENTS_SET, authEnabled),
     },
     async (request, reply) => {
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(200).send(existingReceipt.result);
+        }
+      }
+
       const parsed = CRM4ConsentSetSchema.safeParse(request.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid consent payload', 400, parsed.error.issues);
       }
-      const consent = await service.setConsent(parsed.data);
+      const consent = await service.setConsent(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({

@@ -38,6 +38,19 @@ export interface ActiveFilterPill {
   displayValue: string;
 }
 
+export interface FilterFacetOption {
+  value: string;
+  label: string;
+  count?: number;
+}
+
+export interface FilterFacet {
+  id: string;
+  label: string;
+  paramKey: string;
+  options: FilterFacetOption[];
+}
+
 export interface TableState<T = Record<string, unknown>> {
   columns: DataTableColumn<T>[];
   data: T[];
