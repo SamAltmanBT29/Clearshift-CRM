@@ -167,6 +167,12 @@ import { CRM1_ENDPOINT_ROLES } from "../policies/roles.js";
 import { redactSensitiveObject } from "../policies/masking.js";
 import { crm1Audit } from "../services/audit.js";
 import type { RoleType } from "@cs/identity";
+import {
+  createEndpointAuthPreHandlers,
+  assertObjectMutationAllowed,
+  assertTenantIsolation,
+  type Crm1TokenClaims
+} from "./authz.js";
 
 function modulePreHandlers(
   fastify: FastifyInstance,
@@ -177,10 +183,18 @@ function modulePreHandlers(
 
 function endpointPreHandlers(
   fastify: FastifyInstance,
-  allowedRoles: readonly RoleType[]
+  allowedRolesOrKey: readonly RoleType[] | keyof typeof CRM1_ENDPOINT_ROLES,
+  requireObjectGuard = false
 ) {
-  return [fastify.authenticate, requireRoles(allowedRoles)];
+  if (typeof allowedRolesOrKey === "string") {
+    return createEndpointAuthPreHandlers(fastify, {
+      endpointKey: allowedRolesOrKey,
+      requireObjectGuard,
+    });
+  }
+  return [fastify.authenticate, requireRoles(allowedRolesOrKey)];
 }
+
 export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPluginAsync {
   return async (fastify) => {
     const mutations = new Crm1MutationService(db);
@@ -219,17 +233,22 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/contacts/:id", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_READ)
+      preHandler: endpointPreHandlers(fastify, "CONTACTS_READ")
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const [row] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, id)).limit(1);
       if (!row) {
         throw new AppError("NOT_FOUND", `Contact with ID '${id}' not found`, 404);
       }
+      assertTenantIsolation(
+        request.user as Crm1TokenClaims,
+        (row as any).tenantId || (row as any).tenant_id,
+        request
+      );
       return serializeContact(row);
     });
 
-    fastify.get("/contacts", { preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_LIST) }, async (request) => {
+    fastify.get("/contacts", { preHandler: endpointPreHandlers(fastify, "CONTACTS_LIST") }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const where = contactSearch(query.search);
       const [items, totals] = await Promise.all([
@@ -247,35 +266,85 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/contacts", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_CREATE)
+      preHandler: endpointPreHandlers(fastify, "CONTACTS_CREATE")
     }, async (request, reply) => {
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "contact",
+          payload: request.body as Record<string, unknown>,
+          isUpdate: false,
+        },
+        request
+      );
       const body = parseRequest(CRM1ContactCreateSchema, request.body, 422);
+      if (body.companyId) {
+        const [comp] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, body.companyId)).limit(1);
+        if (comp) {
+          assertTenantIsolation(
+            request.user as Crm1TokenClaims,
+            (comp as any).tenantId || (comp as any).tenant_id,
+            request
+          );
+        }
+      }
       const row = await mutations.createContact(body);
       reply.code(201);
       return serializeContact(row);
     });
 
     fastify.patch("/contacts/:id", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.CONTACTS_UPDATE)
+      preHandler: endpointPreHandlers(fastify, "CONTACTS_UPDATE", true)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
+      const [existing] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, id)).limit(1);
+      if (!existing) {
+        throw new AppError("NOT_FOUND", `Contact with ID '${id}' not found`, 404);
+      }
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "contact",
+          resourceId: id,
+          resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
+          resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
+          payload: request.body as Record<string, unknown>,
+          isUpdate: true,
+        },
+        request
+      );
       const body = parseRequest(CRM1ContactPatchSchema, request.body, 422);
+      if (body.companyId) {
+        const [comp] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, body.companyId)).limit(1);
+        if (comp) {
+          assertTenantIsolation(
+            request.user as Crm1TokenClaims,
+            (comp as any).tenantId || (comp as any).tenant_id,
+            request
+          );
+        }
+      }
       return serializeContact(await mutations.updateContact(id, body));
     });
 
     fastify.get("/companies/:id", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_READ)
+      preHandler: endpointPreHandlers(fastify, "COMPANIES_READ")
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const [row] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, id)).limit(1);
       if (!row) {
         throw new AppError("NOT_FOUND", `Company with ID '${id}' not found`, 404);
       }
+      assertTenantIsolation(
+        request.user as Crm1TokenClaims,
+        (row as any).tenantId || (row as any).tenant_id,
+        request
+      );
       return serializeCompany(row);
     });
 
     fastify.get("/companies", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_LIST)
+      preHandler: endpointPreHandlers(fastify, "COMPANIES_LIST")
     }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const where = companySearch(query.search);
@@ -294,8 +363,17 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/companies", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_CREATE)
+      preHandler: endpointPreHandlers(fastify, "COMPANIES_CREATE")
     }, async (request, reply) => {
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "company",
+          payload: request.body as Record<string, unknown>,
+          isUpdate: false,
+        },
+        request
+      );
       const body = parseRequest(CRM1CompanyCreateSchema, request.body, 422);
       const row = await mutations.createCompany(body);
       reply.code(201);
@@ -303,26 +381,47 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.patch("/companies/:id", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.COMPANIES_UPDATE)
+      preHandler: endpointPreHandlers(fastify, "COMPANIES_UPDATE", true)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
+      const [existing] = await db.select().from(crm1Companies).where(eq(crm1Companies.id, id)).limit(1);
+      if (!existing) {
+        throw new AppError("NOT_FOUND", `Company with ID '${id}' not found`, 404);
+      }
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "company",
+          resourceId: id,
+          resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
+          resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
+          payload: request.body as Record<string, unknown>,
+          isUpdate: true,
+        },
+        request
+      );
       const body = parseRequest(CRM1CompanyPatchSchema, request.body, 422);
       return serializeCompany(await mutations.updateCompany(id, body));
     });
 
     fastify.get("/leads/:id", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_READ)
+      preHandler: endpointPreHandlers(fastify, "LEADS_READ")
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
       const [row] = await db.select().from(crm1Leads).where(eq(crm1Leads.id, id)).limit(1);
       if (!row) {
         throw new AppError("NOT_FOUND", `Lead with ID '${id}' not found`, 404);
       }
+      assertTenantIsolation(
+        request.user as Crm1TokenClaims,
+        (row as any).tenantId || (row as any).tenant_id,
+        request
+      );
       return serializeLead(row);
     });
 
     fastify.get("/leads", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_LIST)
+      preHandler: endpointPreHandlers(fastify, "LEADS_LIST")
     }, async (request) => {
       const query = parseRequest(CRM1ListQuerySchema, request.query);
       const pattern = query.search ? `%${escapeLike(query.search)}%` : undefined;
@@ -362,25 +461,69 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.post("/leads", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_CREATE)
+      preHandler: endpointPreHandlers(fastify, "LEADS_CREATE")
     }, async (request, reply) => {
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "lead",
+          payload: request.body as Record<string, unknown>,
+          isUpdate: false,
+        },
+        request
+      );
       const body = parseRequest(CRM1LeadCreateSchema, request.body, 422);
+      if (body.contactId) {
+        const [cnt] = await db.select().from(crm1Contacts).where(eq(crm1Contacts.id, body.contactId)).limit(1);
+        if (cnt) {
+          assertTenantIsolation(
+            request.user as Crm1TokenClaims,
+            (cnt as any).tenantId || (cnt as any).tenant_id,
+            request
+          );
+        }
+      }
       const row = await mutations.createLead(body);
       reply.code(201);
       return serializeLead(row);
     });
 
     fastify.patch("/leads/:id", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.LEADS_UPDATE)
+      preHandler: endpointPreHandlers(fastify, "LEADS_UPDATE", true)
     }, async (request) => {
       const { id } = parseRequest(IdParamsSchema, request.params);
+      const [existing] = await db.select().from(crm1Leads).where(eq(crm1Leads.id, id)).limit(1);
+      if (!existing) {
+        throw new AppError("NOT_FOUND", `Lead with ID '${id}' not found`, 404);
+      }
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "lead",
+          resourceId: id,
+          resourceOwnerId: (existing as any).ownerId || (existing as any).employeeId || (existing as any).assignedTo || (existing as any).userId || (existing as any).createdBy || undefined,
+          resourceTenantId: (existing as any).tenantId || (existing as any).tenant_id || (existing as any).orgId || (existing as any).org_id || undefined,
+          payload: request.body as Record<string, unknown>,
+          isUpdate: true,
+        },
+        request
+      );
       const body = parseRequest(CRM1LeadPatchSchema, request.body, 422);
       return serializeLead(await mutations.updateLead(id, body));
     });
 
     fastify.post("/imports", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_START)
+      preHandler: endpointPreHandlers(fastify, "IMPORTS_START")
     }, async (request, reply) => {
+      assertObjectMutationAllowed(
+        request.user as Crm1TokenClaims,
+        {
+          resourceType: "import_batch",
+          payload: request.body as Record<string, unknown>,
+          isUpdate: false,
+        },
+        request
+      );
       const body = parseRequest(CRM1ImportCreateSchema, request.body, 422);
       const key = parseRequest(
         z.string().trim().min(1).max(256),
@@ -401,7 +544,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/imports/:batch", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_STATUS)
+      preHandler: endpointPreHandlers(fastify, "IMPORTS_STATUS")
     }, async (request) => {
       const { batch: batchId } = parseRequest(BatchParamsSchema, request.params);
       const [batch] = await db.select().from(crm1ImportBatches)
@@ -427,7 +570,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/imports/:batch/rejects", {
-      preHandler: endpointPreHandlers(fastify, CRM1_ENDPOINT_ROLES.IMPORTS_REJECTS)
+      preHandler: endpointPreHandlers(fastify, "IMPORTS_REJECTS")
     }, async (request) => {
       const { batch: batchId } = parseRequest(BatchParamsSchema, request.params);
       const query = parseRequest(CRM1ListQuerySchema, request.query);
