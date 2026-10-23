@@ -261,6 +261,9 @@ In compliance with SDS ClearShift CRM v2.0 §7.1, endpoints strictly enforce aut
 | `/imports` | `POST` | `migration_runner`, `admin` | Initiate migration batch with required batchId, positive per-row sourceRow, and Idempotency-Key. |
 | `/imports/:batch` | `GET` | `viewer`, `analyst`, `admin` | Check batch execution status and committed receipts. |
 | `/imports/:batch/rejects` | `GET` | `viewer`, `analyst`, `admin` | Retrieve paginated rejected rows for review. |
+| `/import/row` | `POST` | `migration_runner`, `admin` | Target Adapter port for KIT-08 row-level mapped ingestion. Commits target mutation and durable receipt atomically with idempotency protection. |
+| `/import/receipts` | `GET` | `viewer`, `analyst`, `admin` | List durable import receipts recorded by the Target Adapter. |
+| `/import/receipts/:idempotencyKey` | `GET` | `viewer`, `analyst`, `admin` | Retrieve specific durable import receipt by idempotency key. |
 
 ---
 

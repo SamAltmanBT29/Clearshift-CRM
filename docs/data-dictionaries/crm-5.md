@@ -476,3 +476,43 @@ CRM-5 implements an entity creation form for migration run projections adhering 
 * **WAI-ARIA Status Semantics:** Renders floating toast notification (`role="status"`, `aria-live="polite"`, `.cs-toast`, `.cs-toast-success`).
 * **Auto-Dismiss & Manual Close:** Supports configurable auto-dismiss timer (default: 5000ms) with clean timer teardown and accessible manual dismissal button (`.cs-toast-close`, `aria-label="Dismiss notification"`).
 
+---
+
+## 14. Rejection Audit Screen, Module Context Identifiers & Formula-Safe Export (CRM5-23 / Issue #196)
+
+### 14.1 Module Context Identifiers
+In the shared rejection review screen (`RejectsOverviewPage`), failed rows display domain-specific natural identifier columns alongside machine error codes, enabling cross-module operators to immediately locate the corresponding source entity:
+
+| Target Module | Natural Entity Context | Extracted Identifier Columns | Context Fallback |
+| :--- | :--- | :--- | :--- |
+| **CRM-1** | Contacts & Accounts | `contact_id`, `email`, `company` | `email` or `contact_id` |
+| **CRM-2** | Deals & Pipelines | `deal_id`, `quote_number`, `pipeline` | `deal_id` or `quote_number` |
+| **CRM-3** | Support Tickets & Cases | `ticket_id`, `case_number`, `account_id` | `ticket_id` or `case_number` |
+| **CRM-4** | Marketing Campaigns | `campaign_id`, `campaign_name`, `lead_id` | `campaign_id` or `lead_id` |
+| **CRM-5** | Migration Control & Catalog | `batch_id`, `sku`, `tax_id` | `sku` or `batch_id` |
+
+When source payload context is unavailable, identifiers degrade deterministically to `Batch Correlation ID: <batchId>` (`Row #<index>`) without UI breakage or layout shift.
+
+### 14.2 Categorization & Human-Readable Remediation
+Machine error codes are mapped into 5 standardized audit categories:
+* **Constraint Violation:** Unique key conflicts, natural key collisions (`DUPLICATE_SKU`, `EXACT_DUPLICATE`, `UNIQUE_KEY_VIOLATION`).
+* **Integrity & Conservation:** Source-to-target count conservation discrepancies (`COUNT_INVARIANT_VIOLATION`, `SOURCE_TARGET_UNBALANCED`).
+* **Security & Injection:** Spreadsheet formula injection prefixes (`FORMULA_PREFIX`, `FORMULA_INJECTION_RISK`).
+* **Lifecycle & Chronology:** State machine or timestamp chronology violations (`INVALID_STAGE_TRANSITION`, `CHRONOLOGY_VIOLATION`).
+* **Data Validation:** Missing required fields, malformed syntax (`REQUIRED_FIELD_MISSING`, `INVALID_TAX_ID`, `MALFORMED_UUID`).
+
+Every error code provides an operator-friendly explanation and clear remediation instructions pointing to the exact corrective workflow (e.g., routing to exact duplicate resolution, updating source catalog, or reconciling batch counters).
+
+### 14.3 Sensitive Field Masking Policy (PLT-06 / PLT-12)
+All raw row payloads inspected in the detail modal (`RejectDetailModal`) or exported via CSV undergo recursive sanitization:
+* **Bank & Account Data:** Account numbers, IBANs, and routing numbers are masked to `XXXX-XXXX-7890` (preserving only the final 4 digits).
+* **Government & Tax Identifiers:** SSNs, national tax IDs, and Aadhaar numbers are masked to `***-**-7890`.
+* **Credentials & Tokens:** Passwords, API keys, JWT tokens, and client secrets are strictly redacted to `[REDACTED]`.
+* **Employee Compensation:** Salaries, wages, and hourly compensation are masked to `XX,XXX`.
+
+### 14.4 Formula-Safe CSV Export (CWE-1236 / PLT-12)
+The rejection audit screen includes a one-click formula-safe CSV export action (`generateFormulaSafeRejectsCsv` / `downloadRejectsCsv`):
+* **Spreadsheet Formula Neutralization:** All text cells starting with formula trigger characters (`=`, `+`, `-`, `@`) are prepended with a single quote (`'`), neutralizing dynamic execution in spreadsheet applications (Microsoft Excel, LibreOffice, Google Sheets).
+* **RFC-4180 Compliance:** Proper field quoting and CRLF row terminators implemented via `@cs/core` (`exportCsvSafe`).
+* **Standardized Header Schema:** Export files contain uniform columns: `Row Index`, `Target Module`, `Batch Correlation ID`, `Context Identifier Label`, `Context Identifier Value`, `Error Code`, `Error Category`, `Failure Explanation`, `Remediation Guidance`, `Payload SHA-256 Hash`, `Masked Payload Sample`, and `Recorded At`.
+

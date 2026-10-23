@@ -67,9 +67,6 @@ export const CRM5_SCORES_FACETS: FilterFacet[] = [
   },
 ];
 
-/**
- * Standard CRM-5 Rejections Filter Facets
- */
 export const CRM5_REJECTS_FACETS: FilterFacet[] = [
   {
     id: 'module',
@@ -82,6 +79,35 @@ export const CRM5_REJECTS_FACETS: FilterFacet[] = [
       { value: 'crm-3', label: 'CRM-3 (Activities & Tasks)' },
       { value: 'crm-4', label: 'CRM-4 (Analytics & Insights)' },
       { value: 'crm-5', label: 'CRM-5 (Migration Control)' },
+    ],
+  },
+  {
+    id: 'category',
+    label: 'Error Category',
+    paramKey: 'category',
+    options: [
+      { value: '', label: 'All Categories' },
+      { value: 'Constraint Violation', label: 'Constraint Violation' },
+      { value: 'Integrity & Conservation', label: 'Integrity & Conservation' },
+      { value: 'Data Validation', label: 'Data Validation' },
+      { value: 'Security & Injection', label: 'Security & Injection' },
+      { value: 'Lifecycle & Chronology', label: 'Lifecycle & Chronology' },
+    ],
+  },
+  {
+    id: 'errorCode',
+    label: 'Error Code',
+    paramKey: 'errorCode',
+    options: [
+      { value: '', label: 'All Error Codes' },
+      { value: 'DUPLICATE_SKU', label: 'DUPLICATE_SKU' },
+      { value: 'INVALID_TAX_ID', label: 'INVALID_TAX_ID' },
+      { value: 'EXACT_DUPLICATE', label: 'EXACT_DUPLICATE' },
+      { value: 'COUNT_INVARIANT_VIOLATION', label: 'COUNT_INVARIANT_VIOLATION' },
+      { value: 'FORMULA_PREFIX', label: 'FORMULA_PREFIX' },
+      { value: 'REQUIRED_FIELD_MISSING', label: 'REQUIRED_FIELD_MISSING' },
+      { value: 'FOREIGN_KEY_MISSING', label: 'FOREIGN_KEY_MISSING' },
+      { value: 'MALFORMED_UUID', label: 'MALFORMED_UUID' },
     ],
   },
 ];
