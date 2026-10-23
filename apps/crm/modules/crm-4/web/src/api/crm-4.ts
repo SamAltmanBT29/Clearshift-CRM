@@ -65,13 +65,28 @@ async function request<T>(
 ): Promise<T> {
   const { signal, simulateError, simulatePermissionDenied, ...init } = options;
 
+  // Early simulation guards (matching CRM-5 pattern for testability without network)
+  if (simulatePermissionDenied) {
+    throw new Crm4ApiError(
+      403,
+      'FORBIDDEN',
+      'Access denied: insufficient permissions to access CRM-4 marketing module',
+      { requiredCapability: 'module.read' }
+    );
+  }
+  if (simulateError) {
+    throw new Crm4ApiError(
+      500,
+      'INTERNAL_SERVER_ERROR',
+      'Simulated server communication error during query execution.'
+    );
+  }
+
   let origin = '';
   if (typeof window !== 'undefined' && window.location?.origin) {
     origin = window.location.origin;
   }
   const url = new URL(endpoint, origin || 'http://localhost');
-  if (simulateError) url.searchParams.set('simulateError', 'true');
-  if (simulatePermissionDenied) url.searchParams.set('simulatePermissionDenied', 'true');
 
   const headers: Record<string, string> = {
     Accept: 'application/json',

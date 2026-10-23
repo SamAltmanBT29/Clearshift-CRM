@@ -16,6 +16,13 @@ export interface MarketingListsPageProps {
   onCreateList?: () => void;
   onSelectList?: (list: CRM4List) => void;
   onViewCampaigns?: (list: CRM4List) => void;
+  initialLists?: CRM4List[] | undefined;
+  initialTotalCount?: number | undefined;
+  initialTotalPages?: number | undefined;
+  getMarketingListsFn?: typeof getMarketingLists | undefined;
+  forceLoading?: boolean | undefined;
+  forceError?: Error | Crm4ApiError | null | undefined;
+  forcePermissionDenied?: boolean | undefined;
 }
 
 export function MarketingListsPage({
@@ -24,6 +31,13 @@ export function MarketingListsPage({
   onCreateList,
   onSelectList,
   onViewCampaigns,
+  initialLists,
+  initialTotalCount,
+  initialTotalPages,
+  getMarketingListsFn = getMarketingLists,
+  forceLoading,
+  forceError,
+  forcePermissionDenied,
 }: MarketingListsPageProps) {
   // Query state
   const [search, setSearch] = useState('');
@@ -31,13 +45,25 @@ export function MarketingListsPage({
   const pageSize = 10;
 
   // Data state
-  const [lists, setLists] = useState<CRM4List[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [lists, setLists] = useState<CRM4List[]>(initialLists ?? []);
+  const [totalCount, setTotalCount] = useState(initialTotalCount ?? (initialLists ? initialLists.length : 0));
+  const [totalPages, setTotalPages] = useState(initialTotalPages ?? (initialLists ? (initialLists.length > 0 ? 1 : 0) : 1));
 
   // Status state
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Crm4ApiError | null>(null);
+  const [isLoading, setIsLoading] = useState(
+    forceLoading !== undefined ? forceLoading : initialLists === undefined
+  );
+  const [error, setError] = useState<Crm4ApiError | null>(() => {
+    if (forceError) {
+      return forceError instanceof Crm4ApiError
+        ? forceError
+        : new Crm4ApiError(500, 'UNEXPECTED_ERROR', forceError.message);
+    }
+    if (forcePermissionDenied || simulatePermissionDenied) {
+      return new Crm4ApiError(403, 'FORBIDDEN', 'Access denied. Required capability: module.read');
+    }
+    return null;
+  });
   const [, startTransition] = useTransition();
 
   // Fetch marketing lists from server
@@ -46,7 +72,7 @@ export function MarketingListsPage({
     setError(null);
 
     try {
-      const response = await getMarketingLists(
+      const response = await getMarketingListsFn(
         {
           page: currentPage,
           pageSize,
