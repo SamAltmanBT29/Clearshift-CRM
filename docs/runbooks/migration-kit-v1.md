@@ -645,3 +645,77 @@ A critical non-negotiable invariant of ClearShift data reliability:
   }
   ```
 
+---
+
+## 12. Step 5: Generic Target Adapter, Stable Idempotency & Import Receipts (KIT-08)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #75 `[KIT-08]`.
+
+### 12.1 Pipeline Stage Overview
+
+Step 5 (**Load**) is responsible for committing mapped and validated business entities into ClearShift target modules. To satisfy enterprise reliability and zero-data-loss guarantees under transient failures or worker crashes, all load operations adhere to the **Generic Target Adapter Contract** and **Durable Import Receipt Protocol**.
+
+```
+    [ Cleaned & Mapped Rows ]
+                │
+                ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Migration Kit TargetBatchLoader                              │
+    │ - Default chunk size: 500 rows                               │
+    │ - Stable Idempotency Key: batchId:sourceRow:module:entity:v# │
+    │ - 10% failure circuit breaker (STP-01)                       │
+    └──────────────────────┬───────────────────────────────────────┘
+                           │ Dispatches via TargetAdapter Port
+                           ▼ (Zero Direct Target DB Privileges in Kit)
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Target Module Adapter Port (e.g., crm-1, crm-2, crm-3)      │
+    │                                                              │
+    │  1. Check existing receipt by idempotencyKey                 │
+    │     ├── Same Key + Same Hash ──► Return prior target ID (200)│
+    │     └── Same Key + Diff Hash ──► Return Conflict 409 (Abort) │
+    │                                                              │
+    │  2. Domain Validation & Mutation                             │
+    │                                                              │
+    │  3. Single Local PostgreSQL Transaction:                     │
+    │     BEGIN;                                                   │
+    │       INSERT INTO <module>.<entity> (...);                   │
+    │       INSERT INTO <module>.<entity>_import_receipts (...);   │
+    │     COMMIT;                                                  │
+    └──────────────────────────────────────────────────────────────┘
+```
+
+### 12.2 Stable Idempotency Key Derivation
+
+Per SDS §11.4, idempotency keys MUST be stable across retries and cannot be derived from mutable payload content alone:
+
+$$\text{idempotencyKey} = \text{SHA256}(\text{batchId} : \text{sourceRow} : \text{module} : \text{entity} : \text{v}\{\text{operationVersion}\})$$
+
+Key invariants:
+- **Stability:** The key is completely deterministic based on the source location and target operation version.
+- **Payload Hash Tracking:** A canonical SHA-256 hash of the cleaned payload is computed deterministically (`computeCanonicalPayloadHash(cleanData)`) and stored alongside the receipt.
+- **Payload Drift Guard:** If a retry arrives with the same idempotency key but a modified payload, the target adapter detects the hash mismatch and immediately rejects the mutation with an HTTP 409 Conflict (`IDEMPOTENCY_CONFLICT`).
+
+### 12.3 Idempotency Replay Semantics
+
+| Request State | Receipt Lookup | Hash Comparison | Action & Outcome |
+| :--- | :--- | :--- | :--- |
+| **First Attempt** | Not found | N/A | Commits business record and import receipt atomically in one transaction. Returns `targetId` and `isExisting: false`. |
+| **Identical Retry** | Found | Identical | Returns previous `targetId` and existing receipt immediately. `isExisting: true`. Zero duplicate target records created. |
+| **Drifted Payload Retry** | Found | Mismatch | Rejects mutation with `409 Conflict` (`IDEMPOTENCY_CONFLICT`). Original target record is protected. |
+| **Worker Process Crash** | Found in DB | Identical | Worker recovers durable receipts from PostgreSQL; subsequent retries safely return prior IDs. |
+
+### 12.4 Bounded Chunk Loading & Failure Threshold Guard
+
+1. **500-Row Chunking:** The `TargetBatchLoader` processes records in configurable chunks (default: 500 rows) to bound memory consumption and avoid holding long-lived database locks.
+2. **Circuit Breaker (10% Failure Ceiling):** If the cumulative row failure rate exceeds 10.0% ($\frac{\text{rejectedRows}}{\text{attemptedRows}} > 0.10$), the loader halts immediately:
+   - Remaining rows are marked `REJECTED` with reason `STOP_THRESHOLD_EXCEEDED`.
+   - Batch status in `public.kit_batches` transitions to `load_failed_partial` or `failed`.
+   - Unaccounted rows are strictly guaranteed to be 0:
+     $$\text{totalSourceRows} = \text{loaded} + \text{rejected} + \text{merged} + \text{skipped}$$
+
+### 12.5 Architectural Privilege Boundary
+
+Migration Kit operates under strict privilege separation (ADR-004 / Decision C4):
+- **No Direct Table Privileges:** The Migration Kit worker role possesses ZERO insert, update, or delete privileges on module-owned domain schemas (`crm1.*`, `crm2.*`, `crm3.*`, `crm4.*`).
+- **Adapter In-Process Port:** All loads are mediated via the owning module's `MigrationTargetAdapter`, ensuring that module business rules, events, and transactional boundaries are strictly respected.
+
