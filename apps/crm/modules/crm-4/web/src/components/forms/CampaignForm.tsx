@@ -15,7 +15,7 @@ import {
   Button,
   Alert,
   Select,
-} from '@clearshift/ui';
+} from '@cs/ui';
 import type {
   CRM4Campaign,
   CRM4List,
