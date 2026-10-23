@@ -87,3 +87,24 @@ export const rawRows = pgTable("raw_rows", {
   rowHash: text("row_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Migration Kit Column Profile Reports Schema (KIT-03)
+ * Stores computed per-column data health metrics (empties, invalid formats, top values).
+ */
+export const kitProfileReports = pgTable("kit_profile_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  columnName: text("column_name").notNull(),
+  emptyCount: integer("empty_count").notNull().default(0),
+  invalidCount: integer("invalid_count").notNull().default(0),
+  distinctCount: integer("distinct_count").notNull().default(0),
+  inferredType: text("inferred_type").notNull().default("string"),
+  topValuesJson: jsonb("top_values_json").notNull().default([]),
+  minValue: text("min_value"),
+  maxValue: text("max_value"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
