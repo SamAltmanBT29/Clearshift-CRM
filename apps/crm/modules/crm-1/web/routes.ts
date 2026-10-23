@@ -77,6 +77,21 @@ export const CRM1_ROUTES: Record<string, Crm1RouteDefinition> = {
   },
 };
 
+export const CRM1_CLEANING_ROUTE: Crm1RouteDefinition = {
+  id: 'crm1-cleaning',
+  path: 'cleaning',
+  fullPath: `${CRM1_BASE_PATH}/cleaning`,
+  title: 'Cleaning Rules & Field Audit',
+  navLabel: 'Cleaning Audit',
+  requiredCapability: Capabilities.MODULE_READ,
+  breadcrumbs: [
+    { label: 'ClearShift', href: '/' },
+    { label: 'CRM Modules', href: '/crm' },
+    { label: 'Contacts & Accounts', href: CRM1_BASE_PATH },
+    { label: 'Cleaning Audit' },
+  ],
+};
+
 export function getAllCrm1Routes(): Crm1RouteDefinition[] {
   return Object.values(CRM1_ROUTES);
 }
