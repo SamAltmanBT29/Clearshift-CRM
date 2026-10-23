@@ -44,6 +44,7 @@ export function assertModuleOwnership(invokingModule: CrmModuleName, targetTable
     invokingModule === 'kit' &&
     (targetTableName === 'raw_rows' ||
       targetTableName === 'stg_rows' ||
+      targetTableName.startsWith('clean_') ||
       targetTableName.startsWith('kit_') ||
       targetTableName.startsWith('stg_'));
   if (!expectedPrefix || (!targetTableName.startsWith(expectedPrefix) && !isKitOwned)) {

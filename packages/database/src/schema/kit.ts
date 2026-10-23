@@ -159,3 +159,34 @@ export const stgRows = pgTable("stg_rows", {
   goldenId: text("golden_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Migration Kit Mapping Templates Schema (KIT-05 / SDS §4.10)
+ * Stores named, versioned, module-scoped source-to-target field mapping templates.
+ */
+export const kitMappings = pgTable("kit_mappings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  module: text("module").notNull(),
+  name: text("name").notNull(),
+  version: text("version").notNull().default("1.0.0"),
+  targetEntity: text("target_entity").notNull().default("contacts"),
+  mappingJson: jsonb("mapping_json").notNull().default([]),
+  valueConversionsJson: jsonb("value_conversions_json").notNull().default([]),
+  createdBy: text("created_by").notNull().default("system"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Migration Kit Clean Module Staging Table (KIT-05 / SDS §4.5 clean_<module>)
+ * Stores mapped records containing ONLY target fields while preserving durable batch and source row linkage.
+ */
+export const cleanCrm = pgTable("clean_crm", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => kitBatches.id, { onDelete: "cascade" }),
+  sourceRow: integer("source_row").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
