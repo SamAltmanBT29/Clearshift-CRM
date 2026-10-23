@@ -85,3 +85,24 @@
 3. **List Immutability:** Campaigns belong to one list throughout their lifecycle; reassignment is rejected.
 4. **Member Status Allowlist:** Only `sent`, `opened`, and `clicked` are valid statuses.
 5. **Security & RBAC:** All routes require `Capabilities.MODULE_READ`. Unauthenticated sessions are redirected to Hub login with returnUrl preservation.
+
+---
+
+## 4. OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-4.yaml`)
+
+* **Base URL:** `/api/v1/crm-marketing`
+* **Specification Version:** `1.0.0` (OpenAPI `3.1.0`)
+* **Authentication Scheme:** `bearerAuth` (HTTP Bearer JWT)
+* **Endpoints:**
+  - `GET  /api/v1/crm-marketing/lists`: List and search marketing lists (server-paginated)
+  - `POST /api/v1/crm-marketing/lists`: Create a marketing list record
+  - `PATCH /api/v1/crm-marketing/lists/{id}`: Partial update of marketing list name/description
+  - `GET  /api/v1/crm-marketing/campaigns`: List campaigns with optional listId filter
+  - `POST /api/v1/crm-marketing/campaigns`: Create campaign with linked marketing list
+  - `GET  /api/v1/crm-marketing/campaigns/{id}`: Fetch single campaign by UUID
+  - `PATCH /api/v1/crm-marketing/campaigns/{id}`: Update campaign name and/or date (listId immutable)
+  - `GET  /api/v1/crm-marketing/campaigns/{id}/members`: List campaign members with status filtering
+  - `POST /api/v1/crm-marketing/campaigns/{id}/members`: Add contact member to campaign
+  - `POST /api/v1/crm-marketing/consents`: Set or update contact consent status (enforces BR-CRM4-01)
+  - `GET  /api/v1/crm-marketing/consents/{contact}`: Fetch contact consent record by contact UUID
+* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), and `409` (Conflict / Monotonic Opt-Out Invariant Violation).
