@@ -1,3 +1,7 @@
+export * from './types.js';
+export * from './routes.js';
+export * from './auth/route-guard.js';
+export * from './shell/Crm2Shell.js';
 export * from './api/crm-2.js';
 export * from './components/DealsTable.js';
 export * from './components/forms/ConfirmModal.js';
@@ -7,5 +11,7 @@ export * from './pages/DealsListPage.js';
 export * from './pages/DealDetailPage.js';
 export * from './pages/DealFormPage.js';
 export * from './pages/QuoteFormPage.js';
+export * from './pages/PipelineOverviewPage.js';
+export * from './pages/QuotesListPage.js';
 export * from './pages/BatchLoaderPage.js';
 export * from './App.js';

@@ -52,17 +52,23 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-27-03`** | Unrecoverable required-field and syntax anomalies result in structured row rejection with standard reason codes. | **Must** | Issue #120 [CRM1-27] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/cleaner.test.ts`<br>`CRM-1 cleaning rules and field audit` | **VERIFIED (Green)** |
 | **`FR-CRM1-27-04`** | Batch cleaning service and summary metrics breakdown by rule_id and reason_code. | **Must** | Issue #120 [CRM1-27] | Service | Integration | `apps/crm/modules/crm-1/tests/services/crm1-cleaning.service.test.ts`<br>`Crm1CleaningService` | **VERIFIED (Green)** |
 | **`FR-CRM1-27-05`** | Cleaning audit UI component renders before/after audit trail and rejected row tables. | **Should** | Issue #120 [CRM1-27] | Web | Component | `apps/crm/modules/crm-1/tests/web/cleaning-audit-page.test.ts`<br>`CleaningAuditPage Frontend Component` | **VERIFIED (Green)** |
+| **`FR-CRM1-28-01`** | Mapping templates map source file columns to target schema attributes with type coercion rules. | **Must** | Issue #121 [CRM1-28] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/mapping.test.ts`<br>`CRM-1 mapping templates and value translation` | **VERIFIED (Green)** |
+| **`FR-CRM1-28-02`** | Enum translation tables map source values (e.g. status strings) to module enum allowlists. | **Must** | Issue #121 [CRM1-28] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/mapping.test.ts`<br>`CRM-1 mapping templates and value translation` | **VERIFIED (Green)** |
+| **`FR-CRM1-28-03`** | Unmapped required target fields raise validation error and block dry-run execution. | **Must** | Issue #121 [CRM1-28] | Migration / Service | Unit / API | `apps/crm/modules/crm-1/tests/services/crm1-mapping.service.test.ts`<br>`apps/crm/modules/crm-1/tests/api/mapping-routes.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM1-28-04`** | Templates are named, versioned, and reproducible across runs with SHA-256 stable checksums. | **Must** | Issue #121 [CRM1-28] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/mapping.test.ts`<br>`CRM-1 mapping templates and value translation` | **VERIFIED (Green)** |
+| **`FR-CRM1-28-05`** | Mapping routes and React UI page for template inspection and enum translation review. | **Should** | Issue #121 [CRM1-28] | Web / API | Component / API | `apps/crm/modules/crm-1/tests/web/mapping-templates-page.test.ts`<br>`apps/crm/modules/crm-1/tests/api/mapping-routes.test.ts` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 14 executing test files:
+The CRM-1 automated test suite comprises 20 executing test files:
 
 ```
 apps/crm/modules/crm-1/tests/
 ├── api/
 │   ├── list.test.ts                         (46 tests) — Server-side paged list/read contracts & search
+│   ├── mapping-routes.test.ts               (10 tests) — Mapping templates, dry-run validation & batch map
 │   ├── mutations.test.ts                    ( 3 tests) — Validated contact/company/lead CRUD & 422 errors
 │   └── routes.test.ts                       ( 4 tests) — Route registration & Fastify plugin mounting
 ├── db/
@@ -71,21 +77,25 @@ apps/crm/modules/crm-1/tests/
 │   ├── qa-g1-design.test.ts                 (15 tests) — Data dictionary, ERD, traceability, dirty pack
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
 ├── kit/
-│   └── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
+│   ├── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
+│   └── mapping.test.ts                      (15 tests) — Field mapping, type coercion, enums, dry-run guards
 ├── migration/
 │   └── idempotency.test.ts                  (14 tests) — Target adapter, durable receipts, idempotency retries & 409 conflicts (Issue #12 / [CRM1-07])
 ├── security/
 │   └── authorization.test.ts                (51 tests) — EdDSA JWTs, RBAC 5 roles, sensitive masking, audit
 ├── services/
 │   ├── crm1-cleaning.service.test.ts        ( 6 tests) — Batch cleaning service and summary metrics
+│   ├── crm1-mapping.service.test.ts         ( 5 tests) — Mapping service, batch transformation & validation
 │   └── crm1-mutation.service.test.ts        ( 2 tests) — Atomic target + receipt commit in 1 transaction
 └── web/
     ├── cleaning-audit-page.test.ts          ( 3 tests) — Cleaning audit page frontend component and columns
     ├── data-table.test.ts                   (21 tests) — Paginated data table and column layout
+    ├── mapping-templates-page.test.ts       ( 4 tests) — Mapping templates page component & route
     ├── routes.test.ts                       (14 tests) — Frontend route guards, layout shell, ARIA landmarks
-    └── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
+    ├── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
+    └── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 236 tests (100% Green, 0 Failures, 0 Skipped in test DB run)
+Total Automated Test Cases: 302 tests (100% Green, 0 Failures)
 ```
 
 ---
@@ -95,5 +105,8 @@ Total Automated Test Cases: 236 tests (100% Green, 0 Failures, 0 Skipped in test
 * [x] **Cleaning Execution:** All approved V1 cleaning rules execute deterministically.
 * [x] **Field Audit:** Every modified value generates an audit entry with before/after diff and rule ID.
 * [x] **Anomaly Rejection:** Unrecoverable required-field and syntax anomalies result in structured row rejections.
+* [x] **Mapping Templates:** Canonical and legacy mapping templates configured for contacts, companies, and leads.
+* [x] **Enum Translation:** Synonyms mapped to strict allowlists (`lead_status`, `consent_status`, `boolean`).
+* [x] **Dry-Run Guard:** Missing required fields raise structured validation errors and halt execution before DB mutation.
 * [x] **Row Outcome Conservation:** Balance sheet `source = loaded + rejected + merged + skipped` strictly upheld.
 * [x] **Zero Duplicate Platform Infra:** Reuses shared normalizers and registry from `@cs/core`.
