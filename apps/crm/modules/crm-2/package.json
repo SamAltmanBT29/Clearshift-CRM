@@ -20,9 +20,7 @@
     "@cs/identity": "*",
     "@cs/rbac": "*",
     "@cs/db": "*",
-    "fastify": "^5.2.0",
-    "fastify-plugin": "^5.0.1",
-    "jose": "^5.9.6"
+    "fastify": "^5.2.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

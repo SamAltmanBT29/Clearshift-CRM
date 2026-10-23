@@ -1,18 +1,18 @@
 # ClearShift CRM — Data Dictionary: CRM-5 Migration Control Center and Reports
 
-**Module ID:** `CRM-5`  
-**Module Name:** Migration Control Center and Reports  
-**Owning Team:** Team `crm-reports` (Group 5)  
-**Schema Version:** 1.0.0  
-**Storage Engine:** PostgreSQL 18.6 with Drizzle ORM  
-**Target Milestone:** Gate G1 — Design Complete (Weeks 1–2)  
+**Module ID:** `CRM-5`
+**Module Name:** Migration Control Center and Reports
+**Owning Team:** Team `crm-reports` (Group 5)
+**Schema Version:** 1.0.0
+**Storage Engine:** PostgreSQL 18.6 with Drizzle ORM
+**Target Milestone:** Gate G1 — Design Complete (Weeks 1–2)
 **Access Pattern:** Read-only event projections and quality audits; strictly zero direct cross-module writes.
 
 ---
 
-## 1. Entity Relationship Overview
+## 1. Entity Relationship Overview & Master-Data Ownership
 
-CRM-5 maintains 4 core tables to record migration runs, compute quality scores, inspect failed rows, and audit row-level reconciliation balance sheets:
+CRM-5 maintains 5 core tables to record migration runs, compute quality scores, inspect failed rows, audit row-level reconciliation balance sheets, and store durable import receipts:
 
 ```
 ┌─────────────────────────────────┐
@@ -32,8 +32,20 @@ CRM-5 maintains 4 core tables to record migration runs, compute quality scores, 
                  ┌──────────────────────────────────────┐
                  │    crm5_reconciliation_reports       │
                  │   (Conservation Balance Sheet)       │
+                 └──────────────────┬───────────────────┘
+                                    │
+                                    │ (target_id)
+                                    ▼
+                 ┌──────────────────────────────────────┐
+                 │        crm5_import_receipts          │
+                 │      (Atomic Durable Receipts)       │
                  └──────────────────────────────────────┘
 ```
+
+* **Visual ERD & Master-Data Boundaries:** See [`apps/crm/modules/crm-5/docs/erd.md`](../../apps/crm/modules/crm-5/docs/erd.md).
+* **Requirement-to-Test Traceability Matrix:** See [`apps/crm/modules/crm-5/docs/traceability-matrix.md`](../../apps/crm/modules/crm-5/docs/traceability-matrix.md).
+* **Dirty Data Pack Plan:** See [`apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md).
+* **Module-Level Data Dictionary:** See [`apps/crm/modules/crm-5/docs/data-dictionary.md`](../../apps/crm/modules/crm-5/docs/data-dictionary.md).
 
 ---
 
@@ -604,3 +616,22 @@ Every protected route registers `endpointPreHandlers(fastify, allowedRoles)` exe
 * **Date:** 2026-10-23
 * **Status:** Verified & Passing
 * **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
+
+---
+
+## 17. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM5-24] — Issue #197)
+
+### 17.1 Specification Authority & Governance Alignment
+In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseline 1.0-A §4.2, and Issue #197 `[CRM5-24]`, CRM-5 Migration Control Center and Reports establishes production-grade design specifications for Gate G1:
+1. **Field-Level Data Dictionary:** Defines every entity column across all 5 tables (`crm5_runs`, `crm5_scores`, `crm5_rejects`, `crm5_reconciliation_reports`, `crm5_import_receipts`) with PostgreSQL data type, nullability, constraints, business rule, and synthetic example. Verified against Drizzle ORM schema via automated tests (`apps/crm/modules/crm-5/tests/domain/qa-g1-design.test.ts`).
+2. **Entity-Relationship Diagram & Ownership Boundaries:** Visual Mermaid ERD, cardinality catalog, and PLT-03 master-data boundaries documented in [`apps/crm/modules/crm-5/docs/erd.md`](../../apps/crm/modules/crm-5/docs/erd.md). Asserts that CRM-5 is strictly read-only with zero direct external SQL mutations.
+3. **Requirement-to-Test Traceability Matrix:** Comprehensive 26-requirement matrix mapping `FR-CRM5-01` through `FR-CRM5-26` to existing automated test suites documented in [`apps/crm/modules/crm-5/docs/traceability-matrix.md`](../../apps/crm/modules/crm-5/docs/traceability-matrix.md).
+4. **Dirty Data Pack Plan:** Synthetic edge-case strategy covering 11 disjoint anomaly categories from `manifest.json` and 1,000-row canonical balance sheets documented in [`apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md).
+5. **Executable QA Invariants:** Reusable data structures and conservation assertion helpers implemented in [`apps/crm/modules/crm-5/src/domain/qa-specs.ts`](../../apps/crm/modules/crm-5/src/domain/qa-specs.ts).
+
+### 17.2 Versioned Change Record & Gate G1 Sign-off
+* **Change Record ID:** `CR-CRM5-G1-004`
+* **Milestone:** Gate G1 — Design Complete (Sprint 1)
+* **Date:** 2026-10-23
+* **Status:** Verified, 100% Tests Passing, Approved for V1
+* **Sign-off Authority:** Group 5 Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)
