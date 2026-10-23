@@ -442,3 +442,130 @@ Upon completing Step 3:
      }
    }
    ```
+
+---
+
+## 10. Step 4: Field Mapping, Value-Conversion Templates and Required-Target Enforcement (KIT-05)
+
+### 10.1 Pipeline Stage Overview
+
+Step 4 (**Map**) maps normalized source columns from cleaned staging rows (`public.stg_rows`) into target domain entity fields (e.g., Contacts, Leads, Companies). It performs old-value-to-new-value lookups, enforces strict required-target field contracts, isolates transformed records into `public.clean_crm` with target fields only, records state transitions in `public.kit_batch_steps`, and emits `batch.mapped` outbox events.
+
+```
+       [public.stg_rows] (cleaned rows)
+              │
+              ▼
+   ┌──────────────────────────────────────────────┐
+   │ Mapping Engine                               │
+   │ 1. Validate template against Target Schema   │
+   │    (Assert all required target fields mapped)│
+   │ 2. Field Name Transformations                │
+   │ 3. Value-Conversion Lists (old -> new)       │
+   │ 4. Target Enum Validation & Normalization    │
+   └───────┬──────────────────────────────┬───────┘
+           │ (valid mapped rows)          │ (conversion rejects)
+           ▼                              ▼
+  [public.clean_crm]             [public.kit_rejects]
+(Target fields only +           (INVALID_ENUM_CONVERSION)
+ batch/source row linkage)
+```
+
+### 10.2 Required-Target Field Enforcement Invariant
+
+Before any database write or pipeline execution:
+1. The target entity's required fields are identified (e.g. `firstName`, `lastName`, `email` for Contacts).
+2. The mapping template is checked to ensure every required target field is explicitly mapped to a non-empty source column.
+3. If any required target field is missing from the mapping:
+   - Pipeline execution and downstream dry run are **immediately blocked**.
+   - No records are inserted into `public.clean_crm`.
+   - The operation fails with explicit field and template identifiers:
+     `MISSING_REQUIRED_MAPPING: Required target field(s) [email] have no source column mapping in template 'Standard CRM Contacts' (ID: t1000000-0000-4000-8000-000000000001, Module: crm)`.
+
+### 10.3 Value-Conversion Lists & Enum Validation
+
+- Enumerated and status fields are mapped using declarative lookup rules:
+  ```json
+  {
+    "targetField": "leadStatus",
+    "mappings": {
+      "NEW": "New",
+      "OPEN": "New",
+      "WORKING": "Working",
+      "QUALIFIED": "Qualified",
+      "LOST": "Closed",
+      "CLOSED": "Closed"
+    },
+    "unmappedAction": "reject"
+  }
+  ```
+- **Unmapped Actions**:
+  - `reject`: Fails the row with `INVALID_ENUM_CONVERSION` reason and routes to `public.kit_rejects`.
+  - `use_default`: Assigns the configured fallback default value.
+  - `flag_warning`: Passes through the original value and generates an operational policy warning.
+  - `pass_through`: Passes through unmapped values directly.
+- **Target Enum Integrity**: If a converted value does not conform to the allowed domain enums defined in `CRM_TARGET_ENTITIES`, it is rejected by rule.
+
+### 10.4 Named Template Save/Load & Module Scoping (`public.kit_mappings`)
+
+- Mapping templates are persisted in `public.kit_mappings`:
+  ```sql
+  CREATE TABLE IF NOT EXISTS public.kit_mappings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module TEXT NOT NULL,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '1.0.0',
+    target_entity TEXT NOT NULL DEFAULT 'contacts',
+    mapping_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    value_conversions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_by TEXT NOT NULL DEFAULT 'system',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_kit_mappings_module_name_version UNIQUE (module, name, version)
+  );
+  ```
+- **Exact Round-Trip**: Serializing and deserializing a template preserves all field mappings, transformations, value conversions, and metadata without loss.
+- **Module Scoping**: Templates are strictly partitioned by module (e.g. `crm`, `erp`).
+- **Authorization Guard**: Only authorized editors (`migration_admin`, `platform_admin`, or module-specific admins) may save or modify templates for a module domain.
+
+### 10.5 Target Storage (`public.clean_crm`)
+
+- Mapped target rows are staged in `public.clean_crm`:
+  ```sql
+  CREATE TABLE IF NOT EXISTS public.clean_crm (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    batch_id UUID NOT NULL REFERENCES public.kit_batches(id) ON DELETE CASCADE,
+    source_row INTEGER NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_clean_crm_batch_source_row UNIQUE (batch_id, source_row)
+  );
+  ```
+- **Target-Only Payload**: The `payload` column contains ONLY mapped target fields (e.g., `firstName`, `lastName`, `email`). Arbitrary source columns (e.g. `extra_unmapped_source_field`) are excluded (FR-MP-05).
+- **Linkage**: Foreign key linkage to `public.kit_batches(id)` and `source_row` is immutably maintained.
+
+### 10.6 Step Completion & Outbox Event Emission
+
+Upon completing Step 4:
+1. Batch registry records the step in `public.kit_batch_steps` (step name `map`, status `mapped`).
+2. Batch status in `public.kit_batches` transitions to `mapped`.
+3. Outbox event `batch.mapped` is published to `public.outbox`:
+   ```json
+   {
+     "eventType": "batch.mapped",
+     "aggregateType": "kit_batch",
+     "aggregateId": "BATCH_UUID",
+     "correlationId": "CORRELATION_UUID",
+     "producer": "migration-kit.map",
+     "payload": {
+       "batchId": "BATCH_UUID",
+       "module": "crm",
+       "mappedRows": 920,
+       "missingRequired": 0,
+       "templateId": "TPL_UUID",
+       "templateName": "Standard CRM Contacts",
+       "targetEntity": "contacts",
+       "totalRows": 925,
+       "durationMs": 145
+     }
+   }
+   ```
