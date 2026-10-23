@@ -4,18 +4,34 @@ import type {
   TableSortState,
   TablePaginationState,
 } from '../table/types.js';
+import { TableSkeleton } from './TableSkeleton.js';
+import { EmptyState } from './EmptyState.js';
+import { ErrorAlert } from './ErrorAlert.js';
+import { AccessDeniedView } from './AccessDeniedView.js';
 
 export interface DataTableProps<T = Record<string, unknown>> {
   columns: DataTableColumn<T>[];
   data: T[];
-  loading?: boolean;
-  emptyTitle?: string;
-  emptyDescription?: string;
-  hasActiveFilters?: boolean;
+  loading?: boolean | undefined;
+  loadingRowCount?: number | undefined;
+  error?: string | Error | { code?: string | undefined; message?: string | undefined; details?: unknown } | null | undefined;
+  onRetry?: (() => void) | undefined;
+  emptyTitle?: string | undefined;
+  emptyDescription?: string | undefined;
+  emptyActionLabel?: string | undefined;
+  onEmptyAction?: (() => void) | undefined;
+  hasActiveFilters?: boolean | undefined;
   onClearFilters?: (() => void) | undefined;
+  isAccessDenied?: boolean | undefined;
+  httpStatus?: number | undefined;
+  requiredCapability?: string | undefined;
+  requiredRole?: string | undefined;
+  currentRole?: string | undefined;
+  resourceName?: string | undefined;
+  onAccessBack?: (() => void) | undefined;
   sort?: TableSortState | undefined;
   onSortChange?: ((columnKey: string) => void) | undefined;
-  pagination: TablePaginationState;
+  pagination?: TablePaginationState | undefined;
   onPageChange?: ((newPage: number) => void) | undefined;
 }
 
@@ -23,26 +39,57 @@ export const DataTable = <T extends Record<string, unknown>>({
   columns,
   data,
   loading = false,
+  loadingRowCount = 5,
+  error = null,
+  onRetry,
   emptyTitle = 'No records found',
   emptyDescription = 'There are no records matching your current filter criteria.',
+  emptyActionLabel,
+  onEmptyAction,
   hasActiveFilters = false,
   onClearFilters,
+  isAccessDenied = false,
+  httpStatus,
+  requiredCapability,
+  requiredRole,
+  currentRole,
+  resourceName,
+  onAccessBack,
   sort,
   onSortChange,
-  pagination,
+  pagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 },
   onPageChange,
 }: DataTableProps<T>): React.ReactElement => {
-  // 1. Mandatory Loading State (Skeleton)
+  // -1. 403 Forbidden Access-Denied State
+  if (isAccessDenied || httpStatus === 403) {
+    return (
+      <AccessDeniedView
+        requiredCapability={requiredCapability}
+        requiredRole={requiredRole}
+        currentRole={currentRole}
+        resourceName={resourceName}
+        onBack={onAccessBack}
+      />
+    );
+  }
+
+  // 0. API Error State (Alert Banner with Retry)
+  if (error) {
+    return (
+      <div className="cs-table-card cs-table-error-wrapper" role="region" aria-label="Table Error">
+        <ErrorAlert error={error} onRetry={onRetry} />
+      </div>
+    );
+  }
+
+  // 1. Mandatory Loading State (Animated Table Skeleton)
   if (loading) {
     return (
-      <div className="cs-table-card" aria-busy="true" aria-label="Loading table data">
-        <div className="cs-skeleton-container" role="status">
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-        </div>
-      </div>
+      <TableSkeleton
+        rowCount={loadingRowCount}
+        columnCount={columns.length}
+        ariaLabel="Loading table data..."
+      />
     );
   }
 
@@ -51,36 +98,30 @@ export const DataTable = <T extends Record<string, unknown>>({
     if (hasActiveFilters) {
       return (
         <div className="cs-table-card" role="status">
-          <div className="cs-empty-state cs-empty-filter-state">
-            <div className="cs-empty-icon" aria-hidden="true">🔍</div>
-            <h3 className="cs-empty-title">
-              {emptyTitle === 'No records found' ? 'No matching records found' : emptyTitle}
-            </h3>
-            <p className="cs-empty-text">
-              {emptyDescription === 'There are no records matching your current filter criteria.'
+          <EmptyState
+            className="cs-empty-filter-state"
+            icon="🔍"
+            title={emptyTitle === 'No records found' ? 'No matching records found' : emptyTitle}
+            description={
+              emptyDescription === 'There are no records matching your current filter criteria.'
                 ? 'No records matched your search and filter criteria. Try adjusting your search term or clearing filters.'
-                : emptyDescription}
-            </p>
-            {onClearFilters && (
-              <button
-                type="button"
-                className="cs-clear-all-filters-btn cs-empty-reset-btn"
-                onClick={onClearFilters}
-              >
-                Reset All Filters
-              </button>
-            )}
-          </div>
+                : emptyDescription
+            }
+            actionLabel="Reset All Filters"
+            onAction={onClearFilters}
+          />
         </div>
       );
     }
 
     return (
       <div className="cs-table-card" role="status">
-        <div className="cs-empty-state">
-          <h3 className="cs-empty-title">{emptyTitle}</h3>
-          <p className="cs-empty-text">{emptyDescription}</p>
-        </div>
+        <EmptyState
+          title={emptyTitle}
+          description={emptyDescription}
+          actionLabel={emptyActionLabel}
+          onAction={onEmptyAction}
+        />
       </div>
     );
   }
