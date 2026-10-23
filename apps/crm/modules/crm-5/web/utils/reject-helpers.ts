@@ -15,18 +15,18 @@ export type RejectErrorCategory =
 export interface ModuleIdentifierContext {
   label: string;
   value: string;
-  secondary?: string;
-  deepLink?: string;
+  secondary?: string | undefined;
+  deepLink?: string | undefined;
 }
 
 export interface EnhancedRejectRecord extends MigrationReject {
   category: RejectErrorCategory;
   identifierLabel: string;
   identifierValue: string;
-  secondary?: string;
+  secondary?: string | undefined;
   explanation: string;
   remediation: string;
-  maskedPayload?: Record<string, unknown>;
+  maskedPayload?: Record<string, unknown> | undefined;
 }
 
 // Regex patterns for field detection (aligned with @cs/core PLT-06 / PLT-12)

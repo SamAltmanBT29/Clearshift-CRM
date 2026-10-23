@@ -9,8 +9,8 @@ export interface RejectDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   reject: MigrationReject | null;
-  rawPayload?: Record<string, unknown>;
-  onNavigateBatch?: (batchId: string) => void;
+  rawPayload?: Record<string, unknown> | undefined;
+  onNavigateBatch?: ((batchId: string) => void) | undefined;
 }
 
 /**
