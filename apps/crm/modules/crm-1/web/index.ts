@@ -12,3 +12,4 @@ export * from './components/ActiveFilterPills.js';
 export * from './components/FilterToolbar.js';
 export * from './components/FacetedFilterSidebar.js';
 export * from './components/DataTable.js';
+export * from './pages/CleaningAuditPage.js';
