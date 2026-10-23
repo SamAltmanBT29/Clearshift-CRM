@@ -1,7 +1,12 @@
+import './styles/shell.css';
+
 export * from './types.js';
 export * from './routes.js';
 export * from './auth/route-guard.js';
 export * from './shell/Crm1Shell.js';
+export * from './shell/Crm1ShellView.js';
+export * from './Crm1Workspace.js';
+export * from './api/crm-1.js';
 export * from './table/types.js';
 export * from './table/columns.js';
 export * from './table/facets.js';
@@ -16,6 +21,7 @@ export * from './components/TableSkeleton.js';
 export * from './components/EmptyState.js';
 export * from './components/ErrorAlert.js';
 export * from './components/AccessDeniedView.js';
+export * from './components/Crm1RecordEditor.js';
 export * from './pages/ContactsListPage.js';
 export * from './pages/CompaniesListPage.js';
 export * from './pages/LeadsPipelinePage.js';

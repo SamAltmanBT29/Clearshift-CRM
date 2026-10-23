@@ -7,18 +7,23 @@ import {
   CRM1CompanyPatchSchema,
   CRM1CompanySchema,
   CRM1ContactCreateSchema,
+  CRM1ContactListQuerySchema,
   CRM1ContactPatchSchema,
   CRM1ContactReadSchema,
   CRM1ContactSchema,
   CRM1ImportBatchDetailSchema,
+  CRM1ImportBatchListSchema,
   CRM1ImportBatchSchema,
   CRM1ImportCreateSchema,
+  CRM1ImportListQuerySchema,
   CRM1_IDEMPOTENCY_HEADER,
   CRM1ImportRejectSchema,
   CRM1LeadCreateSchema,
+  CRM1LeadListQuerySchema,
   CRM1LeadPatchSchema,
   CRM1LeadReadSchema,
   CRM1LeadSchema,
+  CRM1CompanyListQuerySchema,
   CRM1ListQuerySchema,
   CRM1ListResponseSchema,
   CRM1ImportRowSchema
@@ -33,7 +38,7 @@ import {
   crm1ImportRejects,
   crm1Leads
 } from "../../db/schema.js";
-import { and, asc, count, eq, exists, ilike, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, ilike, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import { Crm1MutationService } from "../services/crm1-mutation.service.js";
@@ -292,8 +297,16 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     });
 
     fastify.get("/contacts", { preHandler: endpointPreHandlers(fastify, "CONTACTS_LIST") }, async (request) => {
-      const query = parseRequest(CRM1ListQuerySchema, request.query);
-      const where = contactSearch(query.search);
+      const query = parseRequest(CRM1ContactListQuerySchema, request.query);
+      const where = and(
+        contactSearch(query.search),
+        query.leadStatus ? eq(crm1Contacts.leadStatus, query.leadStatus) : undefined,
+        query.consentStatus ? eq(crm1Contacts.consentStatus, query.consentStatus) : undefined,
+        query.unsubscribed !== undefined
+          ? eq(crm1Contacts.unsubscribed, query.unsubscribed)
+          : undefined,
+        query.companyId ? eq(crm1Contacts.companyId, query.companyId) : undefined
+      );
       const [items, totals] = await Promise.all([
         db.select({
           contact: crm1Contacts,
@@ -395,8 +408,11 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.get("/companies", {
       preHandler: endpointPreHandlers(fastify, "COMPANIES_LIST")
     }, async (request) => {
-      const query = parseRequest(CRM1ListQuerySchema, request.query);
-      const where = companySearch(query.search);
+      const query = parseRequest(CRM1CompanyListQuerySchema, request.query);
+      const where = and(
+        companySearch(query.search),
+        query.sourceSystem ? eq(crm1Companies.sourceSystem, query.sourceSystem) : undefined
+      );
       const [items, totals] = await Promise.all([
         db.select().from(crm1Companies).where(where)
           .orderBy(asc(crm1Companies.name))
@@ -483,7 +499,7 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
     fastify.get("/leads", {
       preHandler: endpointPreHandlers(fastify, "LEADS_LIST")
     }, async (request) => {
-      const query = parseRequest(CRM1ListQuerySchema, request.query);
+      const query = parseRequest(CRM1LeadListQuerySchema, request.query);
       const pattern = query.search ? `%${escapeLike(query.search)}%` : undefined;
       const matchingContact = pattern
         ? db.select({ id: crm1Contacts.id }).from(crm1Contacts)
@@ -497,7 +513,11 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
             )
           ))
         : undefined;
-      const where = matchingContact ? exists(matchingContact) : undefined;
+      const where = and(
+        matchingContact ? exists(matchingContact) : undefined,
+        query.status ? eq(crm1Leads.status, query.status) : undefined,
+        query.sourceSystem ? eq(crm1Leads.sourceSystem, query.sourceSystem) : undefined
+      );
       const [items, totals] = await Promise.all([
         db.select({
           lead: crm1Leads,
@@ -604,6 +624,34 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
           targetId: receipt.targetId,
           createdAt: dateString(receipt.createdAt)
         }))
+      });
+    });
+
+    fastify.get("/imports", {
+      preHandler: endpointPreHandlers(fastify, "IMPORTS_STATUS")
+    }, async (request) => {
+      const query = parseRequest(CRM1ImportListQuerySchema, request.query);
+      const pattern = query.search ? `%${escapeLike(query.search)}%` : undefined;
+      const where = and(
+        query.status ? eq(crm1ImportBatches.status, query.status) : undefined,
+        pattern
+          ? or(
+              ilike(crm1ImportBatches.sourceSystem, pattern),
+              sql`${crm1ImportBatches.id}::text ILIKE ${pattern}`
+            )
+          : undefined
+      );
+      const [items, totals] = await Promise.all([
+        db.select().from(crm1ImportBatches).where(where)
+          .orderBy(desc(crm1ImportBatches.createdAt), asc(crm1ImportBatches.id))
+          .limit(query.pageSize).offset((query.page - 1) * query.pageSize),
+        db.select({ total: count() }).from(crm1ImportBatches).where(where)
+      ]);
+      return CRM1ImportBatchListSchema.parse({
+        items: items.map(serializeBatch),
+        page: query.page,
+        pageSize: query.pageSize,
+        total: totals[0]?.total ?? 0
       });
     });
 

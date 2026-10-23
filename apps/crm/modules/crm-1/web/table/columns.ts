@@ -1,30 +1,72 @@
+import React from 'react';
 import type { DataTableColumn } from './types.js';
+import type {
+  CRM1Company,
+  CRM1ContactRead,
+  CRM1ImportBatch,
+  CRM1LeadRead,
+} from '@clearshift/contracts/crm-1';
 
 /**
  * Contacts Data Table Columns matching CRM-1 Data Dictionary (`crm1.crm1_contacts`)
  */
-export const CONTACTS_COLUMNS: DataTableColumn[] = [
+export const CONTACTS_COLUMNS: DataTableColumn<CRM1ContactRead>[] = [
   { key: 'id', header: 'Contact ID', sortable: true, align: 'left', width: '180px' },
   { key: 'firstName', header: 'First Name', sortable: true, align: 'left', width: '140px' },
   { key: 'lastName', header: 'Last Name', sortable: true, align: 'left', width: '140px' },
-  { key: 'email', header: 'Email', sortable: true, align: 'left', width: '220px' },
+  {
+    key: 'email',
+    header: 'Email',
+    sortable: true,
+    align: 'left',
+    width: '220px',
+    render: (value) => typeof value === 'string'
+      ? React.createElement('a', { href: `mailto:${encodeURIComponent(value)}` }, value)
+      : 'Not provided',
+  },
   { key: 'phone', header: 'Phone', sortable: false, align: 'left', width: '140px' },
-  { key: 'companyId', header: 'Company ID', sortable: false, align: 'left', width: '160px' },
+  { key: 'address', header: 'Address', sortable: false, align: 'left', width: '200px' },
+  {
+    key: 'companyName',
+    header: 'Company',
+    sortable: false,
+    align: 'left',
+    width: '180px',
+    render: (value) => typeof value === 'string' ? value : 'No company linked',
+  },
   { key: 'leadStatus', header: 'Lead Status', sortable: true, align: 'left', width: '130px' },
   { key: 'goldenId', header: 'Golden ID', sortable: true, align: 'left', width: '160px' },
+  { key: 'sourceSystem', header: 'Source System', sortable: true, align: 'left', width: '140px' },
+  { key: 'sourceId', header: 'Source ID', sortable: false, align: 'left', width: '140px' },
   { key: 'consentStatus', header: 'Consent', sortable: true, align: 'left', width: '120px' },
-  { key: 'unsubscribed', header: 'Unsubscribed', sortable: false, align: 'center', width: '120px' },
+  {
+    key: 'unsubscribed',
+    header: 'Unsubscribed',
+    sortable: false,
+    align: 'center',
+    width: '120px',
+    render: (value) => value === true ? 'Yes' : 'No',
+  },
   { key: 'createdAt', header: 'Created At', sortable: true, align: 'left', width: '180px' },
 ];
 
 /**
  * Companies Data Table Columns matching CRM-1 Data Dictionary (`crm1.crm1_companies`)
  */
-export const COMPANIES_COLUMNS: DataTableColumn[] = [
+export const COMPANIES_COLUMNS: DataTableColumn<CRM1Company>[] = [
   { key: 'id', header: 'Company ID', sortable: true, align: 'left', width: '180px' },
   { key: 'name', header: 'Company Name', sortable: true, align: 'left', width: '200px' },
   { key: 'taxNumber', header: 'Tax Number', sortable: true, align: 'left', width: '150px' },
-  { key: 'email', header: 'Email', sortable: false, align: 'left', width: '220px' },
+  {
+    key: 'email',
+    header: 'Email',
+    sortable: false,
+    align: 'left',
+    width: '220px',
+    render: (value) => typeof value === 'string'
+      ? React.createElement('a', { href: `mailto:${encodeURIComponent(value)}` }, value)
+      : 'Not provided',
+  },
   { key: 'phone', header: 'Phone', sortable: false, align: 'left', width: '140px' },
   { key: 'address', header: 'Address', sortable: false, align: 'left', width: '200px' },
   { key: 'sourceSystem', header: 'Source System', sortable: true, align: 'left', width: '140px' },
@@ -35,8 +77,19 @@ export const COMPANIES_COLUMNS: DataTableColumn[] = [
 /**
  * Leads Data Table Columns matching CRM-1 Data Dictionary (`crm1.crm1_leads`)
  */
-export const LEADS_COLUMNS: DataTableColumn[] = [
+export const LEADS_COLUMNS: DataTableColumn<CRM1LeadRead>[] = [
   { key: 'id', header: 'Lead ID', sortable: true, align: 'left', width: '180px' },
+  { key: 'contactName', header: 'Contact', sortable: true, align: 'left', width: '180px' },
+  {
+    key: 'contactEmail',
+    header: 'Email',
+    sortable: false,
+    align: 'left',
+    width: '220px',
+    render: (value) => typeof value === 'string'
+      ? React.createElement('a', { href: `mailto:${encodeURIComponent(value)}` }, value)
+      : 'Not provided',
+  },
   { key: 'contactId', header: 'Contact ID', sortable: true, align: 'left', width: '180px' },
   { key: 'status', header: 'Workflow Status', sortable: true, align: 'left', width: '140px' },
   { key: 'sourceSystem', header: 'Source System', sortable: true, align: 'left', width: '140px' },
@@ -61,7 +114,7 @@ export const DUPLICATES_COLUMNS: DataTableColumn[] = [
 /**
  * Import Batches & Receipts Columns
  */
-export const IMPORTS_COLUMNS: DataTableColumn[] = [
+export const IMPORTS_COLUMNS: DataTableColumn<CRM1ImportBatch>[] = [
   { key: 'id', header: 'Batch ID', sortable: true, align: 'left', width: '180px' },
   { key: 'sourceSystem', header: 'Source System', sortable: true, align: 'left', width: '140px' },
   { key: 'status', header: 'Status', sortable: true, align: 'left', width: '130px' },

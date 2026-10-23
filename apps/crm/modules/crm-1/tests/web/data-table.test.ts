@@ -22,9 +22,12 @@ describe('CRM-1 Main Paginated Data Table (Issue #110 / [CRM1-17])', () => {
         'lastName',
         'email',
         'phone',
-        'companyId',
+        'address',
+        'companyName',
         'leadStatus',
         'goldenId',
+        'sourceSystem',
+        'sourceId',
         'consentStatus',
         'unsubscribed',
         'createdAt',
@@ -66,6 +69,8 @@ describe('CRM-1 Main Paginated Data Table (Issue #110 / [CRM1-17])', () => {
       const keys = LEADS_COLUMNS.map((c) => c.key);
       expect(keys).toEqual([
         'id',
+        'contactName',
+        'contactEmail',
         'contactId',
         'status',
         'sourceSystem',

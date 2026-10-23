@@ -1,4 +1,5 @@
 import React from 'react';
+import { Select } from '@cs/ui';
 import { SearchInput } from './SearchInput.js';
 import { ActiveFilterPills } from './ActiveFilterPills.js';
 import type { FilterFacet, TableFilterState, ActiveFilterPill } from '../table/types.js';
@@ -47,25 +48,15 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               const currentVal = filters[facet.paramKey] ?? '';
               return (
                 <div key={facet.id} className="cs-filter-facet">
-                  <label
-                    htmlFor={`toolbar-facet-${facet.id}`}
-                    className="cs-facet-label"
-                  >
-                    {facet.label}
-                  </label>
-                  <select
+                  <Select
                     id={`toolbar-facet-${facet.id}`}
                     className="cs-facet-select"
+                    label={facet.label}
+                    options={facet.options.map(({ value, label }) => ({ value, label }))}
                     value={currentVal}
                     onChange={(e) => onFilterChange(facet.paramKey, e.target.value)}
                     data-facet={facet.paramKey}
-                  >
-                    {facet.options.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               );
             })}

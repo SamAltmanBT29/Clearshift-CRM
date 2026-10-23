@@ -7,7 +7,8 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./public": "./dist/public.js"
+    "./public": "./dist/public.js",
+    "./web": "./web/index.ts"
   },
   "scripts": {
     "build": "tsc",
@@ -22,6 +23,7 @@
     "@cs/db": "*",
     "@cs/identity": "*",
     "@cs/rbac": "*",
+    "@cs/ui": "*",
     "fastify": "^5.2.0"
   },
   "devDependencies": {

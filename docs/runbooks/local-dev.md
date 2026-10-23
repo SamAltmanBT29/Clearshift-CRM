@@ -129,6 +129,27 @@ npm run security:check
 npm test
 ```
 
+### Step 8: Run the CRM-1 UI smoke demo
+
+CRM-1's API-backed workspace is exported from `@cs/mod-crm1/web` for the authenticated host application to mount. The host must pass the current session roles and a token callback; the workspace calls the same-origin `/api/v1/crm-contacts` API and does not persist credentials.
+
+```tsx
+import { Crm1Workspace } from '@cs/mod-crm1/web';
+
+<Crm1Workspace
+  roles={session.roles}
+  getAccessToken={() => session.accessToken}
+/>
+```
+
+After starting the local API and seeding its synthetic database, open the host's CRM-1 route, search for a seeded contact, change a facet, and use the table pagination and permitted edit action. The focused synthetic-data interaction test can also be run from the repository root:
+
+```bash
+npx vitest run apps/crm/modules/crm-1/tests/web/crm1-workspace.test.tsx
+```
+
+This test covers API-backed loading, search/filter query changes, pagination, empty and retry states, denied permissions, and contact creation. It stubs only the HTTP boundary with synthetic responses.
+
 ---
 
 ## 4. Teardown and Reset Procedures

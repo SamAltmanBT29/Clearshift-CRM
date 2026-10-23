@@ -1,4 +1,6 @@
 import React from 'react';
+import { Button } from '@cs/ui';
+import type { CRM1ImportBatch } from '@clearshift/contracts/crm-1';
 import { DataTable } from '../components/DataTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
 import { TableSkeleton } from '../components/TableSkeleton.js';
@@ -15,7 +17,7 @@ import type {
 } from '../table/types.js';
 
 export interface ImportsOverviewPageProps {
-  data?: Record<string, unknown>[];
+  data?: CRM1ImportBatch[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
@@ -40,6 +42,7 @@ export interface ImportsOverviewPageProps {
   activePills?: ActiveFilterPill[];
   facets?: FilterFacet[];
   hasActiveFilters?: boolean;
+  onViewBatch?: ((batchId: string) => void) | undefined;
 }
 
 /**
@@ -73,6 +76,7 @@ export const ImportsOverviewPage: React.FC<ImportsOverviewPageProps> = ({
   activePills = [],
   facets = CRM1_IMPORTS_FACETS,
   hasActiveFilters = false,
+  onViewBatch,
 }) => {
   const displayData = isEmpty ? [] : data;
   const isFiltersActive =
@@ -146,6 +150,18 @@ export const ImportsOverviewPage: React.FC<ImportsOverviewPageProps> = ({
               onSortChange={onSortChange}
               pagination={pagination}
               onPageChange={onPageChange}
+              rowActions={onViewBatch ? (batch) => (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onViewBatch(batch.id)}
+                  aria-label={`View details and rejected rows for batch ${batch.id}`}
+                >
+                  View details
+                </Button>
+              ) : undefined}
+              rowActionsLabel="Batch actions"
             />
           )}
         </>

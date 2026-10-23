@@ -1,4 +1,10 @@
 import React from 'react';
+import { Button, Select } from '@cs/ui';
+import {
+  CRM1LeadStatusSchema,
+  CRM1_LEAD_STATUS_TRANSITIONS,
+  type CRM1LeadRead,
+} from '@clearshift/contracts/crm-1';
 import { DataTable } from '../components/DataTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
 import { TableSkeleton } from '../components/TableSkeleton.js';
@@ -15,7 +21,7 @@ import type {
 } from '../table/types.js';
 
 export interface LeadsPipelinePageProps {
-  data?: Record<string, unknown>[];
+  data?: CRM1LeadRead[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
@@ -40,6 +46,10 @@ export interface LeadsPipelinePageProps {
   activePills?: ActiveFilterPill[];
   facets?: FilterFacet[];
   hasActiveFilters?: boolean;
+  canWrite?: boolean;
+  onCreate?: (() => void) | undefined;
+  onEdit?: ((lead: CRM1LeadRead) => void) | undefined;
+  onSetStatus?: ((lead: CRM1LeadRead, status: CRM1LeadRead['status']) => void) | undefined;
 }
 
 /**
@@ -73,6 +83,10 @@ export const LeadsPipelinePage: React.FC<LeadsPipelinePageProps> = ({
   activePills = [],
   facets = CRM1_LEADS_FACETS,
   hasActiveFilters = false,
+  canWrite = false,
+  onCreate,
+  onEdit,
+  onSetStatus,
 }) => {
   const displayData = isEmpty ? [] : data;
   const isFiltersActive =
@@ -90,6 +104,11 @@ export const LeadsPipelinePage: React.FC<LeadsPipelinePageProps> = ({
         <p className="cs-page-desc">
           Track prospective sales opportunities through verified lifecycle stages: New, Working, Qualified, and Closed.
         </p>
+        {canWrite && onCreate && !accessForbidden && (
+          <Button type="button" onClick={onCreate} aria-label="Create lead">
+            Add Lead
+          </Button>
+        )}
       </div>
 
       {accessForbidden ? (
@@ -111,7 +130,7 @@ export const LeadsPipelinePage: React.FC<LeadsPipelinePageProps> = ({
               activePills={activePills}
               onRemoveFilter={onRemoveFilter ?? (() => {})}
               onClearAll={onClearAllFilters ?? (() => {})}
-              searchPlaceholder="Search leads by name, email, or company..."
+              searchPlaceholder="Search leads by contact name or email..."
             />
           )}
 
@@ -139,13 +158,34 @@ export const LeadsPipelinePage: React.FC<LeadsPipelinePageProps> = ({
                   : 'No active leads in pipeline. Create a new lead or import prospects from marketing sources.'
               }
               emptyActionLabel={emptyActionLabel}
-              onEmptyAction={onEmptyAction}
+              onEmptyAction={canWrite ? onEmptyAction ?? onCreate : undefined}
               hasActiveFilters={isFiltersActive}
               onClearFilters={onClearAllFilters}
               sort={sort}
               onSortChange={onSortChange}
               pagination={pagination}
               onPageChange={onPageChange}
+              rowActions={canWrite ? (lead) => (
+                <div className="cs-flex cs-items-center cs-gap-2">
+                  {onEdit && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => onEdit(lead)}>
+                      Edit
+                    </Button>
+                  )}
+                  {onSetStatus && (
+                    <Select
+                      label={`Update status for ${lead.contactName}`}
+                      value={lead.status}
+                      options={[lead.status, ...CRM1_LEAD_STATUS_TRANSITIONS[lead.status]].map((status) => ({
+                        value: status,
+                        label: status,
+                      }))}
+                      onChange={(event) => onSetStatus(lead, CRM1LeadStatusSchema.parse(event.target.value))}
+                    />
+                  )}
+                </div>
+              ) : undefined}
+              rowActionsLabel="Lead actions"
             />
           )}
         </>

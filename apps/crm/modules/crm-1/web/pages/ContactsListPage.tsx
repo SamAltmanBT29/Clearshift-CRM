@@ -1,4 +1,6 @@
 import React from 'react';
+import { Button } from '@cs/ui';
+import type { CRM1ContactRead } from '@clearshift/contracts/crm-1';
 import { DataTable } from '../components/DataTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
 import { TableSkeleton } from '../components/TableSkeleton.js';
@@ -15,7 +17,7 @@ import type {
 } from '../table/types.js';
 
 export interface ContactsListPageProps {
-  data?: Record<string, unknown>[];
+  data?: CRM1ContactRead[];
   isLoading?: boolean;
   isEmpty?: boolean;
   error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
@@ -40,6 +42,9 @@ export interface ContactsListPageProps {
   activePills?: ActiveFilterPill[];
   facets?: FilterFacet[];
   hasActiveFilters?: boolean;
+  canWrite?: boolean;
+  onCreate?: (() => void) | undefined;
+  onEdit?: ((contact: CRM1ContactRead) => void) | undefined;
 }
 
 /**
@@ -73,6 +78,9 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
   activePills = [],
   facets = CRM1_CONTACTS_FACETS,
   hasActiveFilters = false,
+  canWrite = false,
+  onCreate,
+  onEdit,
 }) => {
   const displayData = isEmpty ? [] : data;
   const isFiltersActive =
@@ -90,6 +98,11 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
         <p className="cs-page-desc">
           Manage contact records, golden identity keys, communication channels, and consent status.
         </p>
+        {canWrite && onCreate && !accessForbidden && (
+          <Button type="button" onClick={onCreate} aria-label="Create contact">
+            Add Contact
+          </Button>
+        )}
       </div>
 
       {accessForbidden ? (
@@ -111,7 +124,7 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
               activePills={activePills}
               onRemoveFilter={onRemoveFilter ?? (() => {})}
               onClearAll={onClearAllFilters ?? (() => {})}
-              searchPlaceholder="Search contacts by name, email, or key..."
+              searchPlaceholder="Search contacts by name or email..."
             />
           )}
 
@@ -139,13 +152,19 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
                   : 'No contact records currently exist. Add a contact or import via Migration Kit.'
               }
               emptyActionLabel={emptyActionLabel}
-              onEmptyAction={onEmptyAction}
+              onEmptyAction={canWrite ? onEmptyAction ?? onCreate : undefined}
               hasActiveFilters={isFiltersActive}
               onClearFilters={onClearAllFilters}
               sort={sort}
               onSortChange={onSortChange}
               pagination={pagination}
               onPageChange={onPageChange}
+              rowActions={canWrite && onEdit ? (contact) => (
+                <Button type="button" variant="outline" size="sm" onClick={() => onEdit(contact)}>
+                  Edit
+                </Button>
+              ) : undefined}
+              rowActionsLabel="Contact actions"
             />
           )}
         </>

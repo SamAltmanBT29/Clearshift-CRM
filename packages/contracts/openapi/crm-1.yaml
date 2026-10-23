@@ -23,6 +23,10 @@ paths:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/ContactLeadStatus"
+        - $ref: "#/components/parameters/ConsentStatus"
+        - $ref: "#/components/parameters/Unsubscribed"
+        - $ref: "#/components/parameters/CompanyId"
       responses:
         "200":
           description: Contacts matching the name or email search, with server pagination.
@@ -119,12 +123,6 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/companies:
@@ -137,6 +135,7 @@ paths:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/SourceSystem"
       responses:
         "200":
           description: Server-paged companies.
@@ -233,10 +232,6 @@ paths:
           $ref: "#/components/responses/ConflictError"
         "422":
           $ref: "#/components/responses/ValidationError"
-        "401":
-          $ref: "#/components/responses/UnauthorizedError"
-        "403":
-          $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/leads:
@@ -249,6 +244,8 @@ paths:
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/LeadStatus"
+        - $ref: "#/components/parameters/SourceSystem"
       responses:
         "200":
           description: Server-paged leads.
@@ -290,8 +287,6 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
-        "422":
-          $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
   /api/v1/crm-contacts/leads/{id}:
@@ -355,13 +350,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/crm-contacts/imports:
+    get:
+      operationId: listCRM1Imports
+      tags: [CRM-1]
+      summary: List import batches
+      description: Server-paged persisted import batches, searchable by batch ID or source system. Allowed roles - viewer, analyst, admin.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/ImportStatus"
+      responses:
+        "200":
+          description: Server-paged persisted import batches.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBatchList"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /api/v1/crm-contacts/imports:
     post:
       operationId: createCRM1Import
       tags: [CRM-1]
@@ -547,6 +561,53 @@ components:
       required: false
       schema:
         type: string
+        maxLength: 200
+    ContactLeadStatus:
+      name: leadStatus
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/LeadStatus"
+    LeadStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/LeadStatus"
+    ConsentStatus:
+      name: consentStatus
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/ConsentStatus"
+    Unsubscribed:
+      name: unsubscribed
+      in: query
+      required: false
+      schema:
+        type: boolean
+    CompanyId:
+      name: companyId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+    SourceSystem:
+      name: sourceSystem
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    ImportStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [pending, processing, completed, failed]
     Page:
       name: page
       in: query
@@ -567,18 +628,6 @@ components:
   responses:
     ValidationError:
       description: Request validation failed.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    UnauthorizedError:
-      description: Authentication is required.
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    ForbiddenError:
-      description: The authenticated user lacks the required capability.
       content:
         application/json:
           schema:
@@ -844,6 +893,13 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         completedAt: { type: [string, "null"], format: date-time }
+    ImportBatchList:
+      allOf:
+        - $ref: "#/components/schemas/PageResult"
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ImportBatch" }
     ImportBatchDetail:
       allOf:
         - $ref: "#/components/schemas/ImportBatch"
@@ -973,4 +1029,3 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-

@@ -258,12 +258,26 @@ In compliance with SDS ClearShift CRM v2.0 §7.1, endpoints strictly enforce aut
 | `/leads/:id` | `GET` | `viewer`, `editor`, `admin` | Retrieve lead by UUID. |
 | `/leads` | `POST` | `editor`, `migration_runner`, `admin` | Create lead. Generates audit event. |
 | `/leads/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Advance lead status to next allowlist state. Invalid transitions return 422 `INVALID_LEAD_STATUS_TRANSITION`. |
+| `/imports` | `GET` | `viewer`, `analyst`, `admin` | Server-paged import history; search matches batch UUID or source system and status is filterable. |
 | `/imports` | `POST` | `migration_runner`, `admin` | Initiate migration batch with required batchId, positive per-row sourceRow, and Idempotency-Key. |
 | `/imports/:batch` | `GET` | `viewer`, `analyst`, `admin` | Check batch execution status and committed receipts. |
 | `/imports/:batch/rejects` | `GET` | `viewer`, `analyst`, `admin` | Retrieve paginated rejected rows for review. |
 | `/import/row` | `POST` | `migration_runner`, `admin` | Target Adapter port for KIT-08 row-level mapped ingestion. Commits target mutation and durable receipt atomically with idempotency protection. |
 | `/import/receipts` | `GET` | `viewer`, `analyst`, `admin` | List durable import receipts recorded by the Target Adapter. |
 | `/import/receipts/:idempotencyKey` | `GET` | `viewer`, `analyst`, `admin` | Retrieve specific durable import receipt by idempotency key. |
+
+### List query contract
+
+All collection endpoints return only the requested server page (`page` defaults to 1; `pageSize` defaults to 25 and is capped at 100). Collection filters are applied in PostgreSQL before pagination:
+
+| Collection | Search fields | Additional filters |
+|---|---|---|
+| Contacts | First name, last name, full name, email | `leadStatus`, `consentStatus`, `unsubscribed`, `companyId` |
+| Companies | Name, email, tax number | `sourceSystem` |
+| Leads | Linked contact name and email | `status`, `sourceSystem` |
+| Imports | Batch UUID and source system | `status` |
+
+Changing a search term or filter in the CRM-1 UI resets the requested page to 1. Responses are validated against the collection's Zod response schema before being rendered.
 
 ---
 
@@ -294,7 +308,7 @@ All domain mutations, migration executions, and privileged actions produce appen
 ## 8. Frontend Module Routes, Navigation & Layout Shell (CRM1-16)
 
 ### Module Route Registration
-CRM-1 registers 5 primary sub-views under the common ClearShift layout shell:
+CRM-1 registers the module routes under the common ClearShift layout shell. The CRM1-04 API-backed workspace exposes Contacts, Companies, Leads, and Imports; Duplicate Review remains on its existing route and is not part of this workspace slice.
 
 | Route Path | View Identifier | Display Title | Nav Label | Required Capability |
 | :--- | :--- | :--- | :--- | :--- |
@@ -322,20 +336,20 @@ CRM-1 registers 5 primary sub-views under the common ClearShift layout shell:
 ### Column Schemas & Alignment
 The main CRM-1 collection screens implement bounded paginated tables with stable column keys matching the database schema:
 
-- **Contacts (`CONTACTS_COLUMNS`)**: `id`, `firstName`, `lastName`, `email`, `phone`, `companyId`, `leadStatus`, `goldenId`, `consentStatus`, `unsubscribed`, `createdAt`
+- **Contacts (`CONTACTS_COLUMNS`)**: `id`, `firstName`, `lastName`, `email`, `phone`, `address`, `companyName`, `leadStatus`, `goldenId`, `sourceSystem`, `sourceId`, `consentStatus`, `unsubscribed`, `createdAt`
 - **Companies (`COMPANIES_COLUMNS`)**: `id`, `name`, `taxNumber`, `email`, `phone`, `address`, `sourceSystem`, `sourceId`, `createdAt`
-- **Leads (`LEADS_COLUMNS`)**: `id`, `contactId`, `status`, `sourceSystem`, `sourceId`, `createdAt`
+- **Leads (`LEADS_COLUMNS`)**: `id`, `contactName`, `contactEmail`, `contactId`, `status`, `sourceSystem`, `sourceId`, `createdAt`
 - **Duplicates (`DUPLICATES_COLUMNS`)**: `id`, `entity`, `matchKey`, `matchType`, `existingId`, `incomingId`, `status`, `detectedAt`
 - **Imports (`IMPORTS_COLUMNS`)**: `id`, `sourceSystem`, `status`, `loadedCount`, `rejectedCount`, `createdAt`, `completedAt`
 
 ### Bounded Pagination & Server-Side Query Binding
-- **Default Page Size**: 25 records (configurable up to `MAX_PAGE_SIZE = 100`).
-- **Query Parameter Serialization**: Encodes `page`, `pageSize`, `limit`, `sort`, `order` into API query parameters.
-- **Boundaries**: Page clamping prevents out-of-bounds navigation and DOM degradation.
+- **Default Page Size**: 25 records; the public API accepts page sizes up to 100.
+- **Server Query Binding**: The workspace sends only `page`, `pageSize`, `search`, and the selected entity filters. The API filters and paginates in PostgreSQL; it does not load the full collection into the browser.
+- **Boundaries**: Search and filter changes reset the requested page to 1. Pagination controls are keyboard-operable and disabled at the first and last page.
 
 ### Sorting Controls & ARIA Landmarks
-- **Header Sorting**: Clicking sortable column headers predictably toggles between `asc` and `desc`, resetting the active page to 1.
-- **WAI-ARIA Conformance**: Accessible `<table role="table">`, `<th aria-sort="...">`, sort toggle `<button aria-label="Sort by ...">`, and pagination toolbar (`<nav aria-label="Table Pagination">`).
+- **Sorting**: The CRM-1 API list contract does not define sort parameters, so the workspace does not render no-op sorting controls.
+- **WAI-ARIA Conformance**: Shared `@cs/ui` table and pagination primitives render semantic table headers, a labeled pagination navigation, visible focus, and row action controls.
 
 ---
 
@@ -362,10 +376,10 @@ CRM-1 collection views register structured facets mapped bi-directionally to API
 | **Imports** | **Batch Status** | `status` | `pending`, `processing`, `completed`, `failed` | `status=<BatchStatus>` |
 
 - **Pagination Reset Invariant**: Modifying any search query or faceted filter dimension immediately resets the active page to 1 (`page = 1`) to eliminate phantom pagination overflows.
-- **Bi-directional URL Synchronization**: All active filters serialize to standard URL query parameters (`toQueryParams()` / `toQueryString()`) and hydrate deterministically from `URLSearchParams` (`fromQueryParams()`).
+- **API Query Binding**: Search and selected facets are serialized to the approved list endpoint query parameters. Search is debounced by 300ms; selecting a facet updates the server query immediately.
 
 ### Active Filter Tag Lifecycle & 'Clear All' Action
-- **Active Filter Pill Tags**: When search text or any facet filter is applied, an active filter tag (`.cs-filter-pill`) is displayed containing the facet label and formatted display value (e.g. `Lead Status: Qualified` or `Search: "Sarah"`).
+- **Active Filter Pill Tags**: Selected facets display a dismissible tag (`.cs-filter-pill`) containing the facet label and formatted value (e.g. `Lead Status: Qualified`). Search text remains in the labeled search field, which has a keyboard-operable clear control.
 - **Individual Tag Dismissal**: Each pill tag features an accessible dismiss button (`.cs-filter-pill-remove`) with `aria-label="Remove filter: <Label> <Value>"`. Clicking dismiss clears only that specific filter without disturbing other active filters.
 - **Bulk 'Clear All' Reset**: When at least one filter or search is active, a 'Clear All' button (`.cs-clear-all-filters-btn`) is displayed. Activating it purges all filters and search state, resetting query parameters and table results in a single atomic transaction.
 
@@ -460,10 +474,10 @@ Governs standard UI visual states across all CRM-1 entity tables and pages (`Con
 | Priority | State Condition | Visual Component | Accessibility / ARIA | Interactive Controls |
 | :---: | :--- | :--- | :--- | :--- |
 | 1 | 403 Forbidden / Missing Permission | `AccessDeniedView` | `role="region"`, `aria-labelledby="cs-access-denied-title"`, icon `aria-hidden="true"` | Primary CTA button (`Return to Safe Area` or custom `actionLabel`) |
-| 2 | Error (API failure, network abort) | `ErrorAlert` | `role="alert"`, `aria-live="assertive"`, dismissible banner | Primary `Retry` button (`aria-label="Retry operation"`), optional secondary action |
+| 2 | API failure or network error | `ErrorAlert` | `role="alert"`, `aria-live="assertive"` | Retry button; failed list requests can be retried without navigating away |
 | 3 | Initial or Active Fetching | `TableSkeleton` | `role="status"`, `aria-busy="true"`, `aria-label="Loading content..."` | Animated shimmering placeholders for toolbar, headers, and body rows |
 | 4 | Empty (Zero total records or filtered out) | `EmptyState` | `role="status"`, semantic header and description | Primary CTA button (`actionLabel` / `onAction`), secondary CTA or reset filters |
-| 5 | Normal Populated Data | `DataTable` | `role="table"`, sorting headers (`aria-sort`), paginator (`aria-label="Table Pagination"`) | Column sorting, search filter, page navigation, record actions |
+| 5 | Normal Populated Data | `DataTable` | Semantic table and paginator (`aria-label="Pagination"`) | Search, entity filters, server-side page navigation, permission-aware record actions |
 
 ### 17.2 Error Message Sanitization Standard
 

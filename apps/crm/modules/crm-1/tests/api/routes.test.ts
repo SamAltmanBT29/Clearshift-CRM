@@ -118,6 +118,15 @@ apiSuite("CRM-1 REST API", () => {
     const company = companyResponse.json();
     companyIds.push(company.id);
 
+    const companyListResponse = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/companies?search=${encodeURIComponent(`Company ${fixture}`)}&sourceSystem=clearshift_api`,
+      headers: { authorization }
+    });
+    expect(companyListResponse.statusCode).toBe(200);
+    expect(companyListResponse.json()).toMatchObject({ total: 1, pageSize: 25 });
+    expect(companyListResponse.json().items[0].id).toBe(company.id);
+
     const contactResponse = await app.inject({
       method: "POST",
       url: `${CRM1_API_PREFIX}/contacts`,
@@ -133,6 +142,22 @@ apiSuite("CRM-1 REST API", () => {
     const contact = contactResponse.json();
     contactIds.push(contact.id);
     expect(contact.goldenId).toBeTruthy();
+
+    const contactFilters = new URLSearchParams({
+      search: `Mutation ${fixture}`,
+      leadStatus: "New",
+      consentStatus: "unknown",
+      unsubscribed: "false",
+      companyId: company.id
+    });
+    const filteredContacts = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/contacts?${contactFilters}`,
+      headers: { authorization }
+    });
+    expect(filteredContacts.statusCode).toBe(200);
+    expect(filteredContacts.json()).toMatchObject({ total: 1, pageSize: 25 });
+    expect(filteredContacts.json().items[0].id).toBe(contact.id);
 
     const patchContact = await app.inject({
       method: "PATCH",
@@ -152,6 +177,15 @@ apiSuite("CRM-1 REST API", () => {
     expect(leadResponse.statusCode).toBe(201);
     const lead = leadResponse.json();
     leadIds.push(lead.id);
+    const filteredLeads = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/leads?search=${encodeURIComponent(`Mutation ${fixture}`)}&status=New&sourceSystem=clearshift_api`,
+      headers: { authorization }
+    });
+    expect(filteredLeads.statusCode).toBe(200);
+    expect(filteredLeads.json()).toMatchObject({ total: 1, pageSize: 25 });
+    expect(filteredLeads.json().items[0].id).toBe(lead.id);
+
     const patchLeadWorking = await app.inject({
       method: "PATCH",
       url: `${CRM1_API_PREFIX}/leads/${lead.id}`,
@@ -192,6 +226,28 @@ apiSuite("CRM-1 REST API", () => {
     const batch = importResponse.json();
     batchIds.push(batch.id);
     expect(batch).toMatchObject({ status: "completed", loadedCount: 1, rejectedCount: 0 });
+
+    const importListQuery = new URLSearchParams({
+      search: `import-${fixture}`,
+      status: "completed",
+      page: "1",
+      pageSize: "25"
+    });
+    const importList = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/imports?${importListQuery}`,
+      headers: { authorization }
+    });
+    expect(importList.statusCode).toBe(200);
+    expect(importList.json()).toMatchObject({ page: 1, pageSize: 25, total: 1 });
+    expect(importList.json().items[0].id).toBe(batch.id);
+
+    const invalidImportFilter = await app.inject({
+      method: "GET",
+      url: `${CRM1_API_PREFIX}/imports?status=unknown`,
+      headers: { authorization }
+    });
+    expect(invalidImportFilter.statusCode).toBe(400);
 
     const batchDetailResponse = await app.inject({
       method: "GET",

@@ -1,4 +1,14 @@
 import React from 'react';
+import {
+  Button,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@cs/ui';
 import type {
   DataTableColumn,
   TableSortState,
@@ -9,7 +19,7 @@ import { EmptyState } from './EmptyState.js';
 import { ErrorAlert } from './ErrorAlert.js';
 import { AccessDeniedView } from './AccessDeniedView.js';
 
-export interface DataTableProps<T = Record<string, unknown>> {
+export interface DataTableProps<T extends object = Record<string, unknown>> {
   columns: DataTableColumn<T>[];
   data: T[];
   loading?: boolean | undefined;
@@ -33,6 +43,8 @@ export interface DataTableProps<T = Record<string, unknown>> {
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
   onPageChange?: ((newPage: number) => void) | undefined;
+  rowActions?: ((row: T) => React.ReactNode) | undefined;
+  rowActionsLabel?: string | undefined;
 }
 
 /**
@@ -40,7 +52,7 @@ export interface DataTableProps<T = Record<string, unknown>> {
  * and 403 Forbidden Access-Denied UI States.
  * Conforms to ClearShift V1 Issue #112 (CRM1-19).
  */
-export const DataTable = <T extends Record<string, unknown>>({
+export const DataTable = <T extends object>({
   columns,
   data,
   loading = false,
@@ -64,6 +76,8 @@ export const DataTable = <T extends Record<string, unknown>>({
   onSortChange,
   pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
   onPageChange,
+  rowActions,
+  rowActionsLabel = 'Actions',
 }: DataTableProps<T>): React.ReactElement => {
   // -1. 403 Forbidden Access-Denied State
   if (isAccessDenied || httpStatus === 403) {
@@ -132,18 +146,12 @@ export const DataTable = <T extends Record<string, unknown>>({
   }
 
   // 3. Computed pagination records
-  const startRecord =
-    pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
-  const endRecord = Math.min(pagination.page * pagination.pageSize, pagination.total);
-  const isFirstDisabled = pagination.page <= 1;
-  const isLastDisabled = pagination.page >= pagination.totalPages;
-
   return (
     <div className="cs-table-card">
       <div className="cs-table-responsive">
-        <table className="cs-table" role="table">
-          <thead className="cs-thead">
-            <tr className="cs-tr">
+        <Table className="cs-table" role="table">
+          <TableHeader className="cs-thead">
+            <TableRow className="cs-tr">
               {columns.map((col) => {
                 const isSorted = sort?.columnKey === col.key;
                 const ariaSort = isSorted
@@ -157,16 +165,17 @@ export const DataTable = <T extends Record<string, unknown>>({
                 const alignClass = col.align ? ` cs-text-${col.align}` : '';
 
                 return (
-                  <th
+                  <TableHead
                     key={col.key}
-                    scope="col"
                     aria-sort={ariaSort}
                     className={`cs-th${alignClass}`}
                     style={col.width ? { width: col.width } : undefined}
                   >
-                    {col.sortable ? (
-                      <button
+                    {col.sortable && onSortChange ? (
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         className="cs-th-sort-btn"
                         onClick={() => onSortChange?.(col.key)}
                         aria-label={`Sort by ${col.header}`}
@@ -181,91 +190,55 @@ export const DataTable = <T extends Record<string, unknown>>({
                             ↕
                           </span>
                         )}
-                      </button>
+                      </Button>
                     ) : (
                       <span>{col.header}</span>
                     )}
-                  </th>
+                  </TableHead>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody className="cs-tbody">
+              {rowActions && <TableHead>{rowActionsLabel}</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody className="cs-tbody">
             {data.map((row, rowIdx) => (
-              <tr key={(row['id'] as string) ?? rowIdx} className="cs-tr">
+              <TableRow key={String(Reflect.get(row, 'id') ?? rowIdx)} className="cs-tr">
                 {columns.map((col) => {
-                  const rawVal = row[col.key];
+                  const rawVal = Reflect.get(row, col.key);
                   const formatted = col.format
                     ? col.format(rawVal, row)
                     : rawVal !== null && rawVal !== undefined
                     ? String(rawVal)
                     : '—';
                   const alignClass = col.align ? ` cs-text-${col.align}` : '';
-                  return (
-                    <td key={col.key} className={`cs-td${alignClass}`}>
-                      {formatted}
-                    </td>
-                  );
+                  const content = col.render ? col.render(rawVal, row) : formatted;
+                  return col.key === columns[0]?.key
+                    ? (
+                        <TableHead key={col.key} scope="row" className={`cs-td${alignClass}`}>
+                          {content}
+                        </TableHead>
+                      )
+                    : (
+                        <TableCell key={col.key} className={`cs-td${alignClass}`}>
+                          {content}
+                        </TableCell>
+                      );
                 })}
-              </tr>
+                {rowActions && <TableCell className="cs-td">{rowActions(row)}</TableCell>}
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
-      {/* Pagination Toolbar */}
-      <nav aria-label="Table Pagination" className="cs-pagination-toolbar">
-        <div className="cs-pagination-info">
-          Showing <span className="cs-font-semibold">{startRecord}</span> to{' '}
-          <span className="cs-font-semibold">{endRecord}</span> of{' '}
-          <span className="cs-font-semibold">{pagination.total}</span> records
-        </div>
-        <div className="cs-pagination-controls">
-          <button
-            type="button"
-            className="cs-pagination-btn"
-            disabled={isFirstDisabled}
-            aria-disabled={isFirstDisabled}
-            onClick={() => onPageChange?.(1)}
-            aria-label="Go to first page"
-          >
-            « First
-          </button>
-          <button
-            type="button"
-            className="cs-pagination-btn"
-            disabled={isFirstDisabled}
-            aria-disabled={isFirstDisabled}
-            onClick={() => onPageChange?.(pagination.page - 1)}
-            aria-label="Go to previous page"
-          >
-            ‹ Prev
-          </button>
-          <span className="cs-pagination-page" aria-current="page">
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-          <button
-            type="button"
-            className="cs-pagination-btn"
-            disabled={isLastDisabled}
-            aria-disabled={isLastDisabled}
-            onClick={() => onPageChange?.(pagination.page + 1)}
-            aria-label="Go to next page"
-          >
-            Next ›
-          </button>
-          <button
-            type="button"
-            className="cs-pagination-btn"
-            disabled={isLastDisabled}
-            aria-disabled={isLastDisabled}
-            onClick={() => onPageChange?.(pagination.totalPages)}
-            aria-label="Go to last page"
-          >
-            Last »
-          </button>
-        </div>
-      </nav>
+      <Pagination
+        currentPage={pagination.page}
+        totalPages={pagination.totalPages}
+        totalCount={pagination.total}
+        pageSize={pagination.pageSize}
+        onPageChange={(newPage) => onPageChange?.(newPage)}
+        className="cs-pagination-toolbar"
+      />
     </div>
   );
 };

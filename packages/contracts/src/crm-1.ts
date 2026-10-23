@@ -120,10 +120,33 @@ export const CRM1LeadPatchSchema = CRM1LeadInputSchema.partial()
   .refine((value) => Object.keys(value).length > 0, "At least one field must be provided");
 
 export const CRM1ListQuerySchema = z.object({
-  search: z.string().trim().optional(),
+  search: z.string().trim().max(200).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(25)
 });
+
+const CRM1BooleanQuerySchema = z.enum(["true", "false"]).transform((value) => value === "true");
+const CRM1SourceSystemQuerySchema = z.string().trim().min(1).max(128).optional();
+
+export const CRM1ContactListQuerySchema = CRM1ListQuerySchema.extend({
+  leadStatus: CRM1LeadStatusSchema.optional(),
+  consentStatus: CRM1ConsentStatusSchema.optional(),
+  unsubscribed: CRM1BooleanQuerySchema.optional(),
+  companyId: z.string().uuid().optional()
+}).strict();
+
+export const CRM1CompanyListQuerySchema = CRM1ListQuerySchema.extend({
+  sourceSystem: CRM1SourceSystemQuerySchema
+}).strict();
+
+export const CRM1LeadListQuerySchema = CRM1ListQuerySchema.extend({
+  status: CRM1LeadStatusSchema.optional(),
+  sourceSystem: CRM1SourceSystemQuerySchema
+}).strict();
+
+export const CRM1ImportListQuerySchema = CRM1ListQuerySchema.extend({
+  status: CRM1ImportStatusSchema.optional()
+}).strict();
 
 export const CRM1ListResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
   z.object({
@@ -205,6 +228,8 @@ export const CRM1ImportBatchSchema = z.object({
   completedAt: z.string().datetime().nullable()
 });
 
+export const CRM1ImportBatchListSchema = CRM1ListResponseSchema(CRM1ImportBatchSchema);
+
 export const CRM1ImportRejectSchema = z.object({
   id: z.string().uuid(),
   batchId: z.string().uuid(),
@@ -245,6 +270,12 @@ export type CRM1ConsentStatus = z.infer<typeof CRM1ConsentStatusSchema>;
 export type CRM1EntityType = z.infer<typeof CRM1EntityTypeSchema>;
 export type CRM1ImportStatus = z.infer<typeof CRM1ImportStatusSchema>;
 export type CRM1ImportBatch = z.infer<typeof CRM1ImportBatchSchema>;
+export type CRM1ImportBatchListQuery = z.infer<typeof CRM1ImportListQuerySchema>;
+export type CRM1ImportBatchList = z.infer<typeof CRM1ImportBatchListSchema>;
+export type CRM1ContactListQueryInput = z.input<typeof CRM1ContactListQuerySchema>;
+export type CRM1CompanyListQueryInput = z.input<typeof CRM1CompanyListQuerySchema>;
+export type CRM1LeadListQueryInput = z.input<typeof CRM1LeadListQuerySchema>;
+export type CRM1ImportListQueryInput = z.input<typeof CRM1ImportListQuerySchema>;
 export type CRM1ImportReject = z.infer<typeof CRM1ImportRejectSchema>;
 export type CRM1ImportBatchDetail = z.infer<typeof CRM1ImportBatchDetailSchema>;
 

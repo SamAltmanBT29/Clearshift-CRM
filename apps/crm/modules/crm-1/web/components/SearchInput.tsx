@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Input } from '@cs/ui';
 import { SEARCH_DEBOUNCE_MS } from '../table/SearchFilterController.js';
 
 export interface SearchInputProps {
@@ -110,7 +111,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         <span className="cs-search-icon" aria-hidden="true">
           🔍
         </span>
-        <input
+        <Input
           type="search"
           id={id}
           className="cs-search-input"
@@ -119,6 +120,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           aria-label="Search records"
+          maxLength={200}
           autoFocus={autoFocus}
           autoComplete="off"
           spellCheck="false"

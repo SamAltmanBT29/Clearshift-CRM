@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  CRM1_ROUTES,
   getAllCrm1Routes,
   formatBrowserTitle,
   MODULE_TITLE,
@@ -11,10 +10,11 @@ export interface Crm1ShellProps {
   activeTabKey: string;
   onTabSelect: (tabKey: string) => void;
   children?: React.ReactNode;
+  visibleTabKeys?: readonly string[];
 }
 
 /**
- * CRM-1 Shared Layout Shell
+ * CRM-1 Shared Layout Shell View
  * Complies with WAI-ARIA landmark navigation, keyboard tab navigation,
  * accessible skip links, and dynamic browser title updates.
  */
@@ -22,9 +22,12 @@ export const Crm1Shell: React.FC<Crm1ShellProps> = ({
   activeTabKey,
   onTabSelect,
   children,
+  visibleTabKeys,
 }) => {
-  const routes = getAllCrm1Routes();
-  const activeRoute = CRM1_ROUTES[activeTabKey] ?? routes[0]!;
+  const routes = getAllCrm1Routes().filter(
+    (route) => !visibleTabKeys || visibleTabKeys.includes(route.path)
+  );
+  const activeRoute = routes.find((route) => route.path === activeTabKey) ?? routes[0]!;
   const tabListRef = useRef<HTMLDivElement>(null);
 
   // Synchronize document title on navigation

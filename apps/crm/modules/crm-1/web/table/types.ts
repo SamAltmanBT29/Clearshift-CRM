@@ -19,6 +19,7 @@ export interface DataTableColumn<T = Record<string, unknown>> {
   align?: 'left' | 'center' | 'right';
   width?: string;
   format?: (value: unknown, row: T) => string;
+  render?: (value: unknown, row: T) => React.ReactNode;
 }
 
 export interface TableFilterState {
