@@ -155,6 +155,31 @@
 - **Monotonic Opt-Out (BR-CRM4-01):** Known `unsubscribed` contacts cannot be reverted to `subscribed` via imports, API mutations, or forms; violations return HTTP `409 Conflict`. Adding an unsubscribed contact to a campaign immediately flags `unsubscribed = true`.
 - **Idempotency & Replay Semantics:** Mutation endpoints (`POST /lists`, `POST /campaigns`, `POST /campaigns/:id/members`, `POST /consents`) accept `Idempotency-Key` or `X-Idempotency-Key` headers (or payload keys). Replayed requests return cached receipts with `X-Idempotent-Replay: true` header without double-incrementing counters or creating duplicate entities.
 
+### 5.2 Migration Kit Target Adapter & Durable Import Receipts ([CRM4-11] — Issue #164)
+- **TargetAdapter Port Implementation:** `Crm4TargetAdapter` in [`apps/crm/modules/crm-4/src/migration/target-adapter.ts`](../../apps/crm/modules/crm-4/src/migration/target-adapter.ts) implements the `@cs/kit` `TargetAdapter` port for `crm4_records` (schema version 1).
+- **Atomic Transaction Commit:** Business record mutations and durable `ImportReceipt` records commit atomically in one local transaction. Failure of receipt commitment initiates a complete state rollback with zero orphaned mutations.
+- **Idempotency Guarantees:** Canonical payload SHA-256 hash matching on `idempotencyKey`. Exact replays return existing receipts without duplicating target rows or counters; key reuse with conflicting payloads returns `IDEMPOTENCY_CONFLICT`.
+- **Preflight Dry-Run:** `preflight(batchId, rows)` validates records and counts valid/reject rows with zero database or store mutations.
+- **Batch Loading:** `loadBatch(batchId, rows)` executes sequential type-safe loading, returning loaded receipts and structured rejection errors with standard error codes.
+- **Domain Invariant Assertions:** Strictly enforces monotonic opt-out rule (BR-CRM4-01) rejecting attempts to re-subscribe unsubscribed contacts, validates member status against `sent/opened/clicked`, and links existing members without duplicate entries.
+
+### 5.3 Relationships, State Transitions & Read-Model Consistency ([CRM4-06] — Issue #41)
+- **Cross-Module Referential Integrity Guard:** Contact references (`contactId`) are validated through the `ReferenceResolver` port (`assertContactExists`) without direct cross-module database writes or queries (satisfying Architecture Decision C7). If the referenced contact is missing in CRM-1, mutations fail immediately with HTTP `404 Not Found` (`NOT_FOUND`).
+- **Campaign Membership State Machine:**
+  - Allowed forward status transitions: `sent` -> `opened` -> `clicked` (or direct `sent` -> `clicked`).
+  - Terminal state: `clicked` permits no further transitions.
+  - Reversals (e.g. `clicked` -> `sent`, `opened` -> `sent`, `clicked` -> `opened`) and invalid status codes return HTTP `422 Unprocessable Entity` (`INVALID_STATE_TRANSITION`).
+  - Idempotent self-transitions (e.g. `opened` -> `opened`) succeed safely without state perturbation.
+- **Monotonic Opt-Out Invariant Enforcement (BR-CRM4-01):**
+  - Initial consent (`null` -> `subscribed` or `unsubscribed`) is permitted.
+  - Transition from `subscribed` to `unsubscribed` is permitted and immediately reflects in subsequent campaign memberships.
+  - Reversal from `unsubscribed` to `subscribed` is strictly rejected with HTTP `409 Conflict` (`CONFLICT`).
+- **Immediate Read-Model Consistency:**
+  - When a campaign is associated with a list, the list's `campaignCount` increments immediately.
+  - When a member is added to a campaign, both the campaign's `memberCount` and the parent list's `memberCount` reflect the updated count immediately without eventual-consistency lag.
+  - When a contact's consent changes to `unsubscribed`, new campaign membership records for that contact immediately reflect `unsubscribed = true`.
+- **Automated Verification:** Verified in domain unit and Fastify integration test suite [`apps/crm/modules/crm-4/tests/domain/relationships.test.ts`](../../apps/crm/modules/crm-4/tests/domain/relationships.test.ts).
+
 ---
 
 ## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)

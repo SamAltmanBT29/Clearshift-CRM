@@ -8,6 +8,7 @@ import {
   CRM4CampaignPatchSchema,
   CRM4CampaignQuerySchema,
   CRM4MemberCreateSchema,
+  CRM4MemberPatchSchema,
   CRM4MemberQuerySchema,
   CRM4ConsentSetSchema,
 } from '@clearshift/contracts';
@@ -358,6 +359,33 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       });
 
       return reply.status(201).send(member);
+    }
+  );
+
+  // PATCH /campaigns/:id/members/:memberId
+  fastify.patch(
+    '/campaigns/:id/members/:memberId',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MEMBERS_UPDATE, authEnabled),
+    },
+    async (request, reply) => {
+      const { id, memberId } = request.params as { id: string; memberId: string };
+      const parsed = CRM4MemberPatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid member patch body', 400, parsed.error.issues);
+      }
+      const member = await service.patchMember(id, memberId, parsed.data);
+
+      const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
+      await auditService.logEvent({
+        actor,
+        action: 'crm4.member.updated',
+        entity: 'campaign_member',
+        entityId: member.id,
+        diff: parsed.data,
+      });
+
+      return reply.send(member);
     }
   );
 
