@@ -8,6 +8,19 @@ servers:
     description: V1 Base Endpoint
 
 paths:
+  /health:
+    get:
+      summary: Service health check
+      operationId: getHealth
+      description: Returns health status, module identifier, and service metadata
+      responses:
+        '200':
+          description: Service is healthy and operational
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
   /deals:
     get:
       summary: List deals with search, stage filter, and server-side pagination
@@ -29,7 +42,28 @@ paths:
             default: 10
             minimum: 1
             maximum: 100
-          description: Number of records per page
+          description: Number of records per page (capped at 100)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Alternative limit parameter for records per page (capped at 100)
+            minimum: 1
+            maximum: 100
+          description: Number of records per page (capped at 100)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Alternative limit parameter for records per page (capped at 100)
         - name: search
           in: query
           required: false
@@ -207,6 +241,18 @@ paths:
           schema:
             type: integer
             default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of records per page (capped at 100)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Alternative limit parameter for records per page (capped at 100)
       responses:
         '200':
           description: Paginated quotes list
@@ -317,8 +363,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /import:
+    post:
+      summary: Ingest migration batch rows with idempotency guarantees (KIT-08 Target Adapter)
+      operationId: importRow
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Stable idempotency key for exactly-once processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Crm2ImportRow'
+      responses:
+        '201':
+          description: Row processed and target mutation committed with receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportResult'
+        '200':
+          description: Idempotent replay; original receipt returned without second mutation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportResult'
+        '400':
+          description: Invalid import payload or missing Idempotency-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied (requires MIGRATION_RUNNER or ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Idempotency conflict (key reused with different payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Domain validation failure or unresolved cross-module reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /import/receipts:
+    get:
+      summary: List durable migration import receipts
+      operationId: listImportReceipts
+      responses:
+        '200':
+          description: List of migration receipts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportReceiptsResponse'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - module
+        - name
+        - version
+      properties:
+        status:
+          type: string
+          example: ok
+        module:
+          type: string
+          example: crm-2
+        name:
+          type: string
+          example: CRM-2 Deals, Pipeline and Quotes
+        version:
+          type: string
+          example: 1.0.0
+
     StageName:
       type: string
       enum:
@@ -623,3 +763,103 @@ components:
                 type: object
             - type: object
           nullable: true
+        correlation_id:
+          type: string
+          description: Unique correlation ID for tracking and audit
+
+    Crm2ImportRow:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - sourceSystem
+        - entity
+        - idempotencyKey
+        - data
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        sourceRow:
+          type: integer
+          minimum: 1
+        sourceSystem:
+          type: string
+        entity:
+          type: string
+          enum:
+            - deal
+            - quote
+        idempotencyKey:
+          type: string
+        data:
+          type: object
+
+    Crm2ImportReceipt:
+      type: object
+      required:
+        - id
+        - batchId
+        - sourceRow
+        - entity
+        - sourceSystem
+        - sourceId
+        - targetId
+        - idempotencyKey
+        - payloadHash
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+          format: uuid
+        sourceRow:
+          type: integer
+        entity:
+          type: string
+        sourceSystem:
+          type: string
+        sourceId:
+          type: string
+        targetId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+        payloadHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Crm2ImportResult:
+      type: object
+      required:
+        - targetId
+        - receipt
+        - isExisting
+      properties:
+        targetId:
+          type: string
+          format: uuid
+        receipt:
+          $ref: '#/components/schemas/Crm2ImportReceipt'
+        isExisting:
+          type: boolean
+        correlation_id:
+          type: string
+
+    Crm2ImportReceiptsResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Crm2ImportReceipt'
+        correlation_id:
+          type: string
+

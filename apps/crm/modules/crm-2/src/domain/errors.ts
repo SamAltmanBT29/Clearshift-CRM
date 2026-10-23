@@ -6,9 +6,45 @@ import { AppError } from '@cs/kernel';
  */
 
 export class DomainValidationError extends AppError {
-  constructor(message: string, details: Array<{ field?: string; message: string; code?: string }> = []) {
-    super('VALIDATION_ERROR', message, 400, details);
+  constructor(
+    message: string,
+    details: Array<{ field?: string; message: string; code?: string }> = [],
+    statusCode: number = 422
+  ) {
+    super('VALIDATION_ERROR', message, statusCode, details);
     this.name = 'DomainValidationError';
+  }
+}
+
+export class IdempotencyConflictError extends AppError {
+  constructor(
+    message: string = 'Idempotency conflict on requested entity',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('IDEMPOTENCY_CONFLICT', message, 409, details);
+    this.name = 'IdempotencyConflictError';
+  }
+}
+
+export class IdempotencyKeyReusedError extends AppError {
+  constructor(
+    message: string = 'Idempotency-Key was already used for a different request payload',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('IDEMPOTENCY_KEY_REUSED', message, 409, details);
+    this.name = 'IdempotencyKeyReusedError';
+  }
+}
+
+export class ProtectedFieldMutationError extends AppError {
+  constructor(fieldName: string) {
+    super(
+      'PROTECTED_FIELD_MUTATION',
+      `Field '${fieldName}' is protected/system-maintained and cannot be updated from user edit`,
+      422,
+      [{ field: fieldName, message: 'Protected field cannot be altered by client', code: 'protected_field' }]
+    );
+    this.name = 'ProtectedFieldMutationError';
   }
 }
 
