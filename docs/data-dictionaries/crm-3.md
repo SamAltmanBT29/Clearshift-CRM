@@ -98,7 +98,33 @@ Indexes:
 - Search: Server-side case-insensitive match on `subject` and `orderRef`.
 - Domain Invariants: Status restricted to `[New, Open, Waiting, Solved, Closed]`; Priority restricted to `[Low, Normal, High, Urgent]`.
 
-## 4. Ticket Status Transitions & Relationship Integrity (CRM3-06 / #31)
+---
+
+## 4. Frontend Module Routes, Navigation & Layout Shell (CRM3-16)
+
+### Module Route Registration
+CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
+
+| Route Path | View Identifier | Display Title | Nav Label | Required Capability |
+| :--- | :--- | :--- | :--- | :--- |
+| `/crm-3/tickets` | `crm3-tickets` | Support Tickets Queue | Tickets | `module.read` |
+| `/crm-3/activities` | `crm3-activities` | Customer Activity Timeline | Activities | `module.read` |
+| `/crm-3/notes` | `crm3-notes` | Internal Ticket Notes | Notes | `module.read` |
+| `/crm-3/sla` | `crm3-sla` | SLA Tracking & Priority Escalations | SLA Tracking | `module.read` |
+| `/crm-3/imports` | `crm3-imports` | Import Batches & Receipts | Imports | `module.read` |
+
+### Hub Authentication & Route Guards
+* **Session Verification:** Route guards verify the user's active Hub session before allowing access to any module route.
+* **Unauthenticated Access:** Unauthenticated requests or expired sessions are intercepted and redirected to `/login?returnUrl=<encoded_path>`.
+* **RBAC Authorization:** All module routes require the `module.read` capability. Users lacking this capability are redirected to `/access-denied?required=module.read`.
+
+### Layout Shell & Accessibility Standards
+* **ARIA Landmarks:** Employs `<header role="banner">`, `<nav aria-label="Breadcrumb">`, `<nav role="tablist">`, and `<main id="main-content" role="main">` with `<section role="tabpanel">`.
+* **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
+* **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
+* **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.
+
+## 5. Ticket Status Transitions & Relationship Integrity (CRM3-06 / #31)
 
 ### Status transition map (user edits via `PATCH /tickets/{id}`)
 Source of truth: `CRM3_TICKET_STATUS_TRANSITIONS` in `packages/contracts/src/crm-3.ts`.
