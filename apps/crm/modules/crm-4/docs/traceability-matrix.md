@@ -40,6 +40,7 @@ This Requirement-to-Test Traceability Matrix maps 100% of functional requirement
 | **`MIG-CRM4-01`** | Target domain mutation and migration import receipt commit together in one local database transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
 | **`MIG-CRM4-02`** | Row conservation balance sheet: `source = loaded + rejected + merged + skipped` (`unaccounted = 0`). | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
 | **`MIG-CRM4-03`** | Bounded batching (500 rows) and stop migration when failures exceed 10% of attempted rows. | **Must** | ClearShift Core Rules & SDS §4.11 | Migration | Unit | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM4-26`** | Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #179 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/profiler.test.ts` | **VERIFIED (Green)** |
 
 ---
 
@@ -51,6 +52,10 @@ The CRM-4 test suite comprises executing test files verifying schema, security, 
 apps/crm/modules/crm-4/tests/
 ├── domain/
 │   └── qa-g1-design.test.ts             — Data dictionary, ERD, and conservation equations (Gate G1)
+├── fixtures/
+│   └── dirty-pack.test.ts               (22 tests) — Canonical 100-row dirty data pack & manifest
+├── kit/
+│   └── profiler.test.ts                 (21 tests) — Profiling stats, duplicate detection & manifest comparison
 ├── security/
 │   └── authorization.test.ts            (46 tests) — EdDSA auth, RBAC capability matrix, tenant isolation
 └── web/

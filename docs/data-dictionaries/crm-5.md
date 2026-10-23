@@ -785,3 +785,60 @@ To safeguard against silent coercion failures and data corruption during migrati
 * **Date:** 2026-10-23
 * **Status:** Verified, Tests Passing, Gate G4 Ready
 * **Sign-off Authority:** Group 5 Role 3 (Frontend / Review-screen Engineer) & Role 2 (Integration Engineer)
+
+---
+
+## 19. Entity Detail View, Inline Edit Workflow, and Linked Master Records (CRM5-21 / Issue #194)
+
+### 19.1 Detail View & Primary Attributes Specification (`RunDetailPage`)
+The CRM-5 Migration Control Center implements an entity detail page for migration run projections (`RunDetailPage`), providing operators with end-to-end execution visibility:
+* **Primary Attributes Display (AC 1):**
+  - **Run Identifier:** Immutable UUID (`run.id`) displayed with copyable format.
+  - **Batch Identifier:** Master migration batch ID (`run.batchId`).
+  - **Target Module Badge:** Color-coded module tag (`crm-1`, `crm-2`, `crm-3`, `crm-4`, `crm-5`).
+  - **Pipeline Phase Badge:** Canonical step tag (`extract`, `profile`, `clean`, `map`, `load`, `validate`, `reconcile`).
+  - **Status Pill:** Real-time state badge (`pending`, `running`, `completed`, `failed`, `halted`).
+  - **Execution Metrics:** Records In, Records Out, Records Rejected, Throughput/Success percentage (`(recordsOut / recordsIn) * 100%`), and elapsed execution duration.
+* **Audit & System Metadata Panel (AC 1):**
+  - **Golden ID / Master Identity:** Explicitly surfaces the Golden ID (`metadata.goldenId`) with a dedicated Golden Identity badge (`🏅 Golden ID`). When unassigned, indicates derived identity from batch.
+  - **Created At & Updated At:** ISO-8601 audit timestamps formatted in localized string representations.
+  - **Operator Notes:** Displays historical operator audit annotations or recovery notes.
+
+### 19.2 Controlled Inline Edit / Slide-Over Drawer Form (`EditRunDrawer`)
+Controlled mutation of migration run projections is performed via `EditRunDrawer` (`PATCH /api/v1/crm-control/runs/:id`):
+* **Allowlisted Mutable Fields (AC 2):**
+  - `status`: Select dropdown enforcing state machine transitions (`assertValidTransition`). Reverting terminal states (`completed`, `failed`) is strictly blocked.
+  - `recordsIn`: Integer input (`>= 0`).
+  - `recordsOut`: Integer input (`>= 0`).
+  - `recordsRejected`: Integer input (`>= 0`).
+  - `metadata.operatorNotes`: Textarea documenting operator justification for manual recovery or reconciliation.
+* **Immutable Read-Only Fields:** `id`, `batchId`, `module`, `step`, and `createdAt` cannot be modified.
+* **RBAC Permission Gate (AC 2):**
+  - Requires `migration_runner`, `editor`, or `admin` role (`CRM5_ENDPOINT_ROLES.RUNS_UPDATE`).
+  - Read-only users (e.g. `viewer`, `analyst`) receive an inline 403 Forbidden alert, and form submission is disabled (`canEdit=false`).
+
+### 19.3 Optimistic Concurrency Control & 409 Conflict Handling (AC 4)
+* **Concurrency Token:** Edits include `expectedUpdatedAt: run.updatedAt`.
+* **Conflict Detection:** If the server record was updated concurrently by another operator or background job (`current.updatedAt > expectedUpdatedAt`), the API returns HTTP 409 Conflict (`code: CONCURRENT_MODIFICATION`).
+* **Operator Conflict Prompt & Recovery:** The drawer captures HTTP 409 and presents an alert: *"Concurrent Modification Conflict: This run projection was updated concurrently by another operator. Please refresh to load the latest state before re-applying."*
+* **Refresh and Re-apply Action:** Operators click **"Refresh and Re-apply"** (`data-testid="refresh-reapply-btn"`), which automatically fetches the latest record state from the server and updates form inputs.
+
+### 19.4 Linked Entity Sub-Tables & Module Deep Links (AC 3)
+The detail view embeds 4 linked sub-tables displaying related records for the batch:
+1. **Pipeline Steps Sub-Table:** Displays all 7 canonical migration step runs for the same `batchId`, highlighting the currently inspected step.
+2. **Quality Scores Sub-Table:** Displays 5-dimension quality score metrics (completeness, validity, duplicate rate, reject rate, link integrity, and overall score).
+3. **Migration Rejects Sub-Table:** Lists row-level rejections for the batch with row index, error code, reason, and modal review action (`RejectDetailModal`).
+4. **Owning Module Master Records Sub-Table:** Provides navigation links to target records in owning CRM modules:
+   - For `crm-1`: Navigation link to CRM-1 Contacts (`/crm/contacts`).
+   - For `crm-2`: Navigation link to CRM-2 Deals (`/crm/deals`).
+   - For `crm-3`: Navigation link to CRM-3 Tickets (`/crm/tickets`).
+   - For `crm-4`: Navigation link to CRM-4 Campaigns (`/crm/campaigns`).
+   - For `crm-5`: Navigation link to Control Center Reports (`/crm-5`).
+
+### 19.5 Versioned Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G3-021`
+* **Milestone:** Gate G3 — Detail/Edit Workflow and Linked Records (Weeks 5–6)
+* **Date:** 2026-10-24
+* **Status:** Verified, Tests Passing, Gate G3 Ready
+* **Sign-off Authority:** Group 5 Lead & Role 3 (Frontend Engineer)
+
