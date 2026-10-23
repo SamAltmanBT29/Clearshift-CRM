@@ -155,6 +155,14 @@
 - **Monotonic Opt-Out (BR-CRM4-01):** Known `unsubscribed` contacts cannot be reverted to `subscribed` via imports, API mutations, or forms; violations return HTTP `409 Conflict`. Adding an unsubscribed contact to a campaign immediately flags `unsubscribed = true`.
 - **Idempotency & Replay Semantics:** Mutation endpoints (`POST /lists`, `POST /campaigns`, `POST /campaigns/:id/members`, `POST /consents`) accept `Idempotency-Key` or `X-Idempotency-Key` headers (or payload keys). Replayed requests return cached receipts with `X-Idempotent-Replay: true` header without double-incrementing counters or creating duplicate entities.
 
+### 5.2 Migration Kit Target Adapter & Durable Import Receipts ([CRM4-11] — Issue #164)
+- **TargetAdapter Port Implementation:** `Crm4TargetAdapter` in [`apps/crm/modules/crm-4/src/migration/target-adapter.ts`](../../apps/crm/modules/crm-4/src/migration/target-adapter.ts) implements the `@cs/kit` `TargetAdapter` port for `crm4_records` (schema version 1).
+- **Atomic Transaction Commit:** Business record mutations and durable `ImportReceipt` records commit atomically in one local transaction. Failure of receipt commitment initiates a complete state rollback with zero orphaned mutations.
+- **Idempotency Guarantees:** Canonical payload SHA-256 hash matching on `idempotencyKey`. Exact replays return existing receipts without duplicating target rows or counters; key reuse with conflicting payloads returns `IDEMPOTENCY_CONFLICT`.
+- **Preflight Dry-Run:** `preflight(batchId, rows)` validates records and counts valid/reject rows with zero database or store mutations.
+- **Batch Loading:** `loadBatch(batchId, rows)` executes sequential type-safe loading, returning loaded receipts and structured rejection errors with standard error codes.
+- **Domain Invariant Assertions:** Strictly enforces monotonic opt-out rule (BR-CRM4-01) rejecting attempts to re-subscribe unsubscribed contacts, validates member status against `sent/opened/clicked`, and links existing members without duplicate entries.
+
 ---
 
 ## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
