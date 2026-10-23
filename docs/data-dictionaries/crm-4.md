@@ -163,6 +163,23 @@
 - **Batch Loading:** `loadBatch(batchId, rows)` executes sequential type-safe loading, returning loaded receipts and structured rejection errors with standard error codes.
 - **Domain Invariant Assertions:** Strictly enforces monotonic opt-out rule (BR-CRM4-01) rejecting attempts to re-subscribe unsubscribed contacts, validates member status against `sent/opened/clicked`, and links existing members without duplicate entries.
 
+### 5.3 Relationships, State Transitions & Read-Model Consistency ([CRM4-06] — Issue #41)
+- **Cross-Module Referential Integrity Guard:** Contact references (`contactId`) are validated through the `ReferenceResolver` port (`assertContactExists`) without direct cross-module database writes or queries (satisfying Architecture Decision C7). If the referenced contact is missing in CRM-1, mutations fail immediately with HTTP `404 Not Found` (`NOT_FOUND`).
+- **Campaign Membership State Machine:**
+  - Allowed forward status transitions: `sent` -> `opened` -> `clicked` (or direct `sent` -> `clicked`).
+  - Terminal state: `clicked` permits no further transitions.
+  - Reversals (e.g. `clicked` -> `sent`, `opened` -> `sent`, `clicked` -> `opened`) and invalid status codes return HTTP `422 Unprocessable Entity` (`INVALID_STATE_TRANSITION`).
+  - Idempotent self-transitions (e.g. `opened` -> `opened`) succeed safely without state perturbation.
+- **Monotonic Opt-Out Invariant Enforcement (BR-CRM4-01):**
+  - Initial consent (`null` -> `subscribed` or `unsubscribed`) is permitted.
+  - Transition from `subscribed` to `unsubscribed` is permitted and immediately reflects in subsequent campaign memberships.
+  - Reversal from `unsubscribed` to `subscribed` is strictly rejected with HTTP `409 Conflict` (`CONFLICT`).
+- **Immediate Read-Model Consistency:**
+  - When a campaign is associated with a list, the list's `campaignCount` increments immediately.
+  - When a member is added to a campaign, both the campaign's `memberCount` and the parent list's `memberCount` reflect the updated count immediately without eventual-consistency lag.
+  - When a contact's consent changes to `unsubscribed`, new campaign membership records for that contact immediately reflect `unsubscribed = true`.
+- **Automated Verification:** Verified in domain unit and Fastify integration test suite [`apps/crm/modules/crm-4/tests/domain/relationships.test.ts`](../../apps/crm/modules/crm-4/tests/domain/relationships.test.ts).
+
 ---
 
 ## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)

@@ -145,6 +145,14 @@ export const CRM4MemberCreateSchema = z.object({
 }).strict();
 export type CRM4MemberCreate = z.infer<typeof CRM4MemberCreateSchema>;
 
+export const CRM4MemberPatchSchema = z.object({
+  status: CRM4MemberStatusSchema.optional(),
+  unsubscribed: z.boolean().optional(),
+}).strict().refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for update',
+});
+export type CRM4MemberPatch = z.infer<typeof CRM4MemberPatchSchema>;
+
 export const CRM4ConsentSetSchema = z.object({
   contactId: z.string().uuid('A valid contact ID (UUID) is required'),
   status: CRM4ConsentStatusSchema,
@@ -225,6 +233,7 @@ export const CRM4_ENDPOINT_ROLES = {
 
   MEMBERS_LIST: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
   MEMBERS_CREATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+  MEMBERS_UPDATE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
 
   CONSENTS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
   CONSENTS_SET: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],

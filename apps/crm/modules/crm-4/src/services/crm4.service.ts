@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { AppError } from '@cs/kernel';
+import { AppError, type ReferenceResolver } from '@cs/kernel';
 import {
   type CRM4List,
   type CRM4ListCreate,
@@ -9,12 +9,18 @@ import {
   type CRM4CampaignPatch,
   type CRM4Member,
   type CRM4MemberCreate,
+  type CRM4MemberPatch,
   type CRM4Consent,
   type CRM4ConsentSet,
   assertMonotonicOptOut,
   assertValidMemberStatus,
 } from '@clearshift/contracts';
 import { sanitizeCsvField, redactSensitiveObject } from '../policies/masking.js';
+import {
+  assertValidMemberStatusTransition,
+  assertValidConsentStatusTransition,
+  assertContactExists,
+} from '../domain/relationships.js';
 
 export interface ImportReceipt {
   id: string;
@@ -39,8 +45,10 @@ export class Crm4Service {
   private members: Map<string, CRM4Member> = new Map();
   private consents: Map<string, CRM4Consent> = new Map(); // Keyed by contactId
   private receipts: Map<string, ImportReceipt> = new Map(); // Keyed by idempotencyKey
+  private contactResolver?: ReferenceResolver | undefined;
 
-  constructor() {
+  constructor(options?: { contactResolver?: ReferenceResolver | undefined }) {
+    this.contactResolver = options?.contactResolver;
     this.seedSyntheticData();
   }
 
@@ -451,6 +459,9 @@ export class Crm4Service {
       }
     }
 
+    // Cross-module integrity: Assert referenced contact exists in CRM-1
+    await assertContactExists(this.contactResolver, data.contactId);
+
     const campaign = await this.getCampaignById(data.campaignId);
 
     // Assert status invariant: strictly sent, opened, clicked
@@ -480,6 +491,12 @@ export class Crm4Service {
     this.members.set(member.id, member);
     campaign.memberCount += 1;
 
+    // Increment associated list memberCount if list exists
+    const list = this.lists.get(campaign.listId);
+    if (list) {
+      list.memberCount += 1;
+    }
+
     if (idempotency?.key) {
       this.recordReceipt(idempotency.key, {
         batchId: idempotency.batchId,
@@ -492,6 +509,33 @@ export class Crm4Service {
     }
 
     return member;
+  }
+
+  public async patchMember(
+    campaignId: string,
+    memberId: string,
+    data: CRM4MemberPatch
+  ): Promise<CRM4Member> {
+    await this.getCampaignById(campaignId);
+
+    const member = this.members.get(memberId);
+    if (!member || member.campaignId !== campaignId) {
+      throw new AppError('NOT_FOUND', `Member '${memberId}' not found in campaign '${campaignId}'`, 404);
+    }
+
+    if (data.status !== undefined) {
+      // Enforce valid lifecycle status transitions: sent -> opened -> clicked
+      assertValidMemberStatusTransition(member.status, data.status);
+    }
+
+    const updated: CRM4Member = {
+      ...member,
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.unsubscribed !== undefined ? { unsubscribed: data.unsubscribed } : {}),
+    };
+
+    this.members.set(memberId, updated);
+    return updated;
   }
 
   // =========================================================================
