@@ -10,10 +10,12 @@ export * from './domain/duplicate-policy.js';
 export * from './domain/transitions.js';
 export * from './domain/relationships.js';
 export * from './domain/batch-loader.js';
+export * from './domain/qa-specs.js';
 export * from './migration/target-adapter.js';
 export * from './services/control-center.service.js';
 export * from './routes/control-center.routes.js';
 export * from './routes/import.js';
+export * from './kit/wizard-metadata.js';
 export * from './app.js';
 
 

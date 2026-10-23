@@ -14,6 +14,18 @@ export interface HubTokenClaims {
   sub: string;
   jti: string;
   exp: number;
+  iat?: number | undefined;
+  kid?: string | undefined;
   roles: RoleType[];
-  employee_id?: string;
+  employee_id?: string | undefined;
+}
+
+export interface HubUser {
+  id: string;
+  username: string;
+  roles: RoleType[];
+  employeeRef?: string | undefined;
+  status: "active" | "disabled";
+  createdAt: Date;
+  updatedAt: Date;
 }

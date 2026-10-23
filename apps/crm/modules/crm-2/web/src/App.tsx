@@ -6,10 +6,12 @@ import { DealFormPage } from './pages/DealFormPage.js';
 import { QuoteFormPage } from './pages/QuoteFormPage.js';
 import { PipelineOverviewPage } from './pages/PipelineOverviewPage.js';
 import { QuotesListPage } from './pages/QuotesListPage.js';
+import { BatchLoaderPage } from './pages/BatchLoaderPage.js';
+import { DuplicateReviewPage } from './pages/DuplicateReviewPage.js';
 import { CRM2_ROUTES, getRouteBreadcrumbs } from './routes.js';
 import { checkRouteAuth } from './auth/route-guard.js';
 import type { BreadcrumbItem, UserSession } from './types.js';
-import type { Deal, Quote } from '@clearshift/contracts';
+import type { Deal } from '@clearshift/contracts';
 import { Roles } from '@cs/identity';
 import { Capabilities } from '@cs/rbac';
 import { Button, Alert } from '@clearshift/ui';
@@ -22,7 +24,9 @@ export type ViewState =
   | { type: 'create-deal' }
   | { type: 'edit-deal'; dealId: string }
   | { type: 'create-quote'; dealId: string; deal?: Deal | undefined }
-  | { type: 'edit-quote'; dealId: string; quoteId: string };
+  | { type: 'edit-quote'; dealId: string; quoteId: string }
+  | { type: 'batch-loader' }
+  | { type: 'duplicates' };
 
 export function App() {
   const [view, setView] = useState<ViewState>({ type: 'deals' });
@@ -55,6 +59,20 @@ export function App() {
     currentBreadcrumbs = getRouteBreadcrumbs('quoteCreate');
   } else if (view.type === 'edit-quote') {
     currentBreadcrumbs = getRouteBreadcrumbs('quoteEdit');
+  } else if (view.type === 'batch-loader') {
+    currentBreadcrumbs = [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Deals & Quotes', href: '/crm-2' },
+      { label: 'Batch Loader' },
+    ];
+  } else if (view.type === 'duplicates') {
+    currentBreadcrumbs = [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Deals & Quotes', href: '/crm-2' },
+      { label: 'Duplicate Review' },
+    ];
   } else if (view.type === 'pipeline') {
     currentBreadcrumbs = CRM2_ROUTES['pipeline'].breadcrumbs;
   } else if (view.type === 'quotes') {
@@ -93,6 +111,22 @@ export function App() {
   // Action controls rendered in Shell Header
   const shellActions = (
     <div className="flex items-center gap-2 text-xs">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setView({ type: 'batch-loader' })}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        Batch Loader
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setView({ type: 'duplicates' })}
+        className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+      >
+        Duplicates
+      </Button>
       <Button
         variant={simulateUnauth ? 'danger' : 'outline'}
         size="sm"
@@ -254,6 +288,26 @@ export function App() {
               quoteId={view.quoteId}
               onBackToDeal={() => setView({ type: 'detail', dealId: view.dealId })}
               onSuccess={() => setView({ type: 'detail', dealId: view.dealId })}
+            />
+          )}
+
+          {/* Batch Loader View */}
+          {view.type === 'batch-loader' && (
+            <BatchLoaderPage
+              onBackToList={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
+            />
+          )}
+
+          {/* Duplicate Review View */}
+          {view.type === 'duplicates' && (
+            <DuplicateReviewPage
+              onBackToList={() => {
+                setActiveTab('deals');
+                setView({ type: 'deals' });
+              }}
             />
           )}
         </>

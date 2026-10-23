@@ -1,6 +1,9 @@
 import React from 'react';
 import { DataTable } from '../components/DataTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
+import { TableSkeleton } from '../components/TableSkeleton.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { AccessDeniedView } from '../components/AccessDeniedView.js';
 import { CONTACTS_COLUMNS } from '../table/columns.js';
 import { CRM1_CONTACTS_FACETS } from '../table/facets.js';
 import type {
@@ -15,7 +18,15 @@ export interface ContactsListPageProps {
   data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
-  error?: string | null;
+  error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
+  onRetry?: (() => void) | undefined;
+  httpStatus?: number;
+  isAccessDenied?: boolean;
+  requiredCapability?: string;
+  requiredRole?: string;
+  currentRole?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: (() => void) | undefined;
   sort?: TableSortState | undefined;
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
@@ -34,13 +45,21 @@ export interface ContactsListPageProps {
 /**
  * Contacts List Page Shell
  * Integrates with /api/v1/crm-contacts/contacts, FilterToolbar, and paginated DataTable.
- * Conforms to ClearShift V1 Issue #111 (CRM1-18).
+ * Conforms to ClearShift V1 Issue #111 (CRM1-18) and Issue #112 (CRM1-19).
  */
 export const ContactsListPage: React.FC<ContactsListPageProps> = ({
   data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  onRetry,
+  httpStatus,
+  isAccessDenied = false,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  emptyActionLabel = 'Add Contact',
+  onEmptyAction,
   sort,
   onSortChange,
   pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
@@ -62,6 +81,8 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
     Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
     activePills.length > 0;
 
+  const accessForbidden = isAccessDenied || httpStatus === 403;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -71,53 +92,63 @@ export const ContactsListPage: React.FC<ContactsListPageProps> = ({
         </p>
       </div>
 
-      {onSearchChange && onFilterChange && (
-        <FilterToolbar
-          search={search}
-          onSearchChange={onSearchChange}
-          facets={facets}
-          filters={filters}
-          onFilterChange={onFilterChange}
-          activePills={activePills}
-          onRemoveFilter={onRemoveFilter ?? (() => {})}
-          onClearAll={onClearAllFilters ?? (() => {})}
-          searchPlaceholder="Search contacts by name, email, or key..."
+      {accessForbidden ? (
+        <AccessDeniedView
+          requiredCapability={requiredCapability}
+          requiredRole={requiredRole}
+          currentRole={currentRole}
+          resourceName="Contacts Directory"
         />
-      )}
+      ) : (
+        <>
+          {onSearchChange && onFilterChange && (
+            <FilterToolbar
+              search={search}
+              onSearchChange={onSearchChange}
+              facets={facets}
+              filters={filters}
+              onFilterChange={onFilterChange}
+              activePills={activePills}
+              onRemoveFilter={onRemoveFilter ?? (() => {})}
+              onClearAll={onClearAllFilters ?? (() => {})}
+              searchPlaceholder="Search contacts by name, email, or key..."
+            />
+          )}
 
-      {isLoading && (
-        <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading contacts list">
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <p className="cs-loading-text">Loading contacts from server...</p>
-        </div>
-      )}
+          {error && (
+            <div className="cs-error-container" style={{ marginBottom: '16px' }}>
+              <ErrorAlert error={error} onRetry={onRetry} />
+            </div>
+          )}
 
-      {!isLoading && error && (
-        <div className="cs-error-card" role="alert">
-          <p className="cs-error-message">Error loading contacts: {error}</p>
-        </div>
-      )}
-
-      {!isLoading && !error && (
-        <DataTable
-          columns={CONTACTS_COLUMNS}
-          data={displayData}
-          loading={false}
-          emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
-          emptyDescription={
-            isFiltersActive
-              ? 'No contacts match your search and filter criteria. Try adjusting your search term or clearing filters.'
-              : 'No contact records currently exist. Add a contact or import via Migration Kit.'
-          }
-          hasActiveFilters={isFiltersActive}
-          onClearFilters={onClearAllFilters}
-          sort={sort}
-          onSortChange={onSortChange}
-          pagination={pagination}
-          onPageChange={onPageChange}
-        />
+          {isLoading ? (
+            <TableSkeleton
+              rowCount={5}
+              columnCount={CONTACTS_COLUMNS.length}
+              ariaLabel="Loading contacts from server..."
+            />
+          ) : !error && (
+            <DataTable
+              columns={CONTACTS_COLUMNS}
+              data={displayData}
+              loading={false}
+              emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
+              emptyDescription={
+                isFiltersActive
+                  ? 'No contacts match your search and filter criteria. Try adjusting your search term or clearing filters.'
+                  : 'No contact records currently exist. Add a contact or import via Migration Kit.'
+              }
+              emptyActionLabel={emptyActionLabel}
+              onEmptyAction={onEmptyAction}
+              hasActiveFilters={isFiltersActive}
+              onClearFilters={onClearAllFilters}
+              sort={sort}
+              onSortChange={onSortChange}
+              pagination={pagination}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
       )}
     </div>
   );

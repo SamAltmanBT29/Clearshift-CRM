@@ -17,6 +17,7 @@
     "@cs/kernel": "*",
     "@cs/core": "*",
     "@cs/kit": "*",
+    "@cs/db": "*",
     "@cs/identity": "*",
     "@cs/rbac": "*",
     "fastify": "^5.2.0"

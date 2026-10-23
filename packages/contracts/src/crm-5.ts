@@ -9,6 +9,8 @@ import { z } from 'zod';
 // 1. Enums & Primitive Schemas
 // ---------------------------------------------------------------------------
 
+export const CRM5_API_PREFIX = '/api/v1/crm-control';
+
 export const CrmModuleSchema = z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']);
 export type CrmModule = z.infer<typeof CrmModuleSchema>;
 
@@ -608,6 +610,46 @@ export const BatchExecutionReportSchema = z.object({
 });
 export type BatchExecutionReport = z.infer<typeof BatchExecutionReportSchema>;
 
+// ---------------------------------------------------------------------------
+// 9. Security & Audit Schemas (Issue #54 / [CRM5-15])
+// ---------------------------------------------------------------------------
+
+export const CRM5AuditEventSchema = z.object({
+  id: z.string().uuid(),
+  actor: z.string().min(1),
+  action: z.string().min(1),
+  entity: z.string().min(1),
+  entityId: z.string().uuid().nullable().optional(),
+  batchId: z.string().nullable().optional(),
+  result: z.enum(['success', 'failure', 'rejected', 'halted']),
+  diffRedacted: z.record(z.string(), z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  createdAt: z.coerce.date(),
+});
+export type CRM5AuditEvent = z.infer<typeof CRM5AuditEventSchema>;
+
+export const CRM5ErrorEnvelopeSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.array(z.unknown()).optional(),
+  correlation_id: z.string().optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      details: z.array(z.unknown()).optional(),
+    })
+    .optional(),
+});
+export type CRM5ErrorEnvelope = z.infer<typeof CRM5ErrorEnvelopeSchema>;
+
 export * from './import-target.js';
+export {
+  CRM5_RUNS_TARGET_FIELDS,
+  CRM5_SCORES_TARGET_FIELDS,
+  CRM5_REJECTS_TARGET_FIELDS,
+  CRM5_RECONCILIATION_TARGET_FIELDS,
+  CRM5_TARGET_ENTITIES,
+} from './migration-target.js';
 
 

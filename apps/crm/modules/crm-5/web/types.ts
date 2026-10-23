@@ -12,7 +12,8 @@ export interface Crm5RouteDefinition {
   fullPath: string;
   title: string;
   navLabel: string;
-  requiredCapability: CapabilityType;
+  requiredCapability?: CapabilityType | undefined;
+  allowedRoles?: readonly RoleType[] | undefined;
   breadcrumbs: BreadcrumbItem[];
 }
 
@@ -20,6 +21,7 @@ export interface UserSession {
   userId: string;
   roles: RoleType[];
   expiresAt: number; // unix timestamp in seconds
+  disabled?: boolean | undefined;
 }
 
 export interface AuthGuardResult {

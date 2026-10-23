@@ -19,6 +19,7 @@ import { CRM1_ENDPOINT_ROLES } from '../policies/roles.js';
 import { redactSensitiveObject } from '../policies/masking.js';
 import { Crm1Service } from '../services/crm1.service.js';
 import { Crm1AuditService, crm1Audit } from '../services/audit.js';
+import { crm1CleaningService } from '../services/crm1-cleaning.service.js';
 import { DomainValidationError } from '../domain/errors.js';
 import {
   createEndpointAuthPreHandlers,
@@ -759,5 +760,40 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
 
     const result = await service.getRejects(parsed.data);
     return reply.status(200).send(redactSensitiveObject(result));
+  });
+
+  // ---------------------------------------------------------------------------
+  // 5. Cleaning Rules & Field Audit Endpoints
+  // ---------------------------------------------------------------------------
+
+  fastify.post('/cleaning/clean', {
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
+  }, async (request, reply) => {
+    const CleanRequestSchema = z.object({
+      rows: z.array(z.record(z.string())),
+      options: z.object({
+        dateFormat: z.enum(['YYYY-MM-DD', 'DD-MM-YYYY', 'DD/MM/YYYY', 'MM/DD/YYYY']).optional(),
+        phoneCountry: z.string().optional(),
+        disabledRules: z.array(z.string()).optional(),
+        requiredFields: z.array(z.string()).optional(),
+        entity: z.enum(['contact', 'company', 'lead', 'auto']).optional(),
+      }).optional(),
+      batchId: z.string().optional(),
+    });
+
+    const parsed = CleanRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid cleaning request payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const { rows, options, batchId } = parsed.data;
+    const result = crm1CleaningService.processBatchCleaning(rows, batchId, options);
+    return reply.status(200).send(result);
   });
 };
