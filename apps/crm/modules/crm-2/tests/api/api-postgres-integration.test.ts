@@ -291,32 +291,28 @@ describe('CRM-2 Fastify API-to-PostgreSQL Live Integration Suite', () => {
       },
     });
 
-    // DB rejects with check_violation, unhandled by route -> 500
-    // Demonstrates DEF-CRM2-03 root cause at the database boundary
-    expect(res.statusCode).toBe(500);
+    // Schema now trims name and catches empty string, returning 400 instead of 500
+    expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.body);
-    expect(body.code).toBe('INTERNAL_SERVER_ERROR');
-    expect(body.message).toBe('An unexpected error occurred');
+    expect(body.code).toBe('VALIDATION_ERROR');
   });
 
-  it('5. 13-digit value: accepted by Zod regex but rejected by NUMERIC(14,2) range in PostgreSQL', async () => {
+  it('5. 13-digit value: correctly rejected with 400 validation error by bounded DecimalStringSchema', async () => {
     const res = await app.inject({
       method: 'POST',
       url: `${CRM2_API_PREFIX}/deals`,
       payload: {
         name: 'PG-INT-13-Digit Deal',
-        value: '1000000000000.00', // 13 integer digits - passes Zod regex, fails NUMERIC(14,2)
+        value: '1000000000000.00', // 13 integer digits - now rejected by 12-digit bound
         currency: 'USD',
         stage_name: 'New',
         close_date: '2026-12-31',
       },
     });
 
-    // DB rejects with numeric value out of range (SQLSTATE 22003) -> 500
-    // Demonstrates DEF-CRM2-02 root cause at the database boundary
-    expect(res.statusCode).toBe(500);
+    // Schema now limits integer digits to 12, returning 400 instead of 500
+    expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.body);
-    expect(body.code).toBe('INTERNAL_SERVER_ERROR');
-    expect(body.message).toBe('An unexpected error occurred');
+    expect(body.code).toBe('VALIDATION_ERROR');
   });
 });

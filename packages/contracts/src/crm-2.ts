@@ -157,7 +157,7 @@ export const CurrencyCodeSchema = z.string().regex(/^[A-Z]{3}$/, {
 /**
  * Decimal string validation (ensures explicit decimal number, e.g. "15000.00" or "0.50")
  */
-export const DecimalStringSchema = z.string().regex(/^\d+(\.\d{1,4})?$/, {
+export const DecimalStringSchema = z.string().regex(/^\d{1,12}(\.\d{1,4})?$/, {
   message: 'Value must be a valid non-negative decimal string',
 });
 
@@ -196,7 +196,7 @@ export type Deal = z.infer<typeof DealSchema>;
 
 // Create Deal Input Schema
 export const CreateDealInputSchema = z.object({
-  name: z.string().min(1, 'Deal name is required').max(255),
+  name: z.string().trim().min(1, 'Deal name is required').max(255),
   contact_id: z.string().uuid('Invalid Contact UUID').nullable().optional(),
   value: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),

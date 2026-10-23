@@ -158,22 +158,22 @@ describe('CRM-2 Boundary, Idempotency & Route Validation Tests', () => {
       expect(response.json().code).toBe('VALIDATION_ERROR');
     });
 
-    it('BD-08: asserts single status code from OpenAPI contract (404) for GET /deals/:id with non-UUID path', async () => {
+    it('BD-08: asserts single status code from OpenAPI contract (400) for GET /deals/:id with non-UUID path', async () => {
       const response = await app.inject({
         method: 'GET',
         url: `${CRM2_API_PREFIX}/deals/not-a-valid-uuid`,
       });
-      // [DEF-CRM2-01]: OpenAPI specification /deals/{id} defines 404, but implementation returns 400.
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('BAD_REQUEST');
     });
 
-    it('BD-09: asserts single status code from OpenAPI contract (404) for GET /quotes/:id with non-UUID path', async () => {
+    it('BD-09: asserts single status code from OpenAPI contract (400) for GET /quotes/:id with non-UUID path', async () => {
       const response = await app.inject({
         method: 'GET',
         url: `${CRM2_API_PREFIX}/quotes/not-a-valid-uuid`,
       });
-      // [DEF-CRM2-01]: OpenAPI specification /quotes/{id} defines 404, but implementation returns 400.
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('BAD_REQUEST');
     });
   });
 
