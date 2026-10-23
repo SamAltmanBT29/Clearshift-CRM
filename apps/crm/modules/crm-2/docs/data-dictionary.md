@@ -174,3 +174,22 @@ Import receipts persist in `crm2.crm2_import_receipts` with immutable audit fiel
 - **Payload Conflict:** Submitting an existing `Idempotency-Key` with an altered payload immediately aborts with HTTP 409 Conflict (`IDEMPOTENCY_KEY_REUSED`) without mutating any data.
 - **Preflight Dry-Run:** `preflight(batchId, rows)` validates business invariants across entire batches with zero database mutations.
 
+---
+
+## 4. Exact Duplicate Key Policy & Human Review Audit (CRM2-12 / Issue #125)
+
+### 4.1 Policy Overview
+To prevent data contamination and duplicate records during migration and ongoing CRM-2 operations, deterministic exact-duplicate matching keys and human review governance are enforced:
+1. **Deterministic Exact Matching Only**: Fuzzy scoring, probabilistic algorithms, and automatic merging (`autoMerge: true`) are strictly forbidden in V1 (HTTP 422 `AUTO_MERGE_FORBIDDEN`).
+2. **Review Holding Queue**: All detected duplicates are quarantined in `held_for_review` status pending authorized operator action.
+3. **Mandatory Human Audit**: Merge and reject actions require authenticated `actorId`, explicit rationale (`reason`), and strict validation that `keptId !== mergedId`.
+4. **Child Quotes Reassignment**: When merging deals (`MERGE`), child quotes referencing `mergedId` are safely reassigned to `keptId` within the domain service.
+
+### 4.2 Normalized Exact Keys
+- **Deal Business Key (`deal_business`)**: `${btrim(lower(name))}#${stageId}#${contactId || 'orphan'}`
+- **Deal Name + Contact Key (`deal_name_contact`)**: `${contactId || 'orphan'}#${btrim(lower(name))}`
+- **Quote Number Key (`quote_number`)**: `btrim(upper(quote_number))`
+- **Quote Line Key (`quote_line_sku`)**: `${quoteId}#${lineNumber}#${btrim(upper(sku || 'NOSKU'))}`
+- **Source System Pair Key (`source_key`)**: `${lower(source_system)}:${btrim(source_id)}`
+- **Shared Platform Keys**: `email` (`btrim(lower(email))`), `tax_id` (`upper(replace(nonAlphanumeric, ''))`), `sku` (`btrim(upper(sku))`).
+

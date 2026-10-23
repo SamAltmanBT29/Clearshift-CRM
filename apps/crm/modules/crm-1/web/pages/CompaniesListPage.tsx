@@ -1,6 +1,9 @@
 import React from 'react';
 import { DataTable } from '../components/DataTable.js';
 import { FilterToolbar } from '../components/FilterToolbar.js';
+import { TableSkeleton } from '../components/TableSkeleton.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { AccessDeniedView } from '../components/AccessDeniedView.js';
 import { COMPANIES_COLUMNS } from '../table/columns.js';
 import { CRM1_COMPANIES_FACETS } from '../table/facets.js';
 import type {
@@ -15,7 +18,15 @@ export interface CompaniesListPageProps {
   data?: Record<string, unknown>[];
   isLoading?: boolean;
   isEmpty?: boolean;
-  error?: string | null;
+  error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
+  onRetry?: (() => void) | undefined;
+  httpStatus?: number;
+  isAccessDenied?: boolean;
+  requiredCapability?: string;
+  requiredRole?: string;
+  currentRole?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: (() => void) | undefined;
   sort?: TableSortState | undefined;
   onSortChange?: ((columnKey: string) => void) | undefined;
   pagination?: TablePaginationState | undefined;
@@ -34,13 +45,21 @@ export interface CompaniesListPageProps {
 /**
  * Companies List Page Shell
  * Integrates with /api/v1/crm-contacts/companies, FilterToolbar, and paginated DataTable.
- * Conforms to ClearShift V1 Issue #111 (CRM1-18).
+ * Conforms to ClearShift V1 Issue #111 (CRM1-18) and Issue #112 (CRM1-19).
  */
 export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
   data = [],
   isLoading = false,
   isEmpty = false,
   error = null,
+  onRetry,
+  httpStatus,
+  isAccessDenied = false,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  emptyActionLabel = 'Register Company',
+  onEmptyAction,
   sort,
   onSortChange,
   pagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 },
@@ -62,6 +81,8 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
     Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
     activePills.length > 0;
 
+  const accessForbidden = isAccessDenied || httpStatus === 403;
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -71,53 +92,63 @@ export const CompaniesListPage: React.FC<CompaniesListPageProps> = ({
         </p>
       </div>
 
-      {onSearchChange && onFilterChange && (
-        <FilterToolbar
-          search={search}
-          onSearchChange={onSearchChange}
-          facets={facets}
-          filters={filters}
-          onFilterChange={onFilterChange}
-          activePills={activePills}
-          onRemoveFilter={onRemoveFilter ?? (() => {})}
-          onClearAll={onClearAllFilters ?? (() => {})}
-          searchPlaceholder="Search companies by name, tax ID, or domain..."
+      {accessForbidden ? (
+        <AccessDeniedView
+          requiredCapability={requiredCapability}
+          requiredRole={requiredRole}
+          currentRole={currentRole}
+          resourceName="Companies Directory"
         />
-      )}
+      ) : (
+        <>
+          {onSearchChange && onFilterChange && (
+            <FilterToolbar
+              search={search}
+              onSearchChange={onSearchChange}
+              facets={facets}
+              filters={filters}
+              onFilterChange={onFilterChange}
+              activePills={activePills}
+              onRemoveFilter={onRemoveFilter ?? (() => {})}
+              onClearAll={onClearAllFilters ?? (() => {})}
+              searchPlaceholder="Search companies by name, tax ID, or domain..."
+            />
+          )}
 
-      {isLoading && (
-        <div className="cs-skeleton-container" aria-busy="true" aria-label="Loading companies list">
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <div className="cs-skeleton-line" style={{ width: '100%', height: '44px' }} />
-          <p className="cs-loading-text">Loading companies from server...</p>
-        </div>
-      )}
+          {error && (
+            <div className="cs-error-container" style={{ marginBottom: '16px' }}>
+              <ErrorAlert error={error} onRetry={onRetry} />
+            </div>
+          )}
 
-      {!isLoading && error && (
-        <div className="cs-error-card" role="alert">
-          <p className="cs-error-message">Error loading companies: {error}</p>
-        </div>
-      )}
-
-      {!isLoading && !error && (
-        <DataTable
-          columns={COMPANIES_COLUMNS}
-          data={displayData}
-          loading={false}
-          emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
-          emptyDescription={
-            isFiltersActive
-              ? 'No companies match your search and filter criteria. Try adjusting your search term or clearing filters.'
-              : 'No company records currently registered. Register an account or import accounts from source files.'
-          }
-          hasActiveFilters={isFiltersActive}
-          onClearFilters={onClearAllFilters}
-          sort={sort}
-          onSortChange={onSortChange}
-          pagination={pagination}
-          onPageChange={onPageChange}
-        />
+          {isLoading ? (
+            <TableSkeleton
+              rowCount={5}
+              columnCount={COMPANIES_COLUMNS.length}
+              ariaLabel="Loading companies from server..."
+            />
+          ) : !error && (
+            <DataTable
+              columns={COMPANIES_COLUMNS}
+              data={displayData}
+              loading={false}
+              emptyTitle={isFiltersActive ? 'No matching records found' : 'No records found'}
+              emptyDescription={
+                isFiltersActive
+                  ? 'No companies match your search and filter criteria. Try adjusting your search term or clearing filters.'
+                  : 'No company records currently registered. Register an account or import accounts from source files.'
+              }
+              emptyActionLabel={emptyActionLabel}
+              onEmptyAction={onEmptyAction}
+              hasActiveFilters={isFiltersActive}
+              onClearFilters={onClearAllFilters}
+              sort={sort}
+              onSortChange={onSortChange}
+              pagination={pagination}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
       )}
     </div>
   );

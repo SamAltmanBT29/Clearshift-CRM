@@ -112,3 +112,22 @@ export class DuplicateRecordError extends AppError {
     this.name = 'DuplicateRecordError';
   }
 }
+
+export class AutoMergeForbiddenError extends AppError {
+  constructor(
+    message = 'Automatic fuzzy or unreviewed merging is forbidden in V1. Duplicate candidates must be held for authorized human review.',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('AUTO_MERGE_FORBIDDEN', message, 422, details);
+    this.name = 'AutoMergeForbiddenError';
+  }
+}
+
+export class DuplicateCandidateNotFoundError extends AppError {
+  constructor(id: string) {
+    super('NOT_FOUND', `Duplicate candidate with ID '${id}' not found`, 404, [
+      { field: 'candidateId', message: `Candidate '${id}' does not exist`, code: 'candidate_not_found' },
+    ]);
+    this.name = 'DuplicateCandidateNotFoundError';
+  }
+}

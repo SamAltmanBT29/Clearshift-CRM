@@ -3,6 +3,7 @@ import { DealsListPage } from './pages/DealsListPage.js';
 import { DealDetailPage } from './pages/DealDetailPage.js';
 import { DealFormPage } from './pages/DealFormPage.js';
 import { QuoteFormPage } from './pages/QuoteFormPage.js';
+import { DuplicateReviewPage } from './pages/DuplicateReviewPage.js';
 import type { Deal } from '@clearshift/contracts';
 import { Button } from '@clearshift/ui';
 
@@ -12,7 +13,8 @@ export type ViewState =
   | { type: 'create-deal' }
   | { type: 'edit-deal'; dealId: string }
   | { type: 'create-quote'; dealId: string; deal?: Deal | undefined }
-  | { type: 'edit-quote'; dealId: string; quoteId: string };
+  | { type: 'edit-quote'; dealId: string; quoteId: string }
+  | { type: 'duplicates' };
 
 export function App() {
   const [view, setView] = useState<ViewState>({ type: 'list' });
@@ -39,6 +41,14 @@ export function App() {
 
           {/* Development / Demo simulation controls */}
           <div className="flex items-center gap-2 text-xs">
+            <Button
+              variant={view.type === 'duplicates' ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setView({ type: 'duplicates' })}
+              className="text-xs bg-slate-800 border-slate-700 text-slate-200"
+            >
+              Duplicate Review
+            </Button>
             <Button
               variant={simulateDenied ? 'danger' : 'outline'}
               size="sm"
@@ -121,6 +131,10 @@ export function App() {
             onBackToDeal={() => setView({ type: 'detail', dealId: view.dealId })}
             onSuccess={() => setView({ type: 'detail', dealId: view.dealId })}
           />
+        )}
+
+        {view.type === 'duplicates' && (
+          <DuplicateReviewPage onBackToList={() => setView({ type: 'list' })} />
         )}
       </main>
     </div>
