@@ -406,7 +406,7 @@ describe('Issue #39 [CRM4-04] Marketing Automation Lists & Segment Membership Sc
       const maliciousPayload = {
         id: '40000000-0000-4000-8000-000000000099',
         name: '<script>alert(1)</script>',
-        description: '<img src=x onerror=alert(1)>',
+        description: '<img alt="" src=x onerror=alert(1)>',
         campaignCount: 0,
         memberCount: 0,
         createdAt: '2026-10-01T00:00:00Z',
