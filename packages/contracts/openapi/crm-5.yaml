@@ -8,9 +8,13 @@ servers:
   - url: /api/v1/crm-control
     description: V1 Control Center API Base
 
+security:
+  - bearerAuth: []
+
 paths:
   /health:
     get:
+      security: []
       summary: Health check endpoint
       description: Returns service status and module version.
       operationId: getHealth
@@ -1533,5 +1537,50 @@ components:
         isExisting:
           type: boolean
           default: false
+
+    CRM5AuditEvent:
+      type: object
+      required:
+        - id
+        - actor
+        - action
+        - entity
+        - result
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor:
+          type: string
+        action:
+          type: string
+        entity:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+          nullable: true
+        batchId:
+          type: string
+          nullable: true
+        result:
+          type: string
+          enum: [success, failure, rejected, halted]
+        diffRedacted:
+          type: object
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
 
