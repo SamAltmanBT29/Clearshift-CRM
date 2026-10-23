@@ -6,6 +6,7 @@ export const MODULE_ID = 'crm-1';
 export const MODULE_NAME = 'CRM-1 Contacts, Companies and Leads';
 
 export * from './domain/errors.js';
+export * from './domain/qa-specs.js';
 export * from './public.js';
 
 export interface ModuleDefinition {
