@@ -271,6 +271,8 @@ export function MarketingListsPage({
                 ? `No marketing lists match the query "${search}". Try adjusting your search term.`
                 : 'No marketing lists are currently registered in CRM-4.'
             }
+            emptyActionLabel={onCreateList ? '+ New List' : undefined}
+            onEmptyAction={onCreateList}
             onSelectList={onSelectList}
             onViewCampaigns={onViewCampaigns}
             sort={sort}

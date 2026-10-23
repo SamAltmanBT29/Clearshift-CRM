@@ -165,3 +165,549 @@
   color: var(--cs-text-muted, #4B5563);
   margin: 0;
 }
+
+/* Screen-reader utility */
+.cs-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ==========================================================================
+   Data Table & Sorting
+   ========================================================================== */
+
+.cs-table-card {
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  background-color: var(--cs-bg, #FFFFFF);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.cs-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cs-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.cs-thead {
+  background-color: var(--cs-surface, #F5F6F8);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+}
+
+.cs-th {
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  white-space: nowrap;
+}
+
+.cs-th-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-s-1, 4px);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--cs-r-sm, 2px);
+}
+
+.cs-th-sort-btn:focus-visible {
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+.cs-sort-icon {
+  color: var(--cs-accent, #1D4ED8);
+  font-size: 0.75rem;
+}
+
+.cs-sort-icon-idle {
+  color: var(--cs-text-muted, #4B5563);
+  opacity: 0.4;
+  font-size: 0.75rem;
+}
+
+.cs-td {
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+  color: var(--cs-text, #111827);
+  white-space: nowrap;
+}
+
+.cs-tr:last-child .cs-td {
+  border-bottom: none;
+}
+
+.cs-tr:hover {
+  background-color: var(--cs-surface, #F5F6F8);
+}
+
+/* Pagination Toolbar */
+.cs-pagination-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  background-color: var(--cs-surface, #F5F6F8);
+  border-top: 1px solid var(--cs-border, #D0D5DD);
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-pagination-info {
+  color: var(--cs-text-muted, #4B5563);
+}
+
+.cs-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+}
+
+.cs-pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-1, 4px) var(--cs-s-3, 12px);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--cs-text, #111827);
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 4px);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.cs-pagination-btn:hover:not(:disabled) {
+  background-color: var(--cs-surface, #F5F6F8);
+  border-color: var(--cs-text-muted, #4B5563);
+}
+
+.cs-pagination-btn:focus-visible {
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+.cs-pagination-btn:disabled,
+.cs-pagination-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cs-pagination-page {
+  padding: 0 var(--cs-s-2, 8px);
+  color: var(--cs-text, #111827);
+  font-weight: 500;
+}
+
+/* Text alignment utilities */
+.cs-text-left { text-align: left; }
+.cs-text-center { text-align: center; }
+.cs-text-right { text-align: right; }
+.cs-font-semibold { font-weight: 600; }
+
+/* ==========================================================================
+   Loading Skeleton (CRM4-19)
+   ========================================================================== */
+
+.cs-skeleton-container {
+  width: 100%;
+}
+
+.cs-skeleton-card {
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  overflow: hidden;
+}
+
+.cs-skeleton-line {
+  height: 14px;
+  border-radius: var(--cs-r-sm, 4px);
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 25%,
+    rgba(241, 245, 249, 0.9) 37%,
+    rgba(226, 232, 240, 0.6) 63%
+  );
+  background-size: 400% 100%;
+  animation: cs-skeleton-shimmer 1.4s ease infinite;
+}
+
+.cs-skeleton-header-cell {
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    rgba(203, 213, 225, 0.7) 25%,
+    rgba(226, 232, 240, 0.95) 37%,
+    rgba(203, 213, 225, 0.7) 63%
+  );
+  background-size: 400% 100%;
+}
+
+.cs-skeleton-cell {
+  margin: 4px 0;
+}
+
+@keyframes cs-skeleton-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* ==========================================================================
+   Empty State (CRM4-19)
+   ========================================================================== */
+
+.cs-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-10, 40px) var(--cs-s-6, 24px);
+  text-align: center;
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px dashed var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  margin: var(--cs-s-4, 16px) 0;
+}
+
+.cs-empty-icon {
+  font-size: 2.25rem;
+  margin-bottom: var(--cs-s-3, 12px);
+  line-height: 1;
+}
+
+.cs-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-empty-text {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #4B5563);
+  margin: 0 0 var(--cs-s-4, 16px) 0;
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+.cs-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-3, 12px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.cs-empty-cta-btn {
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--cs-r-md, 4px);
+  cursor: pointer;
+}
+
+.cs-empty-secondary-btn {
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--cs-r-md, 4px);
+  cursor: pointer;
+}
+
+.cs-empty-filter-state {
+  border-color: #93C5FD;
+  background-color: #F0F9FF;
+}
+
+.cs-empty-reset-btn {
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  background-color: var(--cs-accent, #1D4ED8);
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--cs-r-md, 4px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.cs-empty-reset-btn:hover {
+  background-color: #1E40AF;
+}
+
+.cs-clear-all-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-s-1, 4px);
+}
+
+/* ==========================================================================
+   Error Alert Banner (CRM4-19)
+   ========================================================================== */
+
+.cs-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  background-color: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--cs-r-md, 6px);
+  color: #991B1B;
+  margin-bottom: var(--cs-s-4, 16px);
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-error-banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cs-s-3, 12px);
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-error-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.cs-error-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-1, 4px);
+}
+
+.cs-error-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+  color: #991B1B;
+}
+
+.cs-error-message {
+  font-size: 0.8125rem;
+  margin: 0;
+  color: #B91C1C;
+  word-break: break-word;
+}
+
+.cs-error-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+  flex-shrink: 0;
+}
+
+.cs-error-retry-btn {
+  background-color: #DC2626;
+  color: #FFFFFF;
+  border: none;
+  padding: var(--cs-s-1, 4px) var(--cs-s-3, 12px);
+  border-radius: var(--cs-r-sm, 4px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cs-error-retry-btn:hover {
+  background-color: #B91C1C;
+}
+
+.cs-error-retry-btn:focus-visible {
+  outline: 2px solid #991B1B;
+  outline-offset: 2px;
+}
+
+.cs-error-dismiss-btn {
+  background: none;
+  border: none;
+  color: #991B1B;
+  cursor: pointer;
+  padding: var(--cs-s-1, 4px);
+  font-size: 0.875rem;
+  line-height: 1;
+  border-radius: var(--cs-r-sm, 2px);
+}
+
+.cs-error-dismiss-btn:hover {
+  background-color: #FEE2E2;
+}
+
+.cs-table-error-wrapper {
+  padding: var(--cs-s-4, 16px);
+  background-color: #FEF2F2;
+}
+
+/* ==========================================================================
+   403 Forbidden Access-Denied View (CRM4-19)
+   ========================================================================== */
+
+.cs-access-denied-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-12, 48px) var(--cs-s-6, 24px);
+  text-align: center;
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  background-color: var(--cs-surface, #F5F6F8);
+  max-width: 600px;
+  margin: var(--cs-s-8, 32px) auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.cs-access-denied-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: #FEE2E2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--cs-s-4, 16px);
+}
+
+.cs-access-denied-icon {
+  font-size: 1.75rem;
+}
+
+.cs-access-denied-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.cs-access-denied-badge {
+  display: inline-block;
+  padding: var(--cs-s-1, 4px) var(--cs-s-2, 8px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #DC2626;
+  background-color: #FEE2E2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--cs-r-sm, 2px);
+  text-transform: uppercase;
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-access-denied-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--cs-text, #111827);
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-access-denied-desc {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #4B5563);
+  margin: 0 0 var(--cs-s-4, 16px) 0;
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+.cs-access-denied-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-2, 8px);
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 6px);
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: var(--cs-s-6, 24px);
+  text-align: left;
+}
+
+.cs-access-denied-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+}
+
+.cs-meta-label {
+  color: var(--cs-text-muted, #4B5563);
+  font-weight: 500;
+}
+
+.cs-meta-code {
+  background-color: var(--cs-surface, #F5F6F8);
+  padding: 2px 6px;
+  border-radius: var(--cs-r-sm, 2px);
+  font-family: monospace;
+  font-size: 0.8125rem;
+  color: var(--cs-text, #111827);
+  border: 1px solid var(--cs-border, #D0D5DD);
+}
+
+.cs-current-role {
+  color: #4B5563;
+}
+
+.cs-access-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: var(--cs-r-md, 4px);
+  cursor: pointer;
+}
+
+/* Button utility classes */
+.cs-btn-primary {
+  background-color: var(--cs-accent, #1D4ED8);
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  transition: background-color 0.15s;
+}
+
+.cs-btn-primary:hover {
+  background-color: #1E40AF;
+}
+
+.cs-btn-secondary {
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.cs-btn-secondary:hover {
+  background-color: var(--cs-surface, #F5F6F8);
+  border-color: #9CA3AF;
+}
