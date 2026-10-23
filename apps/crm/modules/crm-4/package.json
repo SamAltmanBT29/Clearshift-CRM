@@ -10,12 +10,15 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "dependencies": {
     "@cs/kernel": "*",
     "@cs/core": "*",
-    "@cs/kit": "*"
+    "@cs/kit": "*",
+    "@cs/identity": "*",
+    "@cs/rbac": "*"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

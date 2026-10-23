@@ -32,6 +32,8 @@ export class DataTableController<T = Record<string, unknown>> {
   private filters: TableFilterState;
   private onQueryChange?: ((params: Record<string, string>) => void) | undefined;
 
+  private cachedData: T[] = [];
+
   constructor(options: DataTableControllerOptions<T>) {
     this.columns = options.columns;
     this.page = Math.max(1, options.initialPage ?? 1);
@@ -46,6 +48,46 @@ export class DataTableController<T = Record<string, unknown>> {
 
   public getColumns(): DataTableColumn<T>[] {
     return [...this.columns];
+  }
+
+  public getCachedData(): T[] {
+    return [...this.cachedData];
+  }
+
+  public setCachedData(data: T[]): void {
+    this.cachedData = [...data];
+    this.setTotal(this.cachedData.length);
+  }
+
+  public addRecordToCache(record: T): void {
+    this.cachedData = [record, ...this.cachedData];
+    this.setTotal(this.total + 1);
+  }
+
+  public updateRecordInCache(idOrKey: string, updates: Partial<T>): void {
+    this.cachedData = this.cachedData.map((item) => {
+      const rec = item as Record<string, unknown>;
+      if (rec['id'] === idOrKey || rec['batchId'] === idOrKey) {
+        return { ...item, ...updates };
+      }
+      return item;
+    });
+  }
+
+  public removeRecordFromCache(idOrKey: string): void {
+    const prevLen = this.cachedData.length;
+    this.cachedData = this.cachedData.filter((item) => {
+      const rec = item as Record<string, unknown>;
+      return rec['id'] !== idOrKey && rec['batchId'] !== idOrKey;
+    });
+    if (this.cachedData.length < prevLen) {
+      this.setTotal(Math.max(0, this.total - 1));
+    }
+  }
+
+  public clearCache(): void {
+    this.cachedData = [];
+    this.setTotal(0);
   }
 
   public getPagination(): TablePaginationState {

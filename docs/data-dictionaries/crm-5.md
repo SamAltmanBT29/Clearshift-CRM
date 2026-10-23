@@ -159,35 +159,51 @@ $$\text{source\_count} = \text{loaded\_count} + \text{rejected\_count} + \text{m
 
 ---
 
-## 3. Security, Privacy & Invariant Protections
+## 3. Security, Privacy & Invariant Protections (CRM5-15)
 
-1. **No Raw Secrets:** No passwords, bearer tokens, or full credit card / bank accounts are ever stored in CRM-5 tables.
-2. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
-3. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
-4. **No Direct Target Writes by Caller:** The Migration Kit never writes directly to CRM-5 private tables; data enters strictly through the public API / in-process `TargetAdapter`.
+1. **JWT Authentication & Hub Identity:**
+   * Server validates asymmetric EdDSA (Ed25519) signatures via ClearShift Hub Identity (`@cs/identity`).
+   * Validates issuer (`clearshift-hub`), audience (`clearshift`), and token expiration.
+   * Immediately rejects disabled accounts (`disabled: true` or `status: 'disabled'`) with HTTP 401 Unauthorized.
+2. **Role Capability Enforcement:**
+   * Exact endpoint role enforcement based on SDS ClearShift CRM v2.0 §4.8.
+   * Unauthenticated requests return HTTP 401; authenticated requests with forbidden roles return HTTP 403.
+3. **Field-Level Protection & Masking:**
+   * Bank account and card values are masked to `XXXX-XXXX-7890` (preserving only the terminal 4 digits).
+   * Salary and compensation figures are masked to `XX,XXX` or `'salary hidden'`.
+   * Credentials, passwords, bearer tokens, and secrets are replaced with `[REDACTED]`.
+   * Field restrictions are enforced on the server before serialization and export.
+4. **Formula Injection Defense:** All exported CSVs neutralize spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote (`'`).
+5. **Append-Only Audit Trail:**
+   * `Crm5AuditService` logs immutable audit events for state changes, duplicate resolutions, and chunked load executions.
+   * Audit diffs and metadata are pre-sanitized; raw rows and secrets are never logged.
+6. **No Cross-Schema Mutation:** CRM-5 code never executes `INSERT`, `UPDATE`, or `DELETE` against tables owned by `crm-1`, `crm-2`, `crm-3`, `crm-4`, or platform schemas.
+7. **No Direct Target Writes by Caller:** The Migration Kit never writes directly to CRM-5 private tables; data enters strictly through the public API / in-process `TargetAdapter`.
 
 ---
 
 ## 4. Public API Endpoint Directory (`/api/v1/crm-control`)
 
-| Method | Endpoint | Query / Path Parameters | Bounded Paging | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | None | N/A | Health check returning service status, module ID, and version |
-| `GET` | `/runs` | `module`, `batchId`, `status`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Paginated migration run projections; sorted by `startedAt desc, id asc` |
-| `GET` | `/scores` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
-| `GET` | `/rejects` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
-| `GET` | `/reconciliation/:batch` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
-| `POST` | `/runs` | Body: `CreateRunInput` | N/A | Records migration step projection; idempotent by `idempotencyKey` |
-| `POST` | `/scores` | Body: `CreateScoreInput` | N/A | Records quality score card; computes weighted score automatically |
-| `POST` | `/reconciliation` | Body: `CreateReconciliationInput` | N/A | Records conservation balance sheet; evaluates conservation invariant |
-| `POST` | `/rejects` | Body: `CreateRejectInput` | N/A | Ingests row rejection audit record with payload SHA-256 hash |
-| `POST` | `/duplicates/detect` | Body: `DetectDuplicatesInput` | N/A | Detects exact duplicates using normalized keys; holds candidates for review |
-| `GET` | `/duplicates/held` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
-| `POST` | `/duplicates/resolve` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
-| `GET` | `/duplicates/audit` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
-| `POST` | `/batches/execute-load` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
-| `POST` | `/import/row` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Safely loads mapped row via KIT-08 Target Adapter; commits mutation and receipt in one transaction |
-| `GET` | `/import/receipts` | None | N/A | Returns durable receipts committed alongside migrated target records |
+| Method | Endpoint | Allowed Roles | Query / Path Parameters | Bounded Paging | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/health` | *(Public probe)* | None | N/A | Health check returning service status, module ID, and version |
+| `GET` | `/runs` | `viewer`, `analyst`, `admin` | `module`, `batchId`, `status`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Paginated migration run projections; sorted by `startedAt desc, id asc` |
+| `GET` | `/scores` | `analyst`, `admin` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Quality score cards and overall average score of fully scored batches |
+| `GET` | `/rejects` | `analyst`, `admin` | `module`, `batchId`, `page`, `pageSize`, `limit` | Capped at 100 (rejects > 100 with 400) | Row-level failed record audits; sorted by `rowIndex asc` |
+| `GET` | `/reconciliation/:batch` | `analyst`, `admin` | Path: `:batch` (batch identifier) | N/A | Exact row-count conservation balance sheet; returns 404 if not found |
+| `GET` | `/batches/:batch` | `viewer`, `analyst`, `admin` | Path: `:batch` | N/A | Aggregated batch summary and read-model consistency |
+| `POST` | `/runs` | `migration_runner`, `admin` | Body: `CreateRunInput` | N/A | Records migration step projection; idempotent by `idempotencyKey` |
+| `POST` | `/scores` | `migration_runner`, `admin` | Body: `CreateScoreInput` | N/A | Records quality score card; computes weighted score automatically |
+| `POST` | `/reconciliation` | `migration_runner`, `admin` | Body: `CreateReconciliationInput` | N/A | Records conservation balance sheet; evaluates conservation invariant |
+| `POST` | `/rejects` | `migration_runner`, `admin` | Body: `CreateRejectInput` | N/A | Ingests row rejection audit record with payload SHA-256 hash |
+| `POST` | `/duplicates/detect` | `analyst`, `migration_runner`, `admin` | Body: `DetectDuplicatesInput` | N/A | Detects exact duplicates using normalized keys; holds candidates for review |
+| `GET` | `/duplicates/held` | `analyst`, `admin` | `batchId`, `keyType` | N/A | Lists duplicate candidates currently held for authorized human review |
+| `POST` | `/duplicates/resolve` | `editor`, `analyst`, `admin` | Body: `ResolveDuplicateInput` | N/A | Records authorized human merge decision and generates immutable audit log |
+| `GET` | `/duplicates/audit` | `analyst`, `admin` | `candidateId`, `actorId`, `page`, `pageSize` | Capped at 100 | Paginated query of human duplicate resolution audit records |
+| `POST` | `/batches/execute-load` | `migration_runner`, `admin` | Body: `ExecuteBatchLoadInput` | N/A | Executes chunked 500-row batch loading with bounded exponential backoff retries and 10% stop threshold |
+| `POST` | `/import/row` | `migration_runner`, `admin` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Safely loads mapped row via KIT-08 Target Adapter; commits mutation and receipt in one transaction |
+| `POST` | `/import` | `migration_runner`, `admin` | Headers: `Idempotency-Key`, `X-Correlation-ID`; Body: `ImportRowInput` | N/A | Alias for `/import/row` |
+| `GET` | `/import/receipts` | `viewer`, `analyst`, `admin` | None | N/A | Returns durable receipts committed alongside migrated target records |
 
 ---
 
@@ -410,3 +426,93 @@ CRM-5 primary views register structured facets mapped bi-directionally to API qu
 * **Authorization Failure Handling:** Rendered whenever an endpoint returns HTTP 403 Forbidden or the client-side route guard detects insufficient permissions.
 * **Clear Role & Capability Transparency:** Distinctly displays a `403 Forbidden` status badge, details the required capability (e.g. `control:read`), specifies any required role, and announces the current user's role.
 * **Safe Return Path:** Features an accessible return button (`.cs-access-back-btn`) directing users back to the Migration Control Center home view (`/crm-5`).
+
+---
+
+## 13. Entity Create Form with Field-Level Validation, Modal Workflow, and Server Error Mapping (CRM5-20)
+
+### 13.1 Field-Level Validation Specification & Invariants (`CreateRunFormSchema`)
+CRM-5 implements an entity creation form for migration run projections adhering to Zod client-side schemas and ClearShift domain validation contracts:
+
+| Field | Input Type | Validation Rules & Constraints | Error Message |
+| :--- | :--- | :--- | :--- |
+| **`batchId`** | Text | Required; trimmed; 1 .. 128 characters | `batchId is required` / `batchId cannot exceed 128 characters` |
+| **`module`** | Select | Required; enum: `crm-1`, `crm-2`, `crm-3`, `crm-4`, `crm-5` | `Module is required` |
+| **`step`** | Select | Required; enum: `extract`, `profile`, `clean`, `map`, `load`, `validate`, `reconcile` | `Step is required` |
+| **`status`** | Select | Required; enum: `pending`, `running`, `completed`, `failed`, `halted` | `Status is required` |
+| **`recordsIn`** | Number | Required integer; non-negative (`>= 0`) | `Records In must be an integer` / `Records In cannot be negative` |
+| **`recordsOut`** | Number | Required integer; non-negative (`>= 0`) | `Records Out must be an integer` / `Records Out cannot be negative` |
+| **`recordsRejected`** | Number | Required integer; non-negative (`>= 0`) | `Records Rejected must be an integer` / `Records Rejected cannot be negative` |
+| **`operatorEmail`** | Email | Optional; format verified against standard RFC-5322 regex | `Invalid email address format` |
+| **`operatorPhone`** | Tel | Optional; format verified against phone regex (`+?[0-9\s\-().]{7,20}`) | `Invalid phone number format` |
+| **`samplingRate`** | Number | Optional decimal; strictly bounded in range `[0.00 .. 1.00]` | `Value must be a decimal between 0.00 and 1.00` |
+
+* **Conservation Invariant Assertion:** Enforces the fundamental domain rule that `recordsOut + recordsRejected <= recordsIn`. If violated, blocks submission and attaches an inline validation error to `recordsOut`: *"Invariant violation: sum of recordsOut and recordsRejected cannot exceed recordsIn"*.
+
+### 13.2 Double-Submit Prevention & Inflight Request Lock
+* **Inflight Submission Lock:** When submission begins, `isSubmitting` flag locks the form against concurrent submit triggers.
+* **Button State Mutation:** The primary submit button (`.cs-form-submit-btn`) transitions to `disabled={true}`, renders `.cs-btn-disabled`, displays an inline animated spinner (`.cs-spinner-sm`), and mutates text to *"Recording Run..."*.
+
+### 13.3 Direct HTTP 400 Server Validation Error Mapping
+* **ClearShift Error Envelope Parsing:** Intercepts server responses conforming to standard envelope `{ error: { code, message, details: [{ path: ['field'], message: '...' }] } }`.
+* **Field-Level Direct Feedback:** Server error messages map directly to the corresponding DOM inputs, setting `aria-invalid="true"`, pointing `aria-describedby` to the error element ID, highlighting input borders with `.cs-input-error`, and rendering an accessible error badge (`.cs-field-error`, `role="alert"`).
+* **Validation Summary Banner (`FormValidationSummary`):** Renders a high-visibility summary alert (`role="alert"`, `aria-live="polite"`) at the top of the form listing all field-level failures.
+
+### 13.4 Accessible Modal Dialog Workflow (`CreateRunModal`)
+* **WAI-ARIA Dialog Semantics:** Implements modal overlay conforming to WAI-ARIA standards (`role="dialog"`, `aria-modal="true"`, `aria-labelledby="<uniqueId>"`).
+* **Keyboard & Overlay Dismissal:** Pressing the `Escape` key, clicking the close button (`.cs-modal-close-btn`), or clicking the backdrop overlay (`.cs-modal-backdrop`) dismisses the modal safely.
+* **Success Lifecycle:** Successful form submission automatically closes the modal dialog, updates the table cache in `DataTableController`, and dispatches the confirmation toast.
+
+### 13.5 Table Cache Management (`DataTableController`)
+* **Local Cache Methods:** Added explicit cache manipulation APIs to `DataTableController`:
+  - `setCachedData(data: T[])`: Seeds table cache and sets total.
+  - `getCachedData(): T[]`: Retrieves current cached records.
+  - `addRecordToCache(record: T)`: Prepends newly created projection to cache and increments total count.
+  - `updateRecordInCache(idOrKey, updates)`: Updates an existing projection in-place by `id` or `batchId`.
+  - `removeRecordFromCache(idOrKey)`: Evicts projection from cache and decrements total count.
+  - `clearCache()`: Resets cache and sets total count to 0.
+
+### 13.6 Confirmation Toast Notification (`ConfirmationToast`)
+* **WAI-ARIA Status Semantics:** Renders floating toast notification (`role="status"`, `aria-live="polite"`, `.cs-toast`, `.cs-toast-success`).
+* **Auto-Dismiss & Manual Close:** Supports configurable auto-dismiss timer (default: 5000ms) with clean timer teardown and accessible manual dismissal button (`.cs-toast-close`, `aria-label="Dismiss notification"`).
+
+---
+
+## 14. Rejection Audit Screen, Module Context Identifiers & Formula-Safe Export (CRM5-23 / Issue #196)
+
+### 14.1 Module Context Identifiers
+In the shared rejection review screen (`RejectsOverviewPage`), failed rows display domain-specific natural identifier columns alongside machine error codes, enabling cross-module operators to immediately locate the corresponding source entity:
+
+| Target Module | Natural Entity Context | Extracted Identifier Columns | Context Fallback |
+| :--- | :--- | :--- | :--- |
+| **CRM-1** | Contacts & Accounts | `contact_id`, `email`, `company` | `email` or `contact_id` |
+| **CRM-2** | Deals & Pipelines | `deal_id`, `quote_number`, `pipeline` | `deal_id` or `quote_number` |
+| **CRM-3** | Support Tickets & Cases | `ticket_id`, `case_number`, `account_id` | `ticket_id` or `case_number` |
+| **CRM-4** | Marketing Campaigns | `campaign_id`, `campaign_name`, `lead_id` | `campaign_id` or `lead_id` |
+| **CRM-5** | Migration Control & Catalog | `batch_id`, `sku`, `tax_id` | `sku` or `batch_id` |
+
+When source payload context is unavailable, identifiers degrade deterministically to `Batch Correlation ID: <batchId>` (`Row #<index>`) without UI breakage or layout shift.
+
+### 14.2 Categorization & Human-Readable Remediation
+Machine error codes are mapped into 5 standardized audit categories:
+* **Constraint Violation:** Unique key conflicts, natural key collisions (`DUPLICATE_SKU`, `EXACT_DUPLICATE`, `UNIQUE_KEY_VIOLATION`).
+* **Integrity & Conservation:** Source-to-target count conservation discrepancies (`COUNT_INVARIANT_VIOLATION`, `SOURCE_TARGET_UNBALANCED`).
+* **Security & Injection:** Spreadsheet formula injection prefixes (`FORMULA_PREFIX`, `FORMULA_INJECTION_RISK`).
+* **Lifecycle & Chronology:** State machine or timestamp chronology violations (`INVALID_STAGE_TRANSITION`, `CHRONOLOGY_VIOLATION`).
+* **Data Validation:** Missing required fields, malformed syntax (`REQUIRED_FIELD_MISSING`, `INVALID_TAX_ID`, `MALFORMED_UUID`).
+
+Every error code provides an operator-friendly explanation and clear remediation instructions pointing to the exact corrective workflow (e.g., routing to exact duplicate resolution, updating source catalog, or reconciling batch counters).
+
+### 14.3 Sensitive Field Masking Policy (PLT-06 / PLT-12)
+All raw row payloads inspected in the detail modal (`RejectDetailModal`) or exported via CSV undergo recursive sanitization:
+* **Bank & Account Data:** Account numbers, IBANs, and routing numbers are masked to `XXXX-XXXX-7890` (preserving only the final 4 digits).
+* **Government & Tax Identifiers:** SSNs, national tax IDs, and Aadhaar numbers are masked to `***-**-7890`.
+* **Credentials & Tokens:** Passwords, API keys, JWT tokens, and client secrets are strictly redacted to `[REDACTED]`.
+* **Employee Compensation:** Salaries, wages, and hourly compensation are masked to `XX,XXX`.
+
+### 14.4 Formula-Safe CSV Export (CWE-1236 / PLT-12)
+The rejection audit screen includes a one-click formula-safe CSV export action (`generateFormulaSafeRejectsCsv` / `downloadRejectsCsv`):
+* **Spreadsheet Formula Neutralization:** All text cells starting with formula trigger characters (`=`, `+`, `-`, `@`) are prepended with a single quote (`'`), neutralizing dynamic execution in spreadsheet applications (Microsoft Excel, LibreOffice, Google Sheets).
+* **RFC-4180 Compliance:** Proper field quoting and CRLF row terminators implemented via `@cs/core` (`exportCsvSafe`).
+* **Standardized Header Schema:** Export files contain uniform columns: `Row Index`, `Target Module`, `Batch Correlation ID`, `Context Identifier Label`, `Context Identifier Value`, `Error Code`, `Error Category`, `Failure Explanation`, `Remediation Guidance`, `Payload SHA-256 Hash`, `Masked Payload Sample`, and `Recorded At`.
+
