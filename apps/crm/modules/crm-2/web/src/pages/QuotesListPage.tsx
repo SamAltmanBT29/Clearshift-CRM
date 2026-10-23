@@ -2,19 +2,53 @@ import React, { useEffect, useState } from 'react';
 import { crm2Api } from '../api/crm-2.js';
 import type { Quote, Deal } from '@clearshift/contracts';
 import { Button, Spinner, Alert, Card, Badge, Pagination } from '@clearshift/ui';
+import type { TableSortState } from '../table/types.js';
+import { TableSkeleton } from '../components/TableSkeleton.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { ErrorAlert } from '../components/ErrorAlert.js';
+import { AccessDeniedView } from '../components/AccessDeniedView.js';
 
 export interface QuotesListPageProps {
+  data?: Quote[];
+  isLoading?: boolean;
+  isEmpty?: boolean;
+  error?: string | Error | { code?: string; message?: string; details?: unknown } | null;
+  onRetry?: (() => void) | undefined;
+  httpStatus?: number;
+  isAccessDenied?: boolean;
+  requiredCapability?: string;
+  requiredRole?: string;
+  currentRole?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: (() => void) | undefined;
   onSelectDeal?: (dealId: string) => void;
   onEditQuote?: (quote: Quote) => void;
+  initialSort?: TableSortState;
+  initialPage?: number;
 }
 
 export const QuotesListPage: React.FC<QuotesListPageProps> = ({
+  data: dataProp,
+  isLoading: isLoadingProp,
+  isEmpty: isEmptyProp,
+  error: errorProp,
+  onRetry: onRetryProp,
+  httpStatus,
+  isAccessDenied: isAccessDeniedProp,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  emptyActionLabel = 'Create Quote',
+  onEmptyAction,
   onSelectDeal,
   onEditQuote,
+  initialSort,
+  initialPage = 1,
 }) => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [deals, setDeals] = useState<Map<string, Deal>>(new Map());
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
+  const [sort, setSort] = useState<TableSortState | undefined>(initialSort);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -27,7 +61,12 @@ export const QuotesListPage: React.FC<QuotesListPageProps> = ({
         setLoading(true);
         setError(null);
         const [quotesRes, dealsRes] = await Promise.all([
-          crm2Api.getQuotes({ page, pageSize: 10 }),
+          crm2Api.getQuotes({
+            page,
+            pageSize: 10,
+            sort: sort?.columnKey,
+            order: sort?.direction,
+          }),
           crm2Api.getDeals({ page: 1, pageSize: 100 }),
         ]);
 
@@ -54,7 +93,17 @@ export const QuotesListPage: React.FC<QuotesListPageProps> = ({
     return () => {
       mounted = false;
     };
-  }, [page]);
+  }, [page, sort]);
+
+  const handleSortChange = (columnKey: string) => {
+    setSort((prev) => {
+      if (prev?.columnKey === columnKey) {
+        return { columnKey, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { columnKey, direction: 'asc' };
+    });
+    setPage(1);
+  };
 
   if (loading) {
     return (
@@ -105,10 +154,85 @@ export const QuotesListPage: React.FC<QuotesListPageProps> = ({
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-4">Quote Number</th>
+                <th
+                  className="py-3 px-4"
+                  aria-sort={
+                    sort?.columnKey === 'quote_number'
+                      ? sort.direction === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 font-semibold uppercase hover:text-slate-900"
+                    onClick={() => handleSortChange('quote_number')}
+                    aria-label="Sort by Quote Number"
+                  >
+                    <span>Quote Number</span>
+                    <span aria-hidden="true">
+                      {sort?.columnKey === 'quote_number'
+                        ? sort.direction === 'asc'
+                          ? '▲'
+                          : '▼'
+                        : '↕'}
+                    </span>
+                  </button>
+                </th>
                 <th className="py-3 px-4">Parent Deal</th>
-                <th className="py-3 px-4">Issue Date</th>
-                <th className="py-3 px-4 text-right">Amount</th>
+                <th
+                  className="py-3 px-4"
+                  aria-sort={
+                    sort?.columnKey === 'quote_date'
+                      ? sort.direction === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 font-semibold uppercase hover:text-slate-900"
+                    onClick={() => handleSortChange('quote_date')}
+                    aria-label="Sort by Issue Date"
+                  >
+                    <span>Issue Date</span>
+                    <span aria-hidden="true">
+                      {sort?.columnKey === 'quote_date'
+                        ? sort.direction === 'asc'
+                          ? '▲'
+                          : '▼'
+                        : '↕'}
+                    </span>
+                  </button>
+                </th>
+                <th
+                  className="py-3 px-4 text-right"
+                  aria-sort={
+                    sort?.columnKey === 'amount'
+                      ? sort.direction === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 font-semibold uppercase hover:text-slate-900 ml-auto"
+                    onClick={() => handleSortChange('amount')}
+                    aria-label="Sort by Amount"
+                  >
+                    <span>Amount</span>
+                    <span aria-hidden="true">
+                      {sort?.columnKey === 'amount'
+                        ? sort.direction === 'asc'
+                          ? '▲'
+                          : '▼'
+                        : '↕'}
+                    </span>
+                  </button>
+                </th>
                 <th className="py-3 px-4">Note / Scope</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
