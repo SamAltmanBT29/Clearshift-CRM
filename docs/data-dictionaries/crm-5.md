@@ -426,3 +426,53 @@ CRM-5 primary views register structured facets mapped bi-directionally to API qu
 * **Authorization Failure Handling:** Rendered whenever an endpoint returns HTTP 403 Forbidden or the client-side route guard detects insufficient permissions.
 * **Clear Role & Capability Transparency:** Distinctly displays a `403 Forbidden` status badge, details the required capability (e.g. `control:read`), specifies any required role, and announces the current user's role.
 * **Safe Return Path:** Features an accessible return button (`.cs-access-back-btn`) directing users back to the Migration Control Center home view (`/crm-5`).
+
+---
+
+## 13. Entity Create Form with Field-Level Validation, Modal Workflow, and Server Error Mapping (CRM5-20)
+
+### 13.1 Field-Level Validation Specification & Invariants (`CreateRunFormSchema`)
+CRM-5 implements an entity creation form for migration run projections adhering to Zod client-side schemas and ClearShift domain validation contracts:
+
+| Field | Input Type | Validation Rules & Constraints | Error Message |
+| :--- | :--- | :--- | :--- |
+| **`batchId`** | Text | Required; trimmed; 1 .. 128 characters | `batchId is required` / `batchId cannot exceed 128 characters` |
+| **`module`** | Select | Required; enum: `crm-1`, `crm-2`, `crm-3`, `crm-4`, `crm-5` | `Module is required` |
+| **`step`** | Select | Required; enum: `extract`, `profile`, `clean`, `map`, `load`, `validate`, `reconcile` | `Step is required` |
+| **`status`** | Select | Required; enum: `pending`, `running`, `completed`, `failed`, `halted` | `Status is required` |
+| **`recordsIn`** | Number | Required integer; non-negative (`>= 0`) | `Records In must be an integer` / `Records In cannot be negative` |
+| **`recordsOut`** | Number | Required integer; non-negative (`>= 0`) | `Records Out must be an integer` / `Records Out cannot be negative` |
+| **`recordsRejected`** | Number | Required integer; non-negative (`>= 0`) | `Records Rejected must be an integer` / `Records Rejected cannot be negative` |
+| **`operatorEmail`** | Email | Optional; format verified against standard RFC-5322 regex | `Invalid email address format` |
+| **`operatorPhone`** | Tel | Optional; format verified against phone regex (`+?[0-9\s\-().]{7,20}`) | `Invalid phone number format` |
+| **`samplingRate`** | Number | Optional decimal; strictly bounded in range `[0.00 .. 1.00]` | `Value must be a decimal between 0.00 and 1.00` |
+
+* **Conservation Invariant Assertion:** Enforces the fundamental domain rule that `recordsOut + recordsRejected <= recordsIn`. If violated, blocks submission and attaches an inline validation error to `recordsOut`: *"Invariant violation: sum of recordsOut and recordsRejected cannot exceed recordsIn"*.
+
+### 13.2 Double-Submit Prevention & Inflight Request Lock
+* **Inflight Submission Lock:** When submission begins, `isSubmitting` flag locks the form against concurrent submit triggers.
+* **Button State Mutation:** The primary submit button (`.cs-form-submit-btn`) transitions to `disabled={true}`, renders `.cs-btn-disabled`, displays an inline animated spinner (`.cs-spinner-sm`), and mutates text to *"Recording Run..."*.
+
+### 13.3 Direct HTTP 400 Server Validation Error Mapping
+* **ClearShift Error Envelope Parsing:** Intercepts server responses conforming to standard envelope `{ error: { code, message, details: [{ path: ['field'], message: '...' }] } }`.
+* **Field-Level Direct Feedback:** Server error messages map directly to the corresponding DOM inputs, setting `aria-invalid="true"`, pointing `aria-describedby` to the error element ID, highlighting input borders with `.cs-input-error`, and rendering an accessible error badge (`.cs-field-error`, `role="alert"`).
+* **Validation Summary Banner (`FormValidationSummary`):** Renders a high-visibility summary alert (`role="alert"`, `aria-live="polite"`) at the top of the form listing all field-level failures.
+
+### 13.4 Accessible Modal Dialog Workflow (`CreateRunModal`)
+* **WAI-ARIA Dialog Semantics:** Implements modal overlay conforming to WAI-ARIA standards (`role="dialog"`, `aria-modal="true"`, `aria-labelledby="<uniqueId>"`).
+* **Keyboard & Overlay Dismissal:** Pressing the `Escape` key, clicking the close button (`.cs-modal-close-btn`), or clicking the backdrop overlay (`.cs-modal-backdrop`) dismisses the modal safely.
+* **Success Lifecycle:** Successful form submission automatically closes the modal dialog, updates the table cache in `DataTableController`, and dispatches the confirmation toast.
+
+### 13.5 Table Cache Management (`DataTableController`)
+* **Local Cache Methods:** Added explicit cache manipulation APIs to `DataTableController`:
+  - `setCachedData(data: T[])`: Seeds table cache and sets total.
+  - `getCachedData(): T[]`: Retrieves current cached records.
+  - `addRecordToCache(record: T)`: Prepends newly created projection to cache and increments total count.
+  - `updateRecordInCache(idOrKey, updates)`: Updates an existing projection in-place by `id` or `batchId`.
+  - `removeRecordFromCache(idOrKey)`: Evicts projection from cache and decrements total count.
+  - `clearCache()`: Resets cache and sets total count to 0.
+
+### 13.6 Confirmation Toast Notification (`ConfirmationToast`)
+* **WAI-ARIA Status Semantics:** Renders floating toast notification (`role="status"`, `aria-live="polite"`, `.cs-toast`, `.cs-toast-success`).
+* **Auto-Dismiss & Manual Close:** Supports configurable auto-dismiss timer (default: 5000ms) with clean timer teardown and accessible manual dismissal button (`.cs-toast-close`, `aria-label="Dismiss notification"`).
+
