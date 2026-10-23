@@ -76,7 +76,9 @@ export const CRM3ImportStatusSchema = z.enum([
   "pending",
   "processing",
   "completed",
-  "failed"
+  "failed",
+  // Load halted on the 10% row-failure threshold (decision C9); committed rows are kept.
+  "stopped_excessive_failures"
 ]);
 export type CRM3ImportStatus = z.infer<typeof CRM3ImportStatusSchema>;
 
