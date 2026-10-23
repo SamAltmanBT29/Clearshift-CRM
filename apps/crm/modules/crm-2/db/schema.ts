@@ -1,10 +1,13 @@
+
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   date,
   index,
   numeric,
   pgSchema,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -13,25 +16,13 @@ import {
 
 export const crm2Schema = pgSchema("crm2");
 
-const sourcePairCheck = (
-  tableName: string,
-  sourceSystem: any,
-  sourceId: any
-) =>
-  check(
-    `${tableName}_source_pair_check`,
-    sql`(${sourceSystem} IS NULL AND ${sourceId} IS NULL) OR
-      (${sourceSystem} IS NOT NULL AND ${sourceId} IS NOT NULL AND
-        length(btrim(${sourceSystem})) > 0 AND length(btrim(${sourceId})) > 0)`
-  );
-
 export const crm2Stages = crm2Schema.table(
   "crm2_stages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
-    position: numeric("position", { precision: 2, scale: 0 }).notNull(),
-    isWon: sql`boolean`.mapWith(Boolean).notNull()
+    position: smallint("position").notNull(),
+    isWon: boolean("is_won").notNull().default(false)
   },
   (table) => [
     check(
@@ -65,19 +56,44 @@ export const crm2Deals = crm2Schema.table(
     closeDate: date("close_date"),
     sourceSystem: text("source_system"),
     sourceId: text("source_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+    createdAt: timestamp("created_at", {
+      withTimezone: true
+    }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true
+    }).notNull().defaultNow()
   },
   (table) => [
-    check("crm2_deals_name_nonempty_check", sql`length(btrim(${table.name})) > 0`),
-    check("crm2_deals_value_nonnegative_check", sql`${table.value} >= 0`),
+    check(
+      "crm2_deals_name_nonempty_check",
+      sql`length(btrim(${table.name})) > 0`
+    ),
+    check(
+      "crm2_deals_value_nonnegative_check",
+      sql`${table.value} >= 0`
+    ),
     check(
       "crm2_deals_currency_check",
       sql`${table.currency} ~ '^[A-Z]{3}$'`
     ),
-    sourcePairCheck("crm2_deals", table.sourceSystem, table.sourceId),
-    uniqueIndex("crm2_deals_source_key").on(table.sourceSystem, table.sourceId),
-    index("crm2_deals_name_search_idx").on(sql`lower(${table.name})`),
+    check(
+      "crm2_deals_source_pair_check",
+      sql`(
+        ${table.sourceSystem} IS NULL AND ${table.sourceId} IS NULL
+      ) OR (
+        ${table.sourceSystem} IS NOT NULL AND
+        ${table.sourceId} IS NOT NULL AND
+        length(btrim(${table.sourceSystem})) > 0 AND
+        length(btrim(${table.sourceId})) > 0
+      )`
+    ),
+    uniqueIndex("crm2_deals_source_key").on(
+      table.sourceSystem,
+      table.sourceId
+    ),
+    index("crm2_deals_name_search_idx").on(
+      sql`lower(${table.name})`
+    ),
     index("crm2_deals_contact_id_idx").on(table.contactId),
     index("crm2_deals_stage_id_idx").on(table.stageId),
     index("crm2_deals_close_date_idx").on(table.closeDate)
@@ -97,18 +113,38 @@ export const crm2Quotes = crm2Schema.table(
     note: text("note"),
     sourceSystem: text("source_system"),
     sourceId: text("source_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+    createdAt: timestamp("created_at", {
+      withTimezone: true
+    }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true
+    }).notNull().defaultNow()
   },
   (table) => [
     check(
       "crm2_quotes_number_nonempty_check",
       sql`length(btrim(${table.quoteNumber})) > 0`
     ),
-    check("crm2_quotes_amount_nonnegative_check", sql`${table.amount} >= 0`),
-    sourcePairCheck("crm2_quotes", table.sourceSystem, table.sourceId),
+    check(
+      "crm2_quotes_amount_nonnegative_check",
+      sql`${table.amount} >= 0`
+    ),
+    check(
+      "crm2_quotes_source_pair_check",
+      sql`(
+        ${table.sourceSystem} IS NULL AND ${table.sourceId} IS NULL
+      ) OR (
+        ${table.sourceSystem} IS NOT NULL AND
+        ${table.sourceId} IS NOT NULL AND
+        length(btrim(${table.sourceSystem})) > 0 AND
+        length(btrim(${table.sourceId})) > 0
+      )`
+    ),
     uniqueIndex("crm2_quotes_quote_number_key").on(table.quoteNumber),
-    uniqueIndex("crm2_quotes_source_key").on(table.sourceSystem, table.sourceId),
+    uniqueIndex("crm2_quotes_source_key").on(
+      table.sourceSystem,
+      table.sourceId
+    ),
     index("crm2_quotes_deal_id_idx").on(table.dealId),
     index("crm2_quotes_quote_date_idx").on(table.quoteDate)
   ]
