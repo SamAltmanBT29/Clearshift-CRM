@@ -13,9 +13,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@clearshift/contracts": "*",
     "@cs/kernel": "*",
     "@cs/core": "*",
-    "@cs/kit": "*"
+    "@cs/kit": "*",
+    "fastify": "^5.2.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
