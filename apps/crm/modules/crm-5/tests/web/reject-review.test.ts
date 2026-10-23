@@ -264,7 +264,7 @@ describe('CRM-5 Migration Control Center: Module Context Rejection Review & Expo
         iban: 'FR7630006000011234567890189',
         ssn: '123-45-6789',
         tax_id: '99-8877665',
-        password: 'SuperSecretPassword!2026',
+        password: 'pwd123',
         token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
         salary: 135000,
         nested: {
@@ -308,7 +308,7 @@ describe('CRM-5 Migration Control Center: Module Context Rejection Review & Expo
       const rawPayload = {
         sku: 'SKU-TEST-99',
         bank_account: '1234567890',
-        password: 'SecretPassword',
+        password: 'pwd123',
       };
 
       const enhanced = enhanceRejectRecord(reject, rawPayload);
