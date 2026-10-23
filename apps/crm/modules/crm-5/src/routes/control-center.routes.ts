@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 import {
   RunsQuerySchema,
   ScoresQuerySchema,
@@ -11,7 +11,12 @@ import {
   ResolveDuplicateInputSchema,
   ExecuteBatchLoadInputSchema,
 } from '@clearshift/contracts';
+import type { RoleType } from '@cs/identity';
 import { ControlCenterService } from '../services/control-center.service.js';
+import { Crm5AuditService, crm5Audit } from '../services/audit.js';
+import { CRM5_ENDPOINT_ROLES } from '../policies/roles.js';
+import { redactSensitiveObject } from '../policies/masking.js';
+import { requireRoles } from '../plugins/auth.js';
 import {
   DomainValidationError,
   DomainConflictError,
@@ -21,19 +26,33 @@ import {
 
 export interface ControlCenterRouteOptions {
   service?: ControlCenterService | undefined;
+  auditService?: Crm5AuditService | undefined;
+  authEnabled?: boolean | undefined;
+}
+
+function endpointPreHandlers(
+  fastify: FastifyInstance,
+  allowedRoles: readonly RoleType[],
+  authEnabled: boolean = true
+) {
+  if (!authEnabled) return [];
+  return [fastify.authenticate, requireRoles(allowedRoles)];
 }
 
 /**
  * Fastify Routes for CRM-5 Migration Control Center & Reports
  * Base Prefix: /api/v1/crm-control
+ * Strictly enforces SDS role permissions matrix and append-only audit trails.
  */
 export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> = async (
   fastify,
   opts
 ) => {
   const service = opts.service ?? new ControlCenterService();
+  const auditService = opts.auditService ?? crm5Audit;
+  const authEnabled = opts.authEnabled ?? true;
 
-  // Health check
+  // Health check (public probe)
   fastify.get('/health', async () => {
     return {
       status: 'ok',
@@ -44,7 +63,9 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
   });
 
   // 1. GET /runs
-  fastify.get('/runs', async (request, reply) => {
+  fastify.get('/runs', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.RUNS_LIST, authEnabled),
+  }, async (request, reply) => {
     const parsed = RunsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -57,11 +78,13 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
 
     const result = service.getRuns(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   // 2. GET /scores
-  fastify.get('/scores', async (request, reply) => {
+  fastify.get('/scores', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.SCORES_LIST, authEnabled),
+  }, async (request, reply) => {
     const parsed = ScoresQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -74,11 +97,13 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
 
     const result = service.getScores(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   // 3. GET /rejects
-  fastify.get('/rejects', async (request, reply) => {
+  fastify.get('/rejects', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.REJECTS_LIST, authEnabled),
+  }, async (request, reply) => {
     const parsed = RejectsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -91,11 +116,13 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
 
     const result = service.getRejects(parsed.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   // 4. GET /reconciliation/:batch
-  fastify.get<{ Params: { batch: string } }>('/reconciliation/:batch', async (request, reply) => {
+  fastify.get<{ Params: { batch: string } }>('/reconciliation/:batch', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.RECONCILIATION_READ, authEnabled),
+  }, async (request, reply) => {
     const batchId = request.params.batch;
     if (!batchId || batchId.trim().length === 0) {
       return reply.status(400).send({
@@ -116,11 +143,13 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
       });
     }
 
-    return reply.status(200).send(report);
+    return reply.status(200).send(redactSensitiveObject(report));
   });
 
   // 5. GET /batches/:batch - Aggregated batch summary & read-model consistency
-  fastify.get<{ Params: { batch: string } }>('/batches/:batch', async (request, reply) => {
+  fastify.get<{ Params: { batch: string } }>('/batches/:batch', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.BATCH_SUMMARY, authEnabled),
+  }, async (request, reply) => {
     const batchId = request.params.batch;
     if (!batchId || batchId.trim().length === 0) {
       return reply.status(400).send({
@@ -141,16 +170,17 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
       });
     }
 
-    return reply.status(200).send(summary);
+    return reply.status(200).send(redactSensitiveObject(summary));
   });
 
   // ---------------------------------------------------------------------------
   // Mutation API Endpoints (POST /runs, /scores, /reconciliation, /rejects)
   // ---------------------------------------------------------------------------
 
-
-  // 5. POST /runs - Ingest/update run projection
-  fastify.post('/runs', async (request, reply) => {
+  // 6. POST /runs - Ingest/update run projection
+  fastify.post('/runs', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.RUNS_CREATE, authEnabled),
+  }, async (request, reply) => {
     const parsed = CreateRunInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -165,7 +195,18 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     try {
       const result = service.recordRun(parsed.data);
       const statusCode = result.isDuplicate ? 200 : 201;
-      return reply.status(statusCode).send(result.run);
+
+      await auditService.logEvent({
+        actor: (request.user as any)?.sub || 'system',
+        action: 'crm5.run.recorded',
+        entity: 'run_projection',
+        entityId: result.run.id,
+        batchId: result.run.batchId,
+        result: 'success',
+        diff: result.run as unknown as Record<string, unknown>,
+      });
+
+      return reply.status(statusCode).send(redactSensitiveObject(result.run));
     } catch (err: unknown) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -189,8 +230,10 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 
-  // 6. POST /scores - Ingest quality score
-  fastify.post('/scores', async (request, reply) => {
+  // 7. POST /scores - Ingest quality score
+  fastify.post('/scores', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.SCORES_CREATE, authEnabled),
+  }, async (request, reply) => {
     const parsed = CreateScoreInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -205,7 +248,18 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     try {
       const result = service.recordScore(parsed.data);
       const statusCode = result.isDuplicate ? 200 : 201;
-      return reply.status(statusCode).send(result.score);
+
+      await auditService.logEvent({
+        actor: (request.user as any)?.sub || 'system',
+        action: 'crm5.score.recorded',
+        entity: 'quality_score',
+        entityId: result.score.id,
+        batchId: result.score.batchId,
+        result: 'success',
+        diff: result.score as unknown as Record<string, unknown>,
+      });
+
+      return reply.status(statusCode).send(redactSensitiveObject(result.score));
     } catch (err: unknown) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -229,8 +283,10 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 
-  // 7. POST /reconciliation - Ingest/audit reconciliation report
-  fastify.post('/reconciliation', async (request, reply) => {
+  // 8. POST /reconciliation - Ingest/audit reconciliation report
+  fastify.post('/reconciliation', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.RECONCILIATION_CREATE, authEnabled),
+  }, async (request, reply) => {
     const parsed = CreateReconciliationInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -245,7 +301,18 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     try {
       const result = service.recordReconciliation(parsed.data);
       const statusCode = result.isDuplicate ? 200 : 201;
-      return reply.status(statusCode).send(result.report);
+
+      await auditService.logEvent({
+        actor: (request.user as any)?.sub || 'system',
+        action: 'crm5.reconciliation.recorded',
+        entity: 'reconciliation_report',
+        entityId: result.report.id,
+        batchId: result.report.batchId,
+        result: 'success',
+        diff: result.report as unknown as Record<string, unknown>,
+      });
+
+      return reply.status(statusCode).send(redactSensitiveObject(result.report));
     } catch (err: unknown) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -269,8 +336,10 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 
-  // 8. POST /rejects - Ingest rejection audit record
-  fastify.post('/rejects', async (request, reply) => {
+  // 9. POST /rejects - Ingest rejection audit record
+  fastify.post('/rejects', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.REJECTS_CREATE, authEnabled),
+  }, async (request, reply) => {
     const parsed = CreateRejectInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -285,7 +354,18 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     try {
       const result = service.recordReject(parsed.data);
       const statusCode = result.isDuplicate ? 200 : 201;
-      return reply.status(statusCode).send(result.reject);
+
+      await auditService.logEvent({
+        actor: (request.user as any)?.sub || 'system',
+        action: 'crm5.reject.recorded',
+        entity: 'reject_projection',
+        entityId: result.reject.id,
+        batchId: result.reject.batchId,
+        result: 'success',
+        diff: result.reject as unknown as Record<string, unknown>,
+      });
+
+      return reply.status(statusCode).send(redactSensitiveObject(result.reject));
     } catch (err: unknown) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -309,8 +389,10 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 
-  // 9. POST /duplicates/detect - Detect exact duplicate candidates
-  fastify.post('/duplicates/detect', async (request, reply) => {
+  // 10. POST /duplicates/detect - Detect exact duplicate candidates
+  fastify.post('/duplicates/detect', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.DUPLICATES_DETECT, authEnabled),
+  }, async (request, reply) => {
     const parsed = DetectDuplicatesInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -324,7 +406,7 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
 
     try {
       const result = service.detectDuplicates(parsed.data);
-      return reply.status(200).send(result);
+      return reply.status(200).send(redactSensitiveObject(result));
     } catch (err: unknown) {
       if (err instanceof AutoMergeForbiddenError) {
         return reply.status(err.statusCode).send({
@@ -339,20 +421,25 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 
-  // 10. GET /duplicates/held - List duplicate candidates held for human review
+  // 11. GET /duplicates/held - List duplicate candidates held for human review
   fastify.get<{ Querystring: { batchId?: string; keyType?: string } }>(
     '/duplicates/held',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.DUPLICATES_HELD, authEnabled),
+    },
     async (request, reply) => {
       const items = service.getHeldDuplicates(request.query);
-      return reply.status(200).send({
+      return reply.status(200).send(redactSensitiveObject({
         items,
         total: items.length,
-      });
+      }));
     }
   );
 
-  // 11. POST /duplicates/resolve - Record human merge decision with audit trail
-  fastify.post('/duplicates/resolve', async (request, reply) => {
+  // 12. POST /duplicates/resolve - Record human merge decision with audit trail
+  fastify.post('/duplicates/resolve', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.DUPLICATES_RESOLVE, authEnabled),
+  }, async (request, reply) => {
     const parsed = ResolveDuplicateInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -366,10 +453,26 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
 
     try {
       const audit = service.resolveDuplicate(parsed.data);
-      return reply.status(200).send({
+
+      await auditService.logEvent({
+        actor: (request.user as any)?.sub || parsed.data.actorId || 'system',
+        action: 'crm5.duplicate.resolved',
+        entity: 'duplicate_candidate',
+        entityId: parsed.data.candidateId,
+        batchId: (audit.metadata?.['batchId'] as string) || undefined,
+        result: 'success',
+        diff: {
+          decision: parsed.data.decision,
+          keptId: parsed.data.keptId,
+          mergedId: parsed.data.mergedId,
+          reason: parsed.data.reason,
+        },
+      });
+
+      return reply.status(200).send(redactSensitiveObject({
         status: 'resolved',
         audit,
-      });
+      }));
     } catch (err: unknown) {
       if (err instanceof DuplicateCandidateNotFoundError) {
         return reply.status(err.statusCode).send({
@@ -392,7 +495,7 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 
-  // 12. GET /duplicates/audit - Query duplicate resolution audit logs
+  // 13. GET /duplicates/audit - Query duplicate resolution audit logs
   fastify.get<{
     Querystring: {
       candidateId?: string;
@@ -400,13 +503,17 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
       page?: number;
       pageSize?: number;
     };
-  }>('/duplicates/audit', async (request, reply) => {
+  }>('/duplicates/audit', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.DUPLICATES_AUDIT, authEnabled),
+  }, async (request, reply) => {
     const logs = service.getDuplicateAuditLogs(request.query);
-    return reply.status(200).send(logs);
+    return reply.status(200).send(redactSensitiveObject(logs));
   });
 
-  // 13. POST /batches/execute-load - Execute chunked batch load with bounded retries & stop threshold
-  fastify.post('/batches/execute-load', async (request, reply) => {
+  // 14. POST /batches/execute-load - Execute chunked batch load with bounded retries & stop threshold
+  fastify.post('/batches/execute-load', {
+    preHandler: endpointPreHandlers(fastify, CRM5_ENDPOINT_ROLES.BATCH_EXECUTE_LOAD, authEnabled),
+  }, async (request, reply) => {
     const parsed = ExecuteBatchLoadInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -420,7 +527,22 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
 
     try {
       const report = await service.executeBatchLoad(parsed.data);
-      return reply.status(200).send(report);
+
+      await auditService.logEvent({
+        actor: (request.user as any)?.sub || 'system',
+        action: 'crm5.batch.load_executed',
+        entity: 'batch_load',
+        batchId: parsed.data.batchId,
+        result: report.status === 'COMPLETED' ? 'success' : 'halted',
+        diff: {
+          totalRecords: report.totalRecords,
+          committedRecords: report.committedRecords,
+          failedRecords: report.failedRecords,
+          status: report.status,
+        },
+      });
+
+      return reply.status(200).send(redactSensitiveObject(report));
     } catch (err: unknown) {
       if (err instanceof DomainValidationError) {
         return reply.status(err.statusCode).send({
@@ -435,4 +557,3 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
     }
   });
 };
-

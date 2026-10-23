@@ -1008,6 +1008,396 @@
   cursor: pointer;
 }
 
+/* ==========================================================================
+   CRM5-20: Create Form, Field-Level Validation, Modal & Confirmation Toast
+   ========================================================================== */
+
+/* Page Header Row with Primary Action */
+.cs-page-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-create-run-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  background-color: var(--cs-accent, #1D4ED8);
+  border: 1px solid var(--cs-accent, #1D4ED8);
+  border-radius: var(--cs-r-md, 6px);
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.cs-create-run-btn:hover {
+  background-color: #1E40AF;
+  border-color: #1E40AF;
+}
+
+/* Accessible Modal Backdrop & Card */
+.cs-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-4, 16px);
+}
+
+.cs-modal-card {
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cs-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--cs-s-4, 16px) var(--cs-s-6, 24px);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+}
+
+.cs-modal-header-text {
+  flex: 1;
+}
+
+.cs-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0;
+}
+
+.cs-modal-subtitle {
+  font-size: 0.8125rem;
+  color: var(--cs-text-muted, #4B5563);
+  margin: var(--cs-s-1, 4px) 0 0 0;
+}
+
+.cs-modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--cs-text-muted, #4B5563);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--cs-r-sm, 4px);
+}
+
+.cs-modal-close-btn:hover,
+.cs-modal-close-btn:focus-visible {
+  color: var(--cs-text, #111827);
+  background-color: var(--cs-surface, #F5F6F8);
+}
+
+.cs-modal-body {
+  padding: var(--cs-s-5, 20px) var(--cs-s-6, 24px);
+}
+
+/* Form Layout & Typography */
+.cs-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-5, 20px);
+}
+
+.cs-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-form-section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0;
+  padding-bottom: var(--cs-s-2, 6px);
+  border-bottom: 1px solid var(--cs-border, #E5E7EB);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cs-form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--cs-s-4, 16px);
+}
+
+.cs-form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--cs-s-4, 16px);
+}
+
+.cs-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-1, 4px);
+}
+
+.cs-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--cs-text, #374151);
+}
+
+.cs-field-required {
+  color: #DC2626;
+  margin-left: 2px;
+}
+
+.cs-field-helper {
+  font-size: 0.75rem;
+  color: var(--cs-text-muted, #6B7280);
+}
+
+.cs-field-error {
+  font-size: 0.75rem;
+  color: #DC2626;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Inputs & Form Controls */
+.cs-input,
+.cs-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 6px);
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.cs-input:focus,
+.cs-select:focus {
+  border-color: var(--cs-accent, #1D4ED8);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
+
+.cs-input-error,
+.cs-select.cs-input-error {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
+}
+
+.cs-input-error:focus,
+.cs-select.cs-input-error:focus {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25) !important;
+}
+
+/* Button & Action Bar Styles */
+.cs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--cs-r-md, 6px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease-in-out;
+}
+
+.cs-btn-primary {
+  background-color: var(--cs-accent, #1D4ED8);
+  border-color: var(--cs-accent, #1D4ED8);
+  color: #FFFFFF;
+}
+
+.cs-btn-primary:hover:not(:disabled) {
+  background-color: #1E40AF;
+  border-color: #1E40AF;
+}
+
+.cs-btn-secondary {
+  background-color: var(--cs-surface, #F5F6F8);
+  border-color: var(--cs-border, #D0D5DD);
+  color: var(--cs-text, #374151);
+}
+
+.cs-btn-secondary:hover:not(:disabled) {
+  background-color: #E5E7EB;
+}
+
+.cs-btn-disabled,
+.cs-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cs-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cs-s-3, 12px);
+  padding-top: var(--cs-s-4, 16px);
+  border-top: 1px solid var(--cs-border, #E5E7EB);
+}
+
+/* Spinner for Inflight Submission */
+.cs-spinner-sm {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: cs-spin 0.6s linear infinite;
+}
+
+@keyframes cs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Form Validation Summary Banner */
+.cs-form-validation-summary {
+  padding: 12px 16px;
+  background-color: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--cs-r-md, 6px);
+  margin-bottom: var(--cs-s-4, 16px);
+}
+
+.cs-form-validation-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cs-form-validation-summary-icon {
+  font-size: 1rem;
+}
+
+.cs-form-validation-summary-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #991B1B;
+  margin: 0;
+}
+
+.cs-form-validation-summary-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.8125rem;
+  color: #B91C1C;
+}
+
+.cs-form-validation-summary-item {
+  margin-bottom: 3px;
+}
+
+.cs-form-validation-field-name {
+  font-weight: 600;
+}
+
+/* Confirmation Toast Notification */
+.cs-toast-portal {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+}
+
+.cs-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  max-width: 440px;
+  padding: 12px 16px;
+  border-radius: var(--cs-r-md, 8px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  animation: cs-toast-in 0.2s ease-out;
+}
+
+@keyframes cs-toast-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.cs-toast-success {
+  background-color: #F0FDF4;
+  border: 1px solid #86EFAC;
+  color: #166534;
+}
+
+.cs-toast-error {
+  background-color: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  color: #991B1B;
+}
+
+.cs-toast-icon {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.cs-toast-body {
+  flex: 1;
+}
+
+.cs-toast-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.cs-toast-message {
+  font-size: 0.8125rem;
+  color: #374151;
+}
+
+.cs-toast-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #6B7280;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.cs-toast-close:hover {
+  color: #111827;
+}
+
 /* ─────────────────────────────────────────────────────────────
    REJECTIONS REVIEW & EXPORT CONTROLS (CRM5-23)
    ───────────────────────────────────────────────────────────── */
