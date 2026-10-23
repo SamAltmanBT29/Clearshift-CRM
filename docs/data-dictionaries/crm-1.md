@@ -336,7 +336,45 @@ The main CRM-1 collection screens implement bounded paginated tables with stable
 
 ---
 
-## 10. Exact Duplicate Key Policies (Deterministic Only)
+## 10. Search, Faceted Filters, and Active Filter Tags (CRM1-18)
+
+### 300ms Keystroke Debouncing Protocol
+- **Debounce Delay Window**: Free-text search input enforces an exact 300ms debounce interval (`SEARCH_DEBOUNCE_MS = 300`) to prevent API thrashing and unbounded server queries during fast typing.
+- **Immediate Flush**: Pressing the `Enter` key or triggering explicit form submission flushes pending debounce timers immediately without waiting for the 300ms timer to expire.
+- **Instant Cancellation & Reset**: Clicking the clear icon (`×`) or pressing `Escape` clears search text, cancels pending timers, and triggers an immediate query update with an empty string.
+
+### Faceted Filter Registry & Query Parameter Mapping
+CRM-1 collection views register structured facets mapped bi-directionally to API query parameters:
+
+| View / Collection | Facet Dimension | Query Key | Target Values / Options | API Mapping |
+| :--- | :--- | :--- | :--- | :--- |
+| **Contacts** | **Lead Status** | `leadStatus` | `New`, `Working`, `Qualified`, `Closed` | `leadStatus=<LeadStatus>` |
+| **Contacts** | **Consent** | `consentStatus` | `unknown`, `granted`, `withdrawn` | `consentStatus=<ConsentStatus>` |
+| **Contacts** | **Subscription** | `unsubscribed` | `false`, `true` | `unsubscribed=<Boolean>` |
+| **Companies** | **Source System** | `sourceSystem` | `hubspot`, `salesforce`, `csv_import`, `manual` | `sourceSystem=<Source>` |
+| **Leads** | **Status** | `status` | `New`, `Working`, `Qualified`, `Closed` | `status=<LeadStatus>` |
+| **Leads** | **Source System** | `sourceSystem` | `web_form`, `campaign`, `csv_import`, `outreach` | `sourceSystem=<Source>` |
+| **Duplicates** | **Entity Type** | `entity` | `contact`, `company` | `entity=<Entity>` |
+| **Duplicates** | **Resolution Status** | `status` | `pending`, `merged`, `dismissed` | `status=<ResolutionStatus>` |
+| **Imports** | **Batch Status** | `status` | `pending`, `processing`, `completed`, `failed` | `status=<BatchStatus>` |
+
+- **Pagination Reset Invariant**: Modifying any search query or faceted filter dimension immediately resets the active page to 1 (`page = 1`) to eliminate phantom pagination overflows.
+- **Bi-directional URL Synchronization**: All active filters serialize to standard URL query parameters (`toQueryParams()` / `toQueryString()`) and hydrate deterministically from `URLSearchParams` (`fromQueryParams()`).
+
+### Active Filter Tag Lifecycle & 'Clear All' Action
+- **Active Filter Pill Tags**: When search text or any facet filter is applied, an active filter tag (`.cs-filter-pill`) is displayed containing the facet label and formatted display value (e.g. `Lead Status: Qualified` or `Search: "Sarah"`).
+- **Individual Tag Dismissal**: Each pill tag features an accessible dismiss button (`.cs-filter-pill-remove`) with `aria-label="Remove filter: <Label> <Value>"`. Clicking dismiss clears only that specific filter without disturbing other active filters.
+- **Bulk 'Clear All' Reset**: When at least one filter or search is active, a 'Clear All' button (`.cs-clear-all-filters-btn`) is displayed. Activating it purges all filters and search state, resetting query parameters and table results in a single atomic transaction.
+
+### Empty Search/Filter State Contract & Reset Recovery
+- **Dual Empty-State Contract**:
+  1. **System Empty State**: Rendered when zero data exists in the table and no filters/search are applied (e.g. *"No contact records currently exist."*).
+  2. **Filtered Empty State (`.cs-empty-filter-state`)**: Rendered when data exists in the system but the current search and filter combination returns zero records (e.g. *"No contacts match your search and filter criteria. Try adjusting your search term or clearing filters."*).
+- **Reset Recovery Button**: Filtered empty states prominently render a **"Reset All Filters"** action button (`.cs-empty-reset-btn`) that directly triggers `clearAll()`, providing immediate one-click recovery back to the unfiltered collection view.
+
+---
+
+## 11. Exact Duplicate Key Policies (Deterministic Only)
 
 As mandated by CRM SDS v2.0 and Gate G1 constraints, duplicate evaluation is **strictly deterministic**:
 - **Contact Exact Email Key**: Normalized email (`normalizeEmail(email)`: lowercase, trimmed, whitespace stripped).
@@ -347,7 +385,7 @@ As mandated by CRM SDS v2.0 and Gate G1 constraints, duplicate evaluation is **s
 
 ---
 
-## 11. Lead Status Workflow Transitions (SDS Allowlist)
+## 12. Lead Status Workflow Transitions (SDS Allowlist)
 
 Permitted state transitions strictly enforce the directed acyclic graph:
 - `New` -> `['Working', 'Qualified', 'Closed']`
@@ -359,7 +397,7 @@ Disallowed transitions (e.g. regressions, skips, or transitions originating from
 
 ---
 
-## 12. Domain Event Taxonomy (Redis Streams & Outbox)
+## 13. Domain Event Taxonomy (Redis Streams & Outbox)
 
 | Event Type | Aggregate | Description | Cross-Module Consumers |
 |---|---|---|---|
@@ -375,7 +413,7 @@ Disallowed transitions (e.g. regressions, skips, or transitions originating from
 
 ---
 
-## 13. Deterministic Mock Server (`crm1MockServerPlugin`)
+## 14. Deterministic Mock Server (`crm1MockServerPlugin`)
 
 Available in `@clearshift/contracts` for downstream module development and contract testing:
 - **State Store**: `Crm1MockStateStore` seeds deterministic synthetic contacts, companies, leads, and import batches.
@@ -383,7 +421,7 @@ Available in `@clearshift/contracts` for downstream module development and contr
 
 ---
 
-## 14. Gate G1 Sign-Off Review
+## 15. Gate G1 Sign-Off Review
 
 | Sign-Off Role | Signee | Status | Date |
 | :--- | :--- | :---: | :---: |
