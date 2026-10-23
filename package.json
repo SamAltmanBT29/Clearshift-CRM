@@ -10,8 +10,12 @@
     "packages/*"
   ],
   "scripts": {
-    "db:migrate": "node packages/database/scripts/migrate.js",
-    "db:migrate:test": "cross-env NODE_ENV=test node packages/database/scripts/migrate.js",
+    "db:migrate": "node infra/scripts/db-migrate.ts",
+    "db:migrate:test": "cross-env NODE_ENV=test node infra/scripts/db-migrate.ts",
+    "db:seed": "node infra/scripts/seed.ts",
+    "db:seed:test": "cross-env NODE_ENV=test node infra/scripts/seed.ts",
+    "db:wait": "node infra/scripts/db-migrate.ts --wait-only",
+    "db:reset": "node scripts/db-reset.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

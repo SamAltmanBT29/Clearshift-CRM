@@ -15,6 +15,36 @@ jobs:
   security-baseline:
     name: 🛡️ Security Baseline, Secrets & Dependency Protections
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: clearshift
+          POSTGRES_DB: clearshift_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clearshift -d clearshift_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:8.10.1
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL_TEST: postgresql://clearshift@localhost:5432/clearshift_test
+      DATABASE_MIGRATOR_URL: postgresql://clearshift@localhost:5432/clearshift_test
+      REDIS_URL: redis://localhost:6379
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,10 +73,23 @@ jobs:
           chmod +x ./infra/security/repo-audit.sh
           ./infra/security/repo-audit.sh
 
-      - name: 🧪 Run Formula-Safe CSV & Security Protection Tests
-        run: |
-          npx vitest run packages/core/tests/csv-safe.test.ts
-
       - name: 📐 Monorepo TypeScript Typecheck
         run: |
           npm run typecheck
+
+      - name: 🔎 Linter & Code Quality
+        run: |
+          npm run lint
+
+      - name: ⚡ Controlled Database Migrations
+        run: |
+          node infra/scripts/db-migrate.ts
+
+      - name: 🌱 Seed Synthetic Baseline Data
+        run: |
+          node infra/scripts/seed.ts
+
+      - name: 🧪 Run Monorepo Test Suite
+        run: |
+          npm test
+
