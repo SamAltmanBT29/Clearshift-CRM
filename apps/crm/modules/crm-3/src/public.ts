@@ -1,4 +1,5 @@
 import { ReferenceResolver } from "@cs/kernel";
+import { crm3Service, type Crm3Service } from "./services/crm3.service.js";
 
 export interface TicketPublicSummary {
   id: string;
@@ -8,20 +9,26 @@ export interface TicketPublicSummary {
   contactId: string;
 }
 
+/**
+ * Public read facade other modules use to check CRM-3 references.
+ * Reads the authoritative ticket and note store, so a lookup always agrees with the API.
+ */
 export class Crm3ReferenceResolver implements ReferenceResolver {
-  async exists(entityType: string, _id: string): Promise<boolean> {
-    return entityType === "ticket" || entityType === "note";
+  constructor(private readonly service: Crm3Service = crm3Service) {}
+
+  async exists(entityType: string, id: string): Promise<boolean> {
+    if (entityType === "ticket") {
+      return this.service.ticketExists(id);
+    }
+    if (entityType === "note") {
+      return this.service.noteExists(id);
+    }
+    return false;
   }
 
   async get<T = TicketPublicSummary>(entityType: string, id: string): Promise<T | null> {
     if (entityType === "ticket") {
-      return {
-        id,
-        subject: "Customer Inquiry",
-        status: "open",
-        priority: "high",
-        contactId: "cnt-1234"
-      } as unknown as T;
+      return this.service.getTicketSummary(id) as T | null;
     }
     return null;
   }
