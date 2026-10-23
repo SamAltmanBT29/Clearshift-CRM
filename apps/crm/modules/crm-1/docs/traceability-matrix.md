@@ -44,7 +44,7 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`BR-CRM4-01`** | Unsubscribed contact protection: status `unsubscribed` can never be overwritten by import or bulk action. | **Must** | SDS CRM v2.0 §4.5 | Domain / DB | Schema | `apps/crm/modules/crm-1/tests/db/schema.test.ts`<br>`CRM-1 Drizzle schema constraints` | **VERIFIED (Green)** |
 | **`SEC-01`** | Authenticate via asymmetric EdDSA JWTs and enforce 5 RBAC roles (viewer, editor, analyst, admin, migration_runner). | **Must** | SDS CRM v2.0 §7.1 | Security | Security | `apps/crm/modules/crm-1/tests/security/authorization.test.ts`<br>`CRM-1 Security & Authorization (Issue #14 / [CRM1-09])` | **VERIFIED (Green)** |
 | **`SEC-02`** | Mask sensitive fields (bank accounts XXXX-XXXX-7890, salary XX,XXX, CSV formula injection escape). | **Must** | ClearShift Core Rules | Security | Security | `apps/crm/modules/crm-1/tests/security/authorization.test.ts`<br>`CRM-1 Security & Authorization (Issue #14 / [CRM1-09])` | **VERIFIED (Green)** |
-| **`MIG-01`** | Atomic transaction: target business record and per-row import receipt commit in single transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-1/tests/services/crm1-mutation.service.test.ts`<br>`CRM-1 mutation service & idempotent imports` | **VERIFIED (Green)** |
+| **`MIG-01`** | Atomic transaction: target business record and per-row import receipt commit in single transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-1/tests/migration/idempotency.test.ts`<br>`CRM-1 Target Adapter & Durable Import Receipts (Issue #12 / [CRM1-07])` | **VERIFIED (Green)** |
 | **`MIG-02`** | Mathematical row conservation invariant: `source = loaded + rejected + merged + skipped` (`unaccounted = 0`). | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-1/tests/domain/qa-g1-design.test.ts`<br>`CRM-1 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`MIG-03`** | Bounded batching (500 rows) and stop migration when failures exceed 10% of attempted rows. | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-1/tests/domain/qa-g1-design.test.ts`<br>`CRM-1 QA Gate G1 Design Specifications` | **VERIFIED (Green)** |
 | **`FR-CRM1-27-01`** | Standard cleaners execute: whitespace trimming, name proper casing, email lowercasing, phone normalization, tax stripping, date coercion. | **Must** | Issue #120 [CRM1-27] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/cleaner.test.ts`<br>`CRM-1 cleaning rules and field audit` | **VERIFIED (Green)** |
@@ -57,7 +57,7 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 12 executing test files with 170 individual test cases:
+The CRM-1 automated test suite comprises 14 executing test files:
 
 ```
 apps/crm/modules/crm-1/tests/
@@ -72,6 +72,8 @@ apps/crm/modules/crm-1/tests/
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
 ├── kit/
 │   └── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
+├── migration/
+│   └── idempotency.test.ts                  (14 tests) — Target adapter, durable receipts, idempotency retries & 409 conflicts (Issue #12 / [CRM1-07])
 ├── security/
 │   └── authorization.test.ts                (51 tests) — EdDSA JWTs, RBAC 5 roles, sensitive masking, audit
 ├── services/
@@ -83,7 +85,7 @@ apps/crm/modules/crm-1/tests/
     ├── routes.test.ts                       (14 tests) — Frontend route guards, layout shell, ARIA landmarks
     └── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 222 tests (100% Green, 0 Failures, 0 Skipped in test DB run)
+Total Automated Test Cases: 236 tests (100% Green, 0 Failures, 0 Skipped in test DB run)
 ```
 
 ---

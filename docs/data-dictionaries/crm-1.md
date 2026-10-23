@@ -435,11 +435,27 @@ Available in `@clearshift/contracts` for downstream module development and contr
 
 ---
 
-## 16. UI Presentation States & Error Sanitization (CRM1-19)
+## 16. Target Adapter & Migration Kit Integration ([CRM1-07] — Issue #12 / KIT-08)
+
+### Target Adapter Architecture
+CRM-1 implements the in-process `TargetAdapter` port specified in `@cs/kit` (`KIT-08` & `Decision C4`):
+* **Class**: `Crm1TargetAdapter` (`apps/crm/modules/crm-1/src/migration/target-adapter.ts`)
+* **Supported Entities**: `contacts` / `contact`, `companies` / `company`, `leads` / `lead`.
+* **Atomic Local Transaction**: Domain mutation (contact/company/lead) and durable import receipt (`crm1_import_receipts`) commit atomically in one PostgreSQL transaction.
+* **Idempotency Key Protocol**: Stable composite SHA-256 hash over `batchId + sourceRow + entity + canonicalPayload`.
+  - Replay of identical key + payload returns HTTP 200 with `isExisting: true` and prior target ID.
+  - Replay of identical key with altered payload/entity returns HTTP 409 Conflict.
+* **Transient Infrastructure Failures**: Simulated or transient 503 failures are retryable and never recorded as rejected rows or receipts.
+* **Consent Preservation**: Existing consent and unsubscribe suppression state is protected; older import timestamps or false states never overwrite newer consent records.
+* **HTTP Endpoints**: Exposed under `/api/v1/crm-contacts/import/row` and `/api/v1/crm-contacts/import/receipts`.
+
+---
+
+## 17. UI Presentation States & Error Sanitization (CRM1-19)
 
 Governs standard UI visual states across all CRM-1 entity tables and pages (`ContactsListPage`, `CompaniesListPage`, `LeadsPipelinePage`, `DuplicateReviewPage`, `ImportsOverviewPage`).
 
-### 16.1 State Hierarchy & Dispatch Matrix
+### 17.1 State Hierarchy & Dispatch Matrix
 
 | Priority | State Condition | Visual Component | Accessibility / ARIA | Interactive Controls |
 | :---: | :--- | :--- | :--- | :--- |
@@ -449,7 +465,7 @@ Governs standard UI visual states across all CRM-1 entity tables and pages (`Con
 | 4 | Empty (Zero total records or filtered out) | `EmptyState` | `role="status"`, semantic header and description | Primary CTA button (`actionLabel` / `onAction`), secondary CTA or reset filters |
 | 5 | Normal Populated Data | `DataTable` | `role="table"`, sorting headers (`aria-sort`), paginator (`aria-label="Table Pagination"`) | Column sorting, search filter, page navigation, record actions |
 
-### 16.2 Error Message Sanitization Standard
+### 17.2 Error Message Sanitization Standard
 
 All error payloads rendered in user-facing components (`ErrorAlert`, `DataTableController`) MUST pass through `sanitizeErrorMessage()` before presentation:
 - **Stack Traces**: Strips any trailing lines containing `at functionName (path/to/file.ts:line:col)`.
