@@ -27,6 +27,33 @@ export class Crm4Service {
   }
 
   /**
+   * Captures an in-memory snapshot of all owned entity state for transactional atomicity & rollback.
+   */
+  public snapshotState() {
+    return {
+      lists: new Map(this.lists),
+      campaigns: new Map(this.campaigns),
+      members: new Map(this.members),
+      consents: new Map(this.consents),
+    };
+  }
+
+  /**
+   * Restores in-memory state from a previously captured snapshot.
+   */
+  public restoreState(snapshot: {
+    lists: Map<string, CRM4List>;
+    campaigns: Map<string, CRM4Campaign>;
+    members: Map<string, CRM4Member>;
+    consents: Map<string, CRM4Consent>;
+  }): void {
+    this.lists = new Map(snapshot.lists);
+    this.campaigns = new Map(snapshot.campaigns);
+    this.members = new Map(snapshot.members);
+    this.consents = new Map(snapshot.consents);
+  }
+
+  /**
    * Resets and populates deterministic synthetic fixtures.
    */
   public seedSyntheticData(): void {
@@ -417,6 +444,24 @@ export class Crm4Service {
     }
 
     return consent;
+  }
+
+  public async getListByName(name: string): Promise<CRM4List | undefined> {
+    const trimmed = name.trim().toLowerCase();
+    return Array.from(this.lists.values()).find((l) => l.name.trim().toLowerCase() === trimmed);
+  }
+
+  public async getCampaignByName(name: string, listId?: string): Promise<CRM4Campaign | undefined> {
+    const trimmed = name.trim().toLowerCase();
+    return Array.from(this.campaigns.values()).find(
+      (c) => c.name.trim().toLowerCase() === trimmed && (!listId || c.listId === listId)
+    );
+  }
+
+  public async getMember(campaignId: string, contactId: string): Promise<CRM4Member | undefined> {
+    return Array.from(this.members.values()).find(
+      (m) => m.campaignId === campaignId && m.contactId === contactId
+    );
   }
 
   // =========================================================================

@@ -148,6 +148,14 @@
   - **Query Parameter Isolation:** Unknown query parameters are safely stripped and do not alter SQL or business execution.
   - **Automated Verification:** Verified in Fastify inject suite [`apps/crm/modules/crm-4/tests/api/list.test.ts`](../../apps/crm/modules/crm-4/tests/api/list.test.ts).
 
+### 5.2 Migration Kit Target Adapter & Durable Import Receipts ([CRM4-11] — Issue #164)
+- **TargetAdapter Port Implementation:** `Crm4TargetAdapter` in [`apps/crm/modules/crm-4/src/migration/target-adapter.ts`](../../apps/crm/modules/crm-4/src/migration/target-adapter.ts) implements the `@cs/kit` `TargetAdapter` port for `crm4_records` (schema version 1).
+- **Atomic Transaction Commit:** Business record mutations and durable `ImportReceipt` records commit atomically in one local transaction. Failure of receipt commitment initiates a complete state rollback with zero orphaned mutations.
+- **Idempotency Guarantees:** Canonical payload SHA-256 hash matching on `idempotencyKey`. Exact replays return existing receipts without duplicating target rows or counters; key reuse with conflicting payloads returns `IDEMPOTENCY_CONFLICT`.
+- **Preflight Dry-Run:** `preflight(batchId, rows)` validates records and counts valid/reject rows with zero database or store mutations.
+- **Batch Loading:** `loadBatch(batchId, rows)` executes sequential type-safe loading, returning loaded receipts and structured rejection errors with standard error codes.
+- **Domain Invariant Assertions:** Strictly enforces monotonic opt-out rule (BR-CRM4-01) rejecting attempts to re-subscribe unsubscribed contacts, validates member status against `sent/opened/clicked`, and links existing members without duplicate entries.
+
 ---
 
 ## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
