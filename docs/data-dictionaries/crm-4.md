@@ -140,13 +140,20 @@
   - `POST /api/v1/crm-marketing/campaigns/{id}/members`: Add contact member to campaign
   - `POST /api/v1/crm-marketing/consents`: Set or update contact consent status (enforces BR-CRM4-01)
   - `GET  /api/v1/crm-marketing/consents/{contact}`: Fetch contact consent record by contact UUID
-* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), and `409` (Conflict / Monotonic Opt-Out Invariant Violation).
+* **Standard Error Responses:** Standard `ErrorEnvelope` with `code`, `message`, and `details` for `400` (Validation), `401` (Unauthorized), `403` (Forbidden), `404` (Not Found), `409` (Conflict / Monotonic Opt-Out Invariant Violation), and `422` (Unprocessable Entity).
 * **List / Read Query Specifications ([CRM4-02] — Issue #37):**
   - **Bounded Pagination:** All list endpoints enforce `page` (positive integer, default `1`) and `pageSize` (positive integer, default `25`, max cap `100`). Requesting `pageSize > 100` or `page < 1` is strictly rejected with HTTP 400 Bad Request (`VALIDATION_ERROR`).
   - **Deterministic Sort Order:** All collections apply stable sorting (`createdAt DESC, id ASC`) guaranteeing deterministic, non-overlapping records across consecutive pages.
   - **Server-Side Case-Insensitive Search:** Query parameter `search` performs server-side case-insensitive filtering against text fields (`name` and `description` for lists; `name` for campaigns).
   - **Query Parameter Isolation:** Unknown query parameters are safely stripped and do not alter SQL or business execution.
   - **Automated Verification:** Verified in Fastify inject suite [`apps/crm/modules/crm-4/tests/api/list.test.ts`](../../apps/crm/modules/crm-4/tests/api/list.test.ts).
+
+### 5.1 Mutation API & Domain Invariant Guarantees (Issue #38 / [CRM4-03])
+- **System-Maintained Field Protection:** User/client mutations attempting to modify read-only or computed fields (`id`, `createdAt`, `updatedAt`, `campaignCount`, `memberCount`) are strictly rejected with HTTP `403 Forbidden`.
+- **List Parent Immutability:** Campaign parent `listId` is permanently immutable after creation. Attempting to modify `listId` on `PATCH /campaigns/:id` is strictly rejected with HTTP `403 Forbidden`.
+- **Campaign Membership Invariant:** Member status is strictly restricted to `sent`, `opened`, or `clicked`. Unrecognized statuses return HTTP `400 Bad Request`. Duplicate `(campaignId, contactId)` pairs return HTTP `409 Conflict`.
+- **Monotonic Opt-Out (BR-CRM4-01):** Known `unsubscribed` contacts cannot be reverted to `subscribed` via imports, API mutations, or forms; violations return HTTP `409 Conflict`. Adding an unsubscribed contact to a campaign immediately flags `unsubscribed = true`.
+- **Idempotency & Replay Semantics:** Mutation endpoints (`POST /lists`, `POST /campaigns`, `POST /campaigns/:id/members`, `POST /consents`) accept `Idempotency-Key` or `X-Idempotency-Key` headers (or payload keys). Replayed requests return cached receipts with `X-Idempotent-Replay: true` header without double-incrementing counters or creating duplicate entities.
 
 ---
 
@@ -166,3 +173,40 @@ In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseli
 * **Date:** 2026-10-23
 * **Status:** Verified, 100% Tests Passing, Approved for V1
 * **Sign-off Authority:** Group 4 Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)
+
+---
+
+## 7. Search, Faceted Filters, and Active Filter Tags ([CRM4-18] — Issue #171)
+
+### 7.1 300ms Keystroke Debouncing Protocol
+- **Debounce Delay Window**: Free-text search inputs enforce an exact 300ms debounce interval (`SEARCH_DEBOUNCE_MS = 300`) to prevent API thrashing and unbounded server queries during rapid typing.
+- **Immediate Flush**: Pressing `Enter` or triggering explicit form submission flushes pending debounce timers immediately without waiting for the 300ms timer to expire.
+- **Instant Cancellation & Reset**: Clicking the clear icon (`×`) or pressing `Escape` clears search text, cancels pending timers, and triggers an immediate query update with an empty string.
+
+### 7.2 Faceted Filter Registry & Query Parameter Mapping
+CRM-4 collection views register structured facets mapped bi-directionally to API query parameters:
+
+| Collection / Entity | Facet Dimension | Query Key | Target Values / Options | API Mapping |
+| :--- | :--- | :--- | :--- | :--- |
+| **Marketing Lists** | **Audience Size** | `memberRange` | `empty` (0), `small` (1-50), `medium` (51-250), `large` (250+) | `memberRange=<Range>` |
+| **Marketing Lists** | **Campaign Activity** | `campaignActivity` | `active` (>0), `none` (0) | `campaignActivity=<Activity>` |
+| **Campaigns** | **Campaign Status** | `status` | `draft`, `scheduled`, `sent` | `status=<Status>` |
+| **Campaigns** | **Campaign Period** | `dateRange` | `2026`, `2025` | `dateRange=<Year>` |
+| **Campaign Members** | **Engagement Status** | `status` | `sent`, `opened`, `clicked` | `status=<MemberStatus>` |
+| **Campaign Members** | **Opt-Out Status** | `unsubscribed` | `false` (active), `true` (opted out) | `unsubscribed=<Boolean>` |
+| **Consent Records** | **Consent State** | `consentStatus` | `subscribed`, `unsubscribed` | `consentStatus=<ConsentStatus>` |
+| **Consent Records** | **Source Channel** | `source` | `web_form`, `email_unsubscribe`, `csv_import`, `manual` | `source=<Source>` |
+
+- **Pagination Reset Invariant**: Modifying any search query or faceted filter dimension immediately resets the active page to 1 (`page = 1`) to eliminate phantom pagination overflows.
+- **Bi-directional URL Synchronization**: All active filters serialize to standard URL query parameters (`toQueryParams()` / `toQueryString()`) and hydrate deterministically from `URLSearchParams` (`fromQueryParams()`).
+
+### 7.3 Active Filter Tag Lifecycle & 'Clear All' Action
+- **Active Filter Pill Tags**: When search text or any facet filter is applied, an active filter tag (`.cs-filter-pill`) is displayed containing the facet label and formatted display value (e.g. `Audience Size: 250+ Members` or `Search: "Enterprise"`).
+- **Individual Tag Dismissal**: Each pill tag features an accessible dismiss button (`.cs-filter-pill-remove`) with `aria-label="Remove filter: <Label> <Value>"`. Clicking dismiss clears only that specific filter without disturbing other active filters.
+- **Bulk 'Clear All' Reset**: When at least one filter or search is active, a 'Clear All' button (`.cs-clear-all-filters-btn`) is displayed. Activating it purges all filters and search state, resetting query parameters and table results in a single atomic transaction.
+
+### 7.4 Empty Search/Filter State Contract & Reset Recovery
+- **Dual Empty-State Contract**:
+  1. **System Empty State**: Rendered when zero data exists in the table and no filters/search are applied (e.g. *"No marketing lists recorded"*).
+  2. **Filtered Empty State (`.cs-empty-filter-state`)**: Rendered when data exists in the system but the current search and filter combination returns zero records (e.g. *"No matching marketing lists. No marketing lists match the active filter criteria. Try resetting your filters."*).
+- **Reset Recovery Button**: Filtered empty states prominently render a **"Reset All Filters"** action button (`.cs-empty-reset-btn`) that directly triggers `clearAll()`, providing immediate one-click recovery back to the unfiltered collection view.
