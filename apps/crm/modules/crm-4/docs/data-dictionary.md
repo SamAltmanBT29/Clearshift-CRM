@@ -2,18 +2,18 @@
 
 **Module ID:** `CRM-4`  
 **Module Name:** Marketing Lists and Campaign History  
-**Owning Team:** Team `crm-marketing` (Group 4 — Role 4 Data / QA Lead)  
+**Owning Team:** Team `crm-marketing` (Group 4)  
 **Schema Version:** 1.0.0  
 **Storage Engine:** PostgreSQL 18.6 with Drizzle ORM (schema `crm4`)  
 **Target Milestone:** Gate G4 Release Candidate (Weeks 7–8)  
 **Access Pattern:** Authenticated module API `/api/v1/crm-marketing` with EdDSA JWTs & RBAC. Zero direct cross-module SQL mutations.  
-**Traceability:** ClearShift Project Plan v3.0 §7.4, §9; SDS ClearShift CRM v2.0 §4, §7.1; V1: FR-CRM4-01..05; BR-CRM4-01; Issue #45 `[CRM4-10]`.
+**Traceability:** ClearShift Project Plan v3.0 §7.4, §9; SDS ClearShift CRM v2.0 §4, §7.1; V1: FR-CRM4-01..05; BR-CRM4-01; Issues #36 `[CRM4-01]`, #45 `[CRM4-10]`.
 
 ---
 
 ## 1. Entity Relationship Overview
 
-CRM-4 maintains 4 core tables in the `crm4` PostgreSQL schema to record marketing segmentation lists, campaign history, participant activity, and contact consent records:
+CRM-4 maintains core tables in the `crm4` PostgreSQL schema to record marketing segmentation lists, campaign history, participant activity, contact consent records, and migration receipts:
 
 ```
 ┌──────────────────────────────────────┐
@@ -96,6 +96,41 @@ CRM-4 maintains 4 core tables in the `crm4` PostgreSQL schema to record marketin
 | `source` | `text` | No | — | `length(btrim(source)) > 0` | Origin channel (e.g. `web_form`, `unsubscribe_link`). | `unsubscribe_link` |
 | `created_at` | `timestamptz` | No | `now()` | Read-only | Record creation timestamp. | `2026-10-02T00:00:00.000Z` |
 | `updated_at` | `timestamptz` | No | `now()` | Read-only | Last modification timestamp. | `2026-10-02T00:00:00.000Z` |
+
+---
+
+### 2.5 Table: `crm4_import_batches`
+**Description:** Tracks migration batches loaded into CRM-4.
+
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
+| :--- | :--- | :---: | :--- | :--- | :--- | :--- |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID. | `44444444-5555-4444-8444-000000000001` |
+| `source_system` | `text` | No | — | `length(btrim(source_system)) > 0` | Source system identifier. | `hubspot` |
+| `status` | `text` | No | `'pending'` | IN `('pending', 'processing', 'completed', 'failed')` | Batch lifecycle status. | `completed` |
+| `idempotency_key`| `text` | Yes | `NULL` | Unique Index | Batch-level idempotency key. | `batch-crm4-01` |
+| `request_hash` | `text` | Yes | `NULL` | — | SHA-256 payload digest. | `e3b0c442...` |
+| `loaded_count` | `integer` | No | `0` | `>= 0` | Count of ingested records. | `100` |
+| `rejected_count`| `integer` | No | `0` | `>= 0` | Count of rejected records. | `0` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Ingestion start timestamp. | `2026-10-23T08:00:00.000Z` |
+| `updated_at` | `timestamptz` | No | `now()` | Read-only | Ingestion update timestamp. | `2026-10-23T08:05:00.000Z` |
+| `completed_at` | `timestamptz` | Yes | `NULL` | — | Completion timestamp. | `2026-10-23T08:05:00.000Z` |
+
+---
+
+### 2.6 Table: `crm4_import_receipts`
+**Description:** Row-level transaction receipts providing durable idempotency.
+
+| Column | PostgreSQL Type | Nullable | Default | Constraints | Business Rule | Synthetic Example |
+| :--- | :--- | :---: | :--- | :--- | :--- | :--- |
+| `id` | `uuid` | No | `gen_random_uuid()` | Primary Key | Immutable receipt UUID. | `44444444-6666-4444-8444-000000000001` |
+| `batch_id` | `uuid` | No | — | FK to `crm4_import_batches.id` | Associated batch ID. | `44444444-5555-4444-8444-000000000001` |
+| `source_row` | `integer` | No | — | `source_row > 0` | 1-based source row number. | `1` |
+| `entity` | `text` | No | — | IN `('list', 'campaign', 'member', 'consent')` | Ingested target entity type. | `consent` |
+| `source_system` | `text` | No | — | `length(btrim(source_system)) > 0` | Source system identifier. | `hubspot` |
+| `source_id` | `text` | No | — | `length(btrim(source_id)) > 0` | Source record identifier. | `con_1001` |
+| `target_id` | `uuid` | No | — | Index | UUID of the committed target entity record. | `44444444-4444-4444-8444-000000000001` |
+| `idempotency_key`| `text` | No | — | Unique Index | Deterministic composite hash key. | `rcpt-con_1001` |
+| `created_at` | `timestamptz` | No | `now()` | Read-only | Receipt timestamp. | `2026-10-23T08:05:00.000Z` |
 
 ---
 
