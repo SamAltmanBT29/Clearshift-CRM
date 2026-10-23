@@ -1,17 +1,23 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   type Deal,
   type Stage,
   type Quote,
   type DealsQuery,
+  type DealsQueryInput,
   type DealsListResponse,
   type CreateDealInput,
   type UpdateDealInput,
   type QuotesQuery,
+  type QuotesQueryInput,
   type QuotesListResponse,
   type CreateQuoteInput,
   type UpdateQuoteInput,
   type Crm2StageName,
+  type Crm2ImportRow,
+  type Crm2ImportReceipt,
+  type BatchExecutionReport,
+  type ExecuteBatchLoadInput,
   CRM2_STAGE_SEEDS,
   CRM2_STAGES,
   assertValidStageName,
@@ -21,12 +27,36 @@ import {
   UpdateQuoteInputSchema,
   DealsQuerySchema,
   QuotesQuerySchema,
+  Crm2ImportRowSchema,
+  type Crm2DetectDuplicatesInput,
+  type Crm2ResolveDuplicateInput,
+  type Crm2DuplicateCandidate,
+  type Crm2DuplicateAuditLogEntry,
+  type DealCandidate,
+  type DealDuplicateEvaluationResult,
+  type QuoteCandidate,
+  type QuoteDuplicateEvaluationResult,
+  evaluateDealDuplicate,
+  evaluateQuoteDuplicate,
 } from '@clearshift/contracts';
 import type { ReferenceResolver } from '@cs/kernel';
+import {
+  executeCrm2ChunkedBatchLoad,
+  type Crm2BatchLoaderOptions,
+  type Crm2RowProcessorFn,
+} from '../domain/batch-loader.js';
+import {
+  ExactKeyRegistry,
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+  type DuplicateDetectionResult,
+} from '../domain/duplicate-policy.js';
 import {
   DealNotFoundError,
   QuoteNotFoundError,
   DomainValidationError,
+  IdempotencyConflictError,
+  IdempotencyKeyReusedError,
 } from '../domain/errors.js';
 import {
   assertDealStageTransition,
@@ -36,9 +66,29 @@ import {
   isOrphanDeal,
   calculateDealDerivedTotals,
   calculatePipelineSummary,
+  sanitizeDealUserEdit,
+  sanitizeQuoteUserEdit,
   type DealDerivedTotals,
   type PipelineSummary,
 } from '../domain/relationships.js';
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalize(child)])
+    );
+  }
+  return value;
+}
+
+function requestDigest(input: unknown): string {
+  return createHash('sha256').update(JSON.stringify(canonicalize(input))).digest('hex');
+}
 
 export interface Crm2ServiceOptions {
   contactResolver?: ReferenceResolver;
@@ -90,7 +140,11 @@ export class Crm2Service {
   private stages: Stage[] = [];
   private deals: Deal[] = [];
   private quotes: Quote[] = [];
+  private importReceipts: Crm2ImportReceipt[] = [];
+  private batchReports: Map<string, BatchExecutionReport> = new Map();
   private contactResolver: ReferenceResolver;
+  private duplicateQueue: DuplicateReviewQueue = new DuplicateReviewQueue();
+  private keyRegistry: ExactKeyRegistry = new ExactKeyRegistry();
 
   constructor(options: Crm2ServiceOptions = {}) {
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
@@ -106,6 +160,10 @@ export class Crm2Service {
   }
 
   public resetStore(): void {
+    this.importReceipts = [];
+    this.batchReports.clear();
+    this.duplicateQueue.clear();
+    this.keyRegistry = new ExactKeyRegistry();
     this.seedSyntheticData();
   }
 
@@ -185,6 +243,71 @@ export class Crm2Service {
     ];
   }
 
+  /**
+   * Seeds additional deterministic synthetic fixtures for pagination, sorting, and bounded limit testing.
+   */
+  public seedPaginationFixtures(count = 32): void {
+    this.seedSyntheticData();
+    const stageNames: Crm2StageName[] = [
+      'New',
+      'Qualified',
+      'Proposal',
+      'Negotiation',
+      'Won',
+      'Lost',
+    ];
+    const currencies = ['USD', 'EUR', 'GBP'];
+
+    for (let i = 4; i <= count; i++) {
+      const stageName = stageNames[(i - 1) % stageNames.length]!;
+      const stageSeed = this.stages.find((s) => s.name === stageName)!;
+      const isOrphan = i % 3 === 0;
+      const contactId = isOrphan
+        ? null
+        : i % 2 === 0
+          ? '90000000-0000-4000-8000-000000000001'
+          : '90000000-0000-4000-8000-000000000002';
+      const contactName = isOrphan
+        ? null
+        : i % 2 === 0
+          ? 'Sarah Connor'
+          : 'Lars Lindqvist';
+      const day = String(i).padStart(2, '0');
+      const hex = String(i).padStart(12, '0');
+
+      const deal: Deal = {
+        id: `20000000-0000-4000-8000-${hex}`,
+        name: `Synthetic Deal #${i} [${stageName}]`,
+        contact_id: contactId,
+        contact_name: contactName,
+        value: `${(i * 1500).toFixed(2)}`,
+        currency: currencies[i % currencies.length]!,
+        stage_id: stageSeed.id,
+        stage_name: stageName,
+        close_date: `2026-11-${day}`,
+        is_orphan: isOrphan,
+        created_at: `2026-10-${day}T12:00:00Z`,
+        updated_at: `2026-10-${day}T12:00:00Z`,
+      };
+      this.deals.push(deal);
+
+      if (i <= 20) {
+        this.quotes.push({
+          id: `30000000-0000-4000-8000-${hex}`,
+          deal_id: deal.id,
+          deal_name: deal.name,
+          quote_number: `Q-2026-${String(i).padStart(3, '0')}`,
+          date: `2026-10-${day}`,
+          amount: `${(i * 1200).toFixed(2)}`,
+          currency: deal.currency,
+          note: `Commercial Scope for Deal #${i}`,
+          created_at: `2026-10-${day}T12:00:00Z`,
+          updated_at: `2026-10-${day}T12:00:00Z`,
+        });
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Stages Read API
   // ---------------------------------------------------------------------------
@@ -205,7 +328,7 @@ export class Crm2Service {
   // Deals API & Business Logic
   // ---------------------------------------------------------------------------
 
-  public async getDeals(query: DealsQuery): Promise<DealsListResponse> {
+  public async getDeals(query: DealsQueryInput = {}): Promise<DealsListResponse> {
     const parsedQuery = DealsQuerySchema.parse(query);
     const { page, pageSize, search, stage } = parsedQuery;
 
@@ -241,6 +364,7 @@ export class Crm2Service {
       pagination: {
         page,
         pageSize,
+        limit: pageSize,
         totalCount,
         totalPages,
         hasNextPage: page < totalPages,
@@ -299,7 +423,8 @@ export class Crm2Service {
   }
 
   public async updateDeal(id: string, input: UpdateDealInput): Promise<Deal> {
-    const validated = UpdateDealInputSchema.parse(input);
+    const sanitized = sanitizeDealUserEdit(input as Record<string, unknown>) as UpdateDealInput;
+    const validated = UpdateDealInputSchema.parse(sanitized);
     const index = this.deals.findIndex((d) => d.id === id);
     if (index === -1) {
       throw new DealNotFoundError(id);
@@ -363,7 +488,7 @@ export class Crm2Service {
   // Quotes API & Business Logic
   // ---------------------------------------------------------------------------
 
-  public async getQuotes(query: QuotesQuery): Promise<QuotesListResponse> {
+  public async getQuotes(query: QuotesQueryInput = {}): Promise<QuotesListResponse> {
     const parsedQuery = QuotesQuerySchema.parse(query);
     const { page, pageSize, deal_id } = parsedQuery;
 
@@ -390,6 +515,7 @@ export class Crm2Service {
       pagination: {
         page,
         pageSize,
+        limit: pageSize,
         totalCount,
         totalPages,
         hasNextPage: page < totalPages,
@@ -435,7 +561,8 @@ export class Crm2Service {
   }
 
   public async updateQuote(id: string, input: UpdateQuoteInput): Promise<Quote> {
-    const validated = UpdateQuoteInputSchema.parse(input);
+    const sanitized = sanitizeQuoteUserEdit(input as Record<string, unknown>) as UpdateQuoteInput;
+    const validated = UpdateQuoteInputSchema.parse(sanitized);
     const index = this.quotes.findIndex((q) => q.id === id);
     if (index === -1) {
       throw new QuoteNotFoundError(id);
@@ -481,6 +608,247 @@ export class Crm2Service {
 
   public async getPipelineSummary(): Promise<PipelineSummary> {
     return calculatePipelineSummary(this.deals);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Migration Kit Ingestion & Durable Idempotent Import Receipts
+  // ---------------------------------------------------------------------------
+
+  public async importRow(
+    input: Crm2ImportRow,
+    idempotencyKey?: string
+  ): Promise<{ targetId: string; receipt: Crm2ImportReceipt; isExisting: boolean }> {
+    const key = idempotencyKey || input.idempotencyKey;
+    if (!key || key.trim() === '') {
+      throw new DomainValidationError(
+        'Missing required Idempotency-Key header or field',
+        [{ field: 'idempotencyKey', message: 'Idempotency key is required', code: 'required' }],
+        400
+      );
+    }
+
+    const digest = requestDigest(input.data);
+    const existing = this.importReceipts.find((r) => r.idempotencyKey === key);
+    if (existing) {
+      if (existing.payloadHash === digest) {
+        return { targetId: existing.targetId, receipt: { ...existing }, isExisting: true };
+      }
+      throw new IdempotencyKeyReusedError(
+        'Idempotency-Key was already used for a different import request',
+        [{ field: 'idempotencyKey', message: 'Payload mismatch for reused idempotency key', code: 'idempotency_conflict' }]
+      );
+    }
+
+    let targetId: string;
+    let sourceId: string = (input.data['sourceId'] as string) || (input.data['source_id'] as string) || '';
+
+    if (input.entity === 'deal') {
+      const dealInput = {
+        name: input.data['name'] as string,
+        contact_id: (input.data['contact_id'] ?? input.data['contactId'] ?? null) as string | null,
+        value: String(input.data['value'] ?? ''),
+        currency: (input.data['currency'] as string) || 'USD',
+        stage_name: (input.data['stage_name'] ?? input.data['stageName'] ?? 'New') as any,
+        close_date: (input.data['close_date'] ?? input.data['closeDate'] ?? '') as string,
+      };
+
+      const parseResult = CreateDealInputSchema.safeParse(dealInput);
+      if (!parseResult.success) {
+        throw new DomainValidationError('Invalid import deal payload', parseResult.error.issues, 422);
+      }
+      const created = await this.createDeal(parseResult.data);
+      targetId = created.id;
+      if (!sourceId) sourceId = created.id;
+    } else if (input.entity === 'quote') {
+      const quoteInput = {
+        deal_id: (input.data['deal_id'] ?? input.data['dealId'] ?? '') as string,
+        quote_number: (input.data['quote_number'] ?? input.data['quoteNumber'] ?? '') as string,
+        date: (input.data['date'] ?? input.data['quote_date'] ?? input.data['quoteDate'] ?? '') as string,
+        amount: String(input.data['amount'] ?? ''),
+        currency: (input.data['currency'] as string) || 'USD',
+        note: (input.data['note'] as string | null | undefined) ?? null,
+      };
+
+      const parseResult = CreateQuoteInputSchema.safeParse(quoteInput);
+      if (!parseResult.success) {
+        throw new DomainValidationError('Invalid import quote payload', parseResult.error.issues, 422);
+      }
+      const created = await this.createQuote(parseResult.data);
+      targetId = created.id;
+      if (!sourceId) sourceId = created.id;
+    } else {
+      throw new DomainValidationError(
+        `Unsupported import entity: ${input.entity}`,
+        [{ field: 'entity', message: "Entity must be 'deal' or 'quote'", code: 'invalid_entity' }],
+        422
+      );
+    }
+
+    const receipt: Crm2ImportReceipt = {
+      id: randomUUID(),
+      batchId: input.batchId,
+      sourceRow: input.sourceRow,
+      entity: input.entity,
+      sourceSystem: input.sourceSystem,
+      sourceId,
+      targetId,
+      idempotencyKey: key,
+      payloadHash: digest,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.importReceipts.push(receipt);
+    return { targetId, receipt: { ...receipt }, isExisting: false };
+  }
+
+  public getReceipts(): Crm2ImportReceipt[] {
+    return [...this.importReceipts];
+  }
+
+  public getReceiptByKey(key: string): Crm2ImportReceipt | undefined {
+    return this.importReceipts.find((r) => r.idempotencyKey === key);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Chunked Batch Load Execution & Idempotent Retries (CRM2-13)
+  // ---------------------------------------------------------------------------
+
+  public async executeBatchLoad(
+    input: ExecuteBatchLoadInput,
+    options?: Crm2BatchLoaderOptions
+  ): Promise<BatchExecutionReport> {
+    const defaultWorker: Crm2RowProcessorFn = async (record) => {
+      const data = record.data as Record<string, unknown>;
+      const isQuote = Boolean(
+        data['quote_number'] ||
+        data['quoteNumber'] ||
+        data['deal_id'] ||
+        data['dealId'] ||
+        data['entity'] === 'quote'
+      );
+      const entity = isQuote ? 'quote' : 'deal';
+
+      const importResult = await this.importRow(
+        {
+          batchId: input.batchId,
+          sourceRow: record.sourceRow,
+          sourceSystem: (data['sourceSystem'] as string) || (data['source_system'] as string) || 'crm2_batch_loader',
+          entity,
+          idempotencyKey: record.idempotencyKey,
+          data,
+        },
+        record.idempotencyKey
+      );
+
+      return {
+        targetId: importResult.targetId,
+        kind: importResult.isExisting ? 'linked' : 'created',
+      };
+    };
+
+    const loaderOptions: Crm2BatchLoaderOptions = {
+      baseBackoffMs: options?.baseBackoffMs,
+      sleepFn: options?.sleepFn,
+      worker: options?.worker ?? defaultWorker,
+    };
+
+    const report = await executeCrm2ChunkedBatchLoad(input, loaderOptions);
+    this.batchReports.set(input.batchId, report);
+    return report;
+  }
+
+  public getBatchReport(batchId: string): BatchExecutionReport | undefined {
+    return this.batchReports.get(batchId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Exact Duplicate Key Policy & Human Review Audit (CRM2-12 / KIT-10)
+  // ---------------------------------------------------------------------------
+
+  public detectDuplicates(input: Crm2DetectDuplicatesInput): DuplicateDetectionResult {
+    const result = detectExactDuplicates(input.records, input.keyType, {
+      batchId: input.batchId,
+      entity: input.entity,
+      registry: this.keyRegistry,
+      autoMerge: input.autoMerge,
+    });
+    this.duplicateQueue.addCandidates(result.duplicateCandidates);
+    return result;
+  }
+
+  public getHeldDuplicates(query?: {
+    batchId?: string;
+    keyType?: string;
+    entity?: string;
+  }): Crm2DuplicateCandidate[] {
+    return this.duplicateQueue.listHeld(query);
+  }
+
+  public resolveDuplicate(input: Crm2ResolveDuplicateInput): Crm2DuplicateAuditLogEntry {
+    const audit = this.duplicateQueue.resolve(input);
+
+    // If decision is MERGE, handle target-side consolidation
+    if (input.decision === 'MERGE') {
+      const keptDeal = this.deals.find((d) => d.id === input.keptId);
+      const mergedDealIndex = this.deals.findIndex((d) => d.id === input.mergedId);
+      if (keptDeal && mergedDealIndex !== -1) {
+        // Reassign child quotes pointing to mergedId over to keptId
+        for (let i = 0; i < this.quotes.length; i++) {
+          if (this.quotes[i]!.deal_id === input.mergedId) {
+            this.quotes[i] = {
+              ...this.quotes[i]!,
+              deal_id: input.keptId,
+              updated_at: new Date().toISOString(),
+            };
+          }
+        }
+      }
+    }
+
+    return audit;
+  }
+
+  public getDuplicateAuditLogs(query?: {
+    candidateId?: string;
+    actorId?: string;
+    entity?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    return this.duplicateQueue.getAuditLogs(query);
+  }
+
+  public evaluateDealDuplicate(candidate: DealCandidate): DealDuplicateEvaluationResult {
+    const pool = this.deals.map((d) => ({
+      id: d.id,
+      name: d.name,
+      stageId: d.stage_id,
+      stageName: d.stage_name,
+      contactId: d.contact_id,
+      value: d.value,
+      currency: d.currency,
+    }));
+    return evaluateDealDuplicate(candidate, pool);
+  }
+
+  public evaluateQuoteDuplicate(candidate: QuoteCandidate): QuoteDuplicateEvaluationResult {
+    const pool = this.quotes.map((q) => ({
+      id: q.id,
+      quoteNumber: q.quote_number,
+      dealId: q.deal_id,
+      amount: q.amount,
+      currency: q.currency,
+    }));
+    return evaluateQuoteDuplicate(candidate, pool);
+  }
+
+  public getKeyRegistry(): ExactKeyRegistry {
+    return this.keyRegistry;
+  }
+
+  public getDuplicateQueue(): DuplicateReviewQueue {
+    return this.duplicateQueue;
   }
 }
 

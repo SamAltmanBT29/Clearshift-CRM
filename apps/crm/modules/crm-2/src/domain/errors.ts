@@ -6,9 +6,45 @@ import { AppError } from '@cs/kernel';
  */
 
 export class DomainValidationError extends AppError {
-  constructor(message: string, details: Array<{ field?: string; message: string; code?: string }> = []) {
-    super('VALIDATION_ERROR', message, 400, details);
+  constructor(
+    message: string,
+    details: Array<{ field?: string; message: string; code?: string }> = [],
+    statusCode: number = 422
+  ) {
+    super('VALIDATION_ERROR', message, statusCode, details);
     this.name = 'DomainValidationError';
+  }
+}
+
+export class IdempotencyConflictError extends AppError {
+  constructor(
+    message: string = 'Idempotency conflict on requested entity',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('IDEMPOTENCY_CONFLICT', message, 409, details);
+    this.name = 'IdempotencyConflictError';
+  }
+}
+
+export class IdempotencyKeyReusedError extends AppError {
+  constructor(
+    message: string = 'Idempotency-Key was already used for a different request payload',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('IDEMPOTENCY_KEY_REUSED', message, 409, details);
+    this.name = 'IdempotencyKeyReusedError';
+  }
+}
+
+export class ProtectedFieldMutationError extends AppError {
+  constructor(fieldName: string) {
+    super(
+      'PROTECTED_FIELD_MUTATION',
+      `Field '${fieldName}' is protected/system-maintained and cannot be updated from user edit`,
+      422,
+      [{ field: fieldName, message: 'Protected field cannot be altered by client', code: 'protected_field' }]
+    );
+    this.name = 'ProtectedFieldMutationError';
   }
 }
 
@@ -74,5 +110,34 @@ export class DuplicateRecordError extends AppError {
       { field, message: `${entityType} ${key} must be unique`, code: 'unique_violation' },
     ]);
     this.name = 'DuplicateRecordError';
+  }
+}
+
+export class BatchLoadHaltedError extends AppError {
+  constructor(
+    message = 'Batch execution stopped immediately: row failures exceeded the 10% threshold.',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('STOPPED_EXCESSIVE_FAILURES', message, 422, details);
+    this.name = 'BatchLoadHaltedError';
+  }
+}
+
+export class AutoMergeForbiddenError extends AppError {
+  constructor(
+    message = 'Automatic fuzzy or unreviewed merging is forbidden in V1. Duplicate candidates must be held for authorized human review.',
+    details: Array<{ field?: string; message: string; code?: string }> = []
+  ) {
+    super('AUTO_MERGE_FORBIDDEN', message, 422, details);
+    this.name = 'AutoMergeForbiddenError';
+  }
+}
+
+export class DuplicateCandidateNotFoundError extends AppError {
+  constructor(id: string) {
+    super('NOT_FOUND', `Duplicate candidate with ID '${id}' not found`, 404, [
+      { field: 'candidateId', message: `Candidate '${id}' does not exist`, code: 'candidate_not_found' },
+    ]);
+    this.name = 'DuplicateCandidateNotFoundError';
   }
 }

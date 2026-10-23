@@ -1,18 +1,18 @@
 # ClearShift CRM — Data Dictionary: CRM-5 Migration Control Center and Reports
 
-**Module ID:** `CRM-5`  
-**Module Name:** Migration Control Center and Reports  
-**Owning Team:** Team `crm-reports` (Group 5)  
-**Schema Version:** 1.0.0  
-**Storage Engine:** PostgreSQL 18.6 with Drizzle ORM  
-**Target Milestone:** Gate G1 — Design Complete (Weeks 1–2)  
+**Module ID:** `CRM-5`
+**Module Name:** Migration Control Center and Reports
+**Owning Team:** Team `crm-reports` (Group 5)
+**Schema Version:** 1.0.0
+**Storage Engine:** PostgreSQL 18.6 with Drizzle ORM
+**Target Milestone:** Gate G1 — Design Complete (Weeks 1–2)
 **Access Pattern:** Read-only event projections and quality audits; strictly zero direct cross-module writes.
 
 ---
 
-## 1. Entity Relationship Overview
+## 1. Entity Relationship Overview & Master-Data Ownership
 
-CRM-5 maintains 4 core tables to record migration runs, compute quality scores, inspect failed rows, and audit row-level reconciliation balance sheets:
+CRM-5 maintains 5 core tables to record migration runs, compute quality scores, inspect failed rows, audit row-level reconciliation balance sheets, and store durable import receipts:
 
 ```
 ┌─────────────────────────────────┐
@@ -32,8 +32,20 @@ CRM-5 maintains 4 core tables to record migration runs, compute quality scores, 
                  ┌──────────────────────────────────────┐
                  │    crm5_reconciliation_reports       │
                  │   (Conservation Balance Sheet)       │
+                 └──────────────────┬───────────────────┘
+                                    │
+                                    │ (target_id)
+                                    ▼
+                 ┌──────────────────────────────────────┐
+                 │        crm5_import_receipts          │
+                 │      (Atomic Durable Receipts)       │
                  └──────────────────────────────────────┘
 ```
+
+* **Visual ERD & Master-Data Boundaries:** See [`apps/crm/modules/crm-5/docs/erd.md`](../../apps/crm/modules/crm-5/docs/erd.md).
+* **Requirement-to-Test Traceability Matrix:** See [`apps/crm/modules/crm-5/docs/traceability-matrix.md`](../../apps/crm/modules/crm-5/docs/traceability-matrix.md).
+* **Dirty Data Pack Plan:** See [`apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md).
+* **Module-Level Data Dictionary:** See [`apps/crm/modules/crm-5/docs/data-dictionary.md`](../../apps/crm/modules/crm-5/docs/data-dictionary.md).
 
 ---
 
@@ -604,3 +616,85 @@ Every protected route registers `endpointPreHandlers(fastify, allowedRoles)` exe
 * **Date:** 2026-10-23
 * **Status:** Verified & Passing
 * **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
+
+---
+
+## 17. Migration Control Center Runs List Screen, Search/Filter & Stable UI States (Gate G2 / CRM5-04 / Issue #49)
+
+### 17.1 Scope & Architecture Alignment
+Conforming to ClearShift CRM SDS v2.0 §4.8, FR-CRM5-01..07, and Issue #49 (`[CRM5-04]`), the primary Migration Control Center run list screen (`RunsListPage`) provides real-time, read-only observability of migration run projections across all CRM modules. The implementation strictly consumes public contracts (`@clearshift/contracts`), shared platform primitives (`@cs/ui`), and the dedicated type-safe API client (`apps/crm/modules/crm-5/web/src/api/crm-5.ts`).
+
+### 17.2 Component Hierarchy & Contract Adherence
+* **`RunsListPage` (`apps/crm/modules/crm-5/web/src/pages/RunsListPage.tsx`)**:
+  - Serves as the primary vertical slice container for `/crm-5/runs`.
+  - Connects to `/api/v1/crm-control/runs` via `getRuns(query, options)`.
+  - Validates all server responses using `PaginatedRunsResponseSchema` with zero hard-coded demo data in the production rendering path.
+  - Exposes controlled props and simulation options (`options.simulateError`, `options.simulatePermissionDenied`) for deterministic automated testing.
+* **`RunsTable` (`apps/crm/modules/crm-5/web/src/components/RunsTable.tsx`)**:
+  - Direct implementation using `@cs/ui` accessible table primitives (`Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell`, `Badge`).
+  - Displays all 9 SDS-mandated columns: `Batch ID`, `Module`, `Step`, `Status`, `Records In`, `Records Out`, `Rejected`, `Started At`, and `Completed At`.
+  - Formats numbers with locale string, dates as readable ISO timestamps, and statuses to semantic `@cs/ui` Badge variants (`completed` -> `success`, `running` -> `info`, `pending` -> `neutral`, `failed` -> `danger`, `halted` -> `warning`).
+  - Highlights row rejections in rose pill badge when `recordsRejected > 0`.
+  - Features cell text sanitization to neutralize spreadsheet formula injection (`=`, `+`, `-`, `@`).
+
+### 17.3 Query Mutation & Page 1 Reset Lifecycle
+* **Server-Side Pagination & Hard Bounds**:
+  - Adheres strictly to the bounded pagination contract: page size defaults to 20 and is capped at 100 on the server.
+  - Never fetches all rows into browser memory.
+* **Deterministic Filter Reset Invariant**:
+  - Any mutation to search text (searching by `batchId`), `module` dropdown, or `status` dropdown updates query parameters and immediately resets pagination to `page = 1`.
+  - Active filter badges render dynamically with individual removal triggers and a global "Reset" action that clears all active dimensions and queries `page = 1`.
+
+### 17.4 Distinct Stable States
+The interface transitions deterministically across 5 distinct, accessible states:
+1. **Loading State (`TableSkeleton`)**:
+   - Renders 5-row by 9-column shimmer skeleton with `role="status"` and `aria-busy="true"` when asynchronous fetch is in-flight.
+2. **Zero-Data State (`EmptyState`)**:
+   - When no records exist and filters are active, displays `"No matching migration runs"` with actionable `"Clear All Filters"` button.
+   - When database has zero records registered, displays `"No migration runs recorded"`.
+3. **API Failure State (`ErrorAlert`)**:
+   - Renders alert banner with `role="alert"` and `aria-live="assertive"`.
+   - Strips internal system paths and raw stack traces (`sanitizeErrorMessage`).
+   - Provides keyboard-operable `"Retry Connection"` button that triggers re-fetch.
+4. **403 Forbidden State (`AccessDeniedView`)**:
+   - Activates when server returns HTTP 403 or `isPermissionDenied: true`.
+   - Explicitly displays the required capability (`control:read`) and resource name (`Migration Control Center`).
+5. **Populated Data State**:
+   - Renders `RunsTable` along with `@cs/ui` `Pagination` control supporting previous/next navigation and page jump.
+
+### 17.5 Accessibility, WAI-ARIA & Keyboard Navigation
+* **Landmarks & Regions**: Page wrapper uses `<main role="main" aria-label="Migration Runs List Page">`, table wrapper uses `role="region" aria-label="Migration Runs Projections Table"` with `tabIndex={0}` for responsive horizontal scrolling on tablets and desktops.
+* **Keyboard-Operable Controls**:
+  - Sortable column headers feature `<button type="button">` with descriptive accessible names (`Sort by Batch ID ascending/descending`) and `aria-sort` attributes.
+  - Table rows support `onKeyDown` navigation; pressing `Enter` or `Space` activates row selection (`onRowClick`).
+  - Search input supports keyboard submission on `Enter` and clearing on `Escape` or clear button.
+* **Formula Injection Prevention**: Text values starting with spreadsheet formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) are safely escaped with leading single quotes (`'`) to neutralize CSV/formula execution vulnerabilities (CWE-1236).
+
+### 17.6 Domain Invariant Verification
+Automated test suites assert that:
+1. **Module Read-Only Isolation**: CRM-5 only reads approved event projections (`crm5_runs`, `crm5_scores`, `crm5_rejects`, `crm5_reconciliation`) and never writes into another module's private tables (`crm1_contacts`, `crm2_deals`, `crm3_activities`, `crm4_analytics`) or mutates shared Kit batches directly (`kit_batches`).
+2. **Quality Score Formula**: Exactly $100 \times (\text{completeness} + \text{validity} + (1 - \text{duplicate\_rate}) + (1 - \text{reject\_rate}) + \text{link\_integrity}) / 5$, rounded to 2 decimal places, returning `null` (N/A) if any component is missing.
+3. **Reconciliation Conservation**: Evaluates $\text{source} = \text{loaded} + \text{rejected} + \text{merged} + \text{skipped}$ and verifies status is `OK` if and only if $\text{unaccounted} = 0$.
+
+### 17.7 Versioned Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G2-002`
+* **Milestone:** Gate G2 — UI & API List Integration (Weeks 3–4)
+* **Date:** 2026-10-23
+* **Status:** Verified & Passing
+* **Sign-off:** Role 1 (Core Lead) & Role 4 (Data/QA Lead)
+## 17. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM5-24] — Issue #197)
+
+### 17.1 Specification Authority & Governance Alignment
+In accordance with ClearShift Project Plan v3.0 §17, Master Architecture Baseline 1.0-A §4.2, and Issue #197 `[CRM5-24]`, CRM-5 Migration Control Center and Reports establishes production-grade design specifications for Gate G1:
+1. **Field-Level Data Dictionary:** Defines every entity column across all 5 tables (`crm5_runs`, `crm5_scores`, `crm5_rejects`, `crm5_reconciliation_reports`, `crm5_import_receipts`) with PostgreSQL data type, nullability, constraints, business rule, and synthetic example. Verified against Drizzle ORM schema via automated tests (`apps/crm/modules/crm-5/tests/domain/qa-g1-design.test.ts`).
+2. **Entity-Relationship Diagram & Ownership Boundaries:** Visual Mermaid ERD, cardinality catalog, and PLT-03 master-data boundaries documented in [`apps/crm/modules/crm-5/docs/erd.md`](../../apps/crm/modules/crm-5/docs/erd.md). Asserts that CRM-5 is strictly read-only with zero direct external SQL mutations.
+3. **Requirement-to-Test Traceability Matrix:** Comprehensive 26-requirement matrix mapping `FR-CRM5-01` through `FR-CRM5-26` to existing automated test suites documented in [`apps/crm/modules/crm-5/docs/traceability-matrix.md`](../../apps/crm/modules/crm-5/docs/traceability-matrix.md).
+4. **Dirty Data Pack Plan:** Synthetic edge-case strategy covering 11 disjoint anomaly categories from `manifest.json` and 1,000-row canonical balance sheets documented in [`apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md`](../../apps/crm/modules/crm-5/docs/dirty-data-pack-plan.md).
+5. **Executable QA Invariants:** Reusable data structures and conservation assertion helpers implemented in [`apps/crm/modules/crm-5/src/domain/qa-specs.ts`](../../apps/crm/modules/crm-5/src/domain/qa-specs.ts).
+
+### 17.2 Versioned Change Record & Gate G1 Sign-off
+* **Change Record ID:** `CR-CRM5-G1-004`
+* **Milestone:** Gate G1 — Design Complete (Sprint 1)
+* **Date:** 2026-10-23
+* **Status:** Verified, 100% Tests Passing, Approved for V1
+* **Sign-off Authority:** Group 5 Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)
