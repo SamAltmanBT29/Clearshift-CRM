@@ -3,7 +3,11 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "strict": true,
     "strictNullChecks": true,
     "noImplicitAny": true,
@@ -42,10 +46,12 @@
       "@cs/mod-crm3": ["./apps/crm/modules/crm-3/src/index.ts"],
       "@cs/mod-crm4": ["./apps/crm/modules/crm-4/src/index.ts"],
       "@cs/mod-crm5": ["./apps/crm/modules/crm-5/src/index.ts"]
-    }
+    },
+    "jsx": "react"
   },
   "include": [
     "apps/**/*.ts",
+    "apps/**/*.tsx",
     "packages/**/*.ts"
   ],
   "exclude": [

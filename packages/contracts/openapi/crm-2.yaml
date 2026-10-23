@@ -1,0 +1,625 @@
+openapi: 3.1.0
+info:
+  title: ClearShift CRM-2 Deals, Pipeline and Quotes API
+  description: Public module contract for CRM-2 (Deals, Pipeline stages, Quotes).
+  version: 1.0.0
+servers:
+  - url: /api/v1/crm-deals
+    description: V1 Base Endpoint
+
+paths:
+  /deals:
+    get:
+      summary: List deals with search, stage filter, and server-side pagination
+      operationId: listDeals
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number (1-based)
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of records per page
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Free-text search matching deal name or contact name
+        - name: stage
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/StageName'
+          description: Filter deals by pipeline stage
+      responses:
+        '200':
+          description: Paginated deals list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealsListResponse'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Create a new deal
+      operationId: createDeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDealInput'
+      responses:
+        '201':
+          description: Deal created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deal'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Referential integrity error (contact not found)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /deals/{id}:
+    get:
+      summary: Retrieve a single deal by ID
+      operationId: getDealById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deal'
+        '404':
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update an existing deal
+      operationId: updateDeal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDealInput'
+      responses:
+        '200':
+          description: Deal updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deal'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid state transition or referential integrity error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /stages:
+    get:
+      summary: Retrieve fixed pipeline stages
+      operationId: listStages
+      description: Returns the fixed seed stages in pipeline order (New, Qualified, Proposal, Negotiation, Won, Lost)
+      responses:
+        '200':
+          description: List of pipeline stages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StagesListResponse'
+
+  /quotes:
+    get:
+      summary: List quotes
+      operationId: listQuotes
+      parameters:
+        - name: deal_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter quotes by deal ID
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Paginated quotes list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotesListResponse'
+
+    post:
+      summary: Create a quote for a deal
+      operationId: createQuote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuoteInput'
+      responses:
+        '201':
+          description: Quote created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate quote number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Referential integrity error (deal not found)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /quotes/{id}:
+    get:
+      summary: Retrieve a single quote by ID
+      operationId: getQuoteById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Quote details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '404':
+          description: Quote not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update a quote
+      operationId: updateQuote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuoteInput'
+      responses:
+        '200':
+          description: Quote updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Quote not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate quote number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    StageName:
+      type: string
+      enum:
+        - New
+        - Qualified
+        - Proposal
+        - Negotiation
+        - Won
+        - Lost
+      description: Fixed pipeline stage names
+
+    Stage:
+      type: object
+      required:
+        - id
+        - name
+        - order
+        - is_closed_won
+        - is_closed_lost
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          $ref: '#/components/schemas/StageName'
+        order:
+          type: integer
+          minimum: 1
+          maximum: 6
+        is_closed_won:
+          type: boolean
+        is_closed_lost:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    StagesListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stage'
+
+    Deal:
+      type: object
+      required:
+        - id
+        - name
+        - contact_id
+        - value
+        - currency
+        - stage_id
+        - stage_name
+        - close_date
+        - is_orphan
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        contact_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Nullable foreign key. When null, deal is flagged as orphan.
+        contact_name:
+          type: string
+          nullable: true
+        value:
+          type: string
+          pattern: '^\d+(\.\d{1,4})?$'
+          description: Decimal string representation
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: USD
+        stage_id:
+          type: string
+          format: uuid
+        stage_name:
+          $ref: '#/components/schemas/StageName'
+        close_date:
+          type: string
+          format: date
+          example: '2026-11-30'
+        is_orphan:
+          type: boolean
+          description: True when contact_id is null
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateDealInput:
+      type: object
+      required:
+        - name
+        - value
+        - currency
+        - stage_name
+        - close_date
+      properties:
+        name:
+          type: string
+        contact_id:
+          type: string
+          format: uuid
+          nullable: true
+        value:
+          type: string
+          pattern: '^\d+(\.\d{1,4})?$'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          default: USD
+        stage_name:
+          $ref: '#/components/schemas/StageName'
+          default: New
+        close_date:
+          type: string
+          format: date
+
+    UpdateDealInput:
+      type: object
+      properties:
+        name:
+          type: string
+        contact_id:
+          type: string
+          format: uuid
+          nullable: true
+        value:
+          type: string
+        currency:
+          type: string
+        stage_name:
+          $ref: '#/components/schemas/StageName'
+        close_date:
+          type: string
+          format: date
+
+    Quote:
+      type: object
+      required:
+        - id
+        - deal_id
+        - quote_number
+        - date
+        - amount
+        - currency
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        deal_id:
+          type: string
+          format: uuid
+        deal_name:
+          type: string
+        quote_number:
+          type: string
+        date:
+          type: string
+          format: date
+        amount:
+          type: string
+          pattern: '^\d+(\.\d{1,4})?$'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateQuoteInput:
+      type: object
+      required:
+        - deal_id
+        - quote_number
+        - date
+        - amount
+        - currency
+      properties:
+        deal_id:
+          type: string
+          format: uuid
+        quote_number:
+          type: string
+        date:
+          type: string
+          format: date
+        amount:
+          type: string
+        currency:
+          type: string
+          default: USD
+        note:
+          type: string
+          nullable: true
+
+    UpdateQuoteInput:
+      type: object
+      properties:
+        quote_number:
+          type: string
+        date:
+          type: string
+          format: date
+        amount:
+          type: string
+        currency:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    PaginationMeta:
+      type: object
+      required:
+        - page
+        - pageSize
+        - totalCount
+        - totalPages
+        - hasNextPage
+        - hasPreviousPage
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalCount:
+          type: integer
+        totalPages:
+          type: integer
+        hasNextPage:
+          type: boolean
+        hasPreviousPage:
+          type: boolean
+
+    DealsListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deal'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    QuotesListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Quote'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          oneOf:
+            - type: array
+              items:
+                type: object
+            - type: object
+          nullable: true

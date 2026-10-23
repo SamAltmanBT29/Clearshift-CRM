@@ -3,6 +3,15 @@ import { z } from "zod";
 export const CRM1_API_PREFIX = "/api/v1/crm-contacts";
 
 export const CRM1LeadStatusSchema = z.enum(["New", "Working", "Qualified", "Closed"]);
+export type CRM1LeadStatus = z.infer<typeof CRM1LeadStatusSchema>;
+export const CRM1_LEAD_STATUS_TRANSITIONS: Readonly<
+  Record<CRM1LeadStatus, readonly CRM1LeadStatus[]>
+> = {
+  New: ["Working"],
+  Working: ["Qualified"],
+  Qualified: ["Closed"],
+  Closed: []
+};
 export const CRM1ConsentStatusSchema = z.enum(["unknown", "granted", "withdrawn"]);
 export const CRM1EntityTypeSchema = z.enum(["contact", "company", "lead"]);
 export const CRM1ImportStatusSchema = z.enum(["pending", "processing", "completed", "failed"]);
@@ -27,6 +36,18 @@ export const CRM1ContactSchema = z.object({
   unsubscribedUpdatedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
+});
+
+export const CRM1ContactReadSchema = CRM1ContactSchema.extend({
+  companyName: z.string().min(1).nullable()
+}).superRefine((contact, context) => {
+  if ((contact.companyId === null) !== (contact.companyName === null)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "companyId and companyName must both be present or absent",
+      path: ["companyName"]
+    });
+  }
 });
 
 const CRM1ContactInputSchema = z.object({
@@ -82,6 +103,11 @@ export const CRM1LeadSchema = z.object({
   updatedAt: z.string().datetime()
 });
 
+export const CRM1LeadReadSchema = CRM1LeadSchema.extend({
+  contactName: z.string().min(1),
+  contactEmail: z.string().email().nullable()
+});
+
 const CRM1LeadInputSchema = z.object({
   contactId: z.string().uuid(),
   status: CRM1LeadStatusSchema
@@ -96,7 +122,7 @@ export const CRM1LeadPatchSchema = CRM1LeadInputSchema.partial()
 export const CRM1ListQuerySchema = z.object({
   search: z.string().trim().optional(),
   page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().default(25)
+  pageSize: z.coerce.number().int().positive().max(100).default(25)
 });
 
 export const CRM1ListResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
@@ -203,17 +229,18 @@ export const CRM1ImportBatchDetailSchema = CRM1ImportBatchSchema.extend({
 export const CRM1ImportRejectListSchema = CRM1ListResponseSchema(CRM1ImportRejectSchema);
 
 export type CRM1Contact = z.infer<typeof CRM1ContactSchema>;
+export type CRM1ContactRead = z.infer<typeof CRM1ContactReadSchema>;
 export type CRM1ContactCreate = z.infer<typeof CRM1ContactCreateSchema>;
 export type CRM1ContactPatch = z.infer<typeof CRM1ContactPatchSchema>;
 export type CRM1Company = z.infer<typeof CRM1CompanySchema>;
 export type CRM1CompanyCreate = z.infer<typeof CRM1CompanyCreateSchema>;
 export type CRM1CompanyPatch = z.infer<typeof CRM1CompanyPatchSchema>;
 export type CRM1Lead = z.infer<typeof CRM1LeadSchema>;
+export type CRM1LeadRead = z.infer<typeof CRM1LeadReadSchema>;
 export type CRM1LeadCreate = z.infer<typeof CRM1LeadCreateSchema>;
 export type CRM1LeadPatch = z.infer<typeof CRM1LeadPatchSchema>;
 export type CRM1ImportCreate = z.infer<typeof CRM1ImportCreateSchema>;
 export type CRM1ImportRow = z.infer<typeof CRM1ImportRowSchema>;
-export type CRM1LeadStatus = z.infer<typeof CRM1LeadStatusSchema>;
 export type CRM1ConsentStatus = z.infer<typeof CRM1ConsentStatusSchema>;
 export type CRM1EntityType = z.infer<typeof CRM1EntityTypeSchema>;
 export type CRM1ImportStatus = z.infer<typeof CRM1ImportStatusSchema>;
@@ -602,4 +629,3 @@ export const CRM1ErrorEnvelopeSchema = z.object({
     .optional(),
 });
 export type CRM1ErrorEnvelope = z.infer<typeof CRM1ErrorEnvelopeSchema>;
-

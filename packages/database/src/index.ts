@@ -4,3 +4,5 @@ export * from "./tx.js";
 export * from "./clients.js";
 export * from "./schema/platform.js";
 export * from "./schema/audit.js";
+export * from "./schema/kit.js";
+export * from "./outbox/index.js";
