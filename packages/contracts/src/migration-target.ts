@@ -713,3 +713,100 @@ export const BatchProfiledPayloadSchema = z.object({
 });
 export type BatchProfiledPayload = z.infer<typeof BatchProfiledPayloadSchema>;
 
+/**
+ * ---------------------------------------------------------------------------
+ * KIT-04: V1 Cleaning Rule Registry, Rejection & Audit Log Contracts
+ * ---------------------------------------------------------------------------
+ */
+
+export const CleaningRuleIdSchema = z.enum([
+  'RL-TEXT-01',
+  'RL-TEXT-02',
+  'RL-NAME-01',
+  'RL-EMAIL-01',
+  'RL-PHONE-01',
+  'RL-DATE-01',
+  'RL-CURRENCY-01',
+  'RL-ADDR-01',
+  'RL-REQ-01',
+  'RL-FORMAT-01',
+  'RL-DUP-01',
+  'RL-TAX-01',
+]);
+export type CleaningRuleId = z.infer<typeof CleaningRuleIdSchema>;
+
+export const V1_CLEANING_RULES: readonly CleaningRuleId[] = [
+  'RL-TEXT-01',
+  'RL-TEXT-02',
+  'RL-NAME-01',
+  'RL-EMAIL-01',
+  'RL-PHONE-01',
+  'RL-DATE-01',
+  'RL-CURRENCY-01',
+  'RL-ADDR-01',
+  'RL-REQ-01',
+  'RL-FORMAT-01',
+  'RL-DUP-01',
+  'RL-TAX-01',
+] as const;
+
+export const CleanLogEntrySchema = z.object({
+  id: z.string().uuid().optional(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  fieldName: z.string().min(1),
+  oldValue: z.string().nullable(),
+  newValue: z.string().nullable(),
+  ruleId: CleaningRuleIdSchema,
+  ruleVersion: z.string().min(1).default('1.0.0'),
+  createdAt: z.coerce.date().optional(),
+});
+export type CleanLogEntry = z.infer<typeof CleanLogEntrySchema>;
+
+export const KitRejectSchema = z.object({
+  id: z.string().uuid().optional(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  entity: z.string().min(1),
+  reasonCode: z.string().min(1),
+  reasonText: z.string().min(1),
+  rawJson: z.record(z.unknown()).default({}),
+  createdAt: z.coerce.date().optional(),
+});
+export type KitReject = z.infer<typeof KitRejectSchema>;
+
+export const StgRowStatusSchema = z.enum(['cleaned', 'rejected']);
+export type StgRowStatus = z.infer<typeof StgRowStatusSchema>;
+
+export const StgRowSchema = z.object({
+  id: z.string().uuid().optional(),
+  batchId: z.string().uuid(),
+  sourceRow: z.number().int().positive(),
+  status: StgRowStatusSchema,
+  cleanedPayload: z.record(z.unknown()).default({}),
+  rejectReason: z.string().nullable().optional(),
+  goldenId: z.string().nullable().optional(),
+  createdAt: z.coerce.date().optional(),
+});
+export type StgRow = z.infer<typeof StgRowSchema>;
+
+export const CleaningRuleConfigSchema = z.object({
+  enabledRules: z.array(CleaningRuleIdSchema).optional(),
+  disabledRules: z.array(CleaningRuleIdSchema).optional(),
+  dateFormat: z.string().default('YYYY-MM-DD'),
+  phoneCountry: z.string().default('+1'),
+  requiredFields: z.array(z.string()).default([]),
+  addressDictionary: z.record(z.string()).optional(),
+});
+export type CleaningRuleConfig = z.infer<typeof CleaningRuleConfigSchema>;
+
+export const BatchCleanedPayloadSchema = z.object({
+  batchId: z.string().uuid(),
+  module: z.string().min(1),
+  cleanedRows: z.number().int().nonnegative(),
+  rejectedRows: z.number().int().nonnegative(),
+  totalRows: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative().optional(),
+  ruleVersion: z.string().default('1.0.0'),
+});
+export type BatchCleanedPayload = z.infer<typeof BatchCleanedPayloadSchema>;

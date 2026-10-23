@@ -337,4 +337,108 @@ Upon completing profiling:
    }
    ```
 
+---
 
+## 9. V1 Cleaning Rule Registry, Rejection & Per-Field Audit Trail (KIT-04)
+
+### 9.1 Shared Cleaning Architecture
+
+Step 3 (Clean) processes extracted raw rows from `public.raw_rows` deterministically without mutating source records. It normalizes data according to the 12 core rules, rejects records with required-field violations, logs every modified field to `public.kit_clean_log`, stages records in `public.stg_rows`, and publishes `batch.cleaned` to `public.outbox`:
+
+```
+   [ Raw Rows (public.raw_rows) ]
+                 │
+                 ▼
+     [ Cleaning Rule Registry ]
+     (12 Core V1 Rules from @cs/core)
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+   [ Valid / Clean ]   [ Required Failure ]
+        │                 │
+        ▼                 ▼
+   Normalize & Log     Reject Row
+   (kit_clean_log)     (kit_rejects)
+        │                 │
+        └────────┬────────┘
+                 ▼
+      [ Staging (stg_rows) ]
+                 │
+                 ▼
+    [ Outbox: batch.cleaned ]
+```
+
+### 9.2 The 12 V1 Cleaning Rules (`@cs/core/cleaning`)
+
+| Rule ID | Name | Behavior | Failure Outcome |
+|---|---|---|---|
+| **`RL-TEXT-01`** | Whitespace Normalizer | Trims leading and trailing spaces; collapses multiple internal spaces into a single ASCII space. | Safe fallback |
+| **`RL-TEXT-02`** | Control Char Sanitizer | Strips ASCII control characters `[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]` and BOM (`\uFEFF`). | Safe fallback |
+| **`RL-NAME-01`** | Name Proper Casing | Capitalizes names to title case; preserves special prefixes (`O'Brien`, `McDonald`, `MacArthur`, `van der`, `de`, `di`) and hyphens (`Mary-Jane`). | Safe fallback |
+| **`RL-EMAIL-01`** | Email Sanitizer & Validator | Trims, lowercases, verifies exactly one `@` sign and valid domain with at least one dot. | Required: reject with TS-05 reason ("Email is not valid: value has no @ sign"). Optional: flag warning. |
+| **`RL-PHONE-01`** | Phone Standardization | Keeps digits and leading `+`. Automatically prepends declared file country code (e.g. `+1`) to 10-digit national numbers; verifies E.164 length (7–15 digits). | Required: reject with `INVALID_PHONE`. Optional: flag warning. |
+| **`RL-DATE-01`** | Date Normalizer | Parses dates matching declared file format (`YYYY-MM-DD`, `DD-MM-YYYY`, `MM/DD/YYYY`) and outputs canonical ISO-8601 (`YYYY-MM-DD`). | Required: reject with `INVALID_DATE`. Optional: flag warning. |
+| **`RL-CURRENCY-01`** | Currency Normalizer | Strips currency symbols (`$`, `€`, `£`, `₹`, `¥`), eliminates thousand separators, formats as exact 2-decimal string via `Decimal.js`. | Required: reject with `INVALID_CURRENCY`. Optional: flag warning. |
+| **`RL-ADDR-01`** | Address Standardization | Standardizes cities and countries from an editable canonical dictionary (`Bombay` -> `Mumbai`, `Calcutta` -> `Kolkata`, `US` -> `United States`). | Retains value if unmapped |
+| **`RL-REQ-01`** | Required Fields Check | Checks that designated required fields are present and non-blank. | Required: reject row with `REQUIRED_FIELD_MISSING` and simple message ("Required field '<field>' is missing or empty"). |
+| **`RL-FORMAT-01`** | Generic Format Validator | Validates email, phone, date, and tax format patterns against declared field types. | Required: reject row with `INVALID_FORMAT`. Optional: flag warning. |
+| **`RL-DUP-01`** | Duplicate Key Normalizer | Normalizes duplicate matching keys (e.g. `sku`, `tax_number`, `external_id`) to canonical form. | Safe fallback |
+| **`RL-TAX-01`** | Tax ID Format Check | Normalizes tax identifiers (US EIN, EU VAT, IN GSTIN). If ambiguous or unfamiliar, flags `unknown` instead of rejecting when unsure (SDS RL-TAX-01). | Retains value & flags warning |
+
+### 9.3 Runtime Rule Toggles (On/Off Switches)
+
+Operators can enable or disable individual rules at runtime per batch execution:
+```ts
+const result = await cleanService.cleanBatch(batchId, {
+  requiredFields: ['first_name', 'company', 'email'],
+  phoneCountry: '+1',
+  dateFormat: 'YYYY-MM-DD',
+  disabledRules: ['RL-NAME-01'], // Disables name proper casing for this run
+});
+```
+
+### 9.4 Per-Field Change Audit Trail (`public.kit_clean_log`)
+
+Every field value modified by a cleaning rule records an immutable audit log entry:
+- **`batch_id`**: Batch UUID.
+- **`source_row`**: 1-based source row index.
+- **`field_name`**: Column name that was transformed.
+- **`old_value`**: Pre-cleaning value (masked if sensitive).
+- **`new_value`**: Post-cleaning value (masked if sensitive).
+- **`rule_id`**: Identifier of the rule that made the change (e.g. `RL-EMAIL-01`).
+- **`rule_version`**: Version of the rule library (default `1.0.0`).
+
+### 9.5 Sensitive Data Redaction (PLT-10 Compliance)
+
+Any field containing sensitive data (passwords, tokens, tax IDs, salaries, compensation, bank accounts, credit cards) is automatically masked prior to audit log persistence:
+- Masking format: `****<last4>` for accounts/tax IDs, `[REDACTED_FINANCIAL]` or `****<last4>` for salaries, and `[REDACTED_SECRET]` for credentials.
+- Guarantees zero PII or credential leakage to operator logs or audit tables.
+
+### 9.6 Staging & Raw Immutability
+
+- Cleaned and rejected records are staged in `public.stg_rows` with `status` (`cleaned` or `rejected`), `payload`, and `reject_reason`.
+- Rejections are cataloged in `public.kit_rejects` with `reason_code`, `reason_text`, and `raw_json`.
+- Pre-cleaning and post-cleaning cryptographic SHA-256 hashes of `public.raw_rows` are compared; any difference halts execution with an invariant violation error.
+
+### 9.7 Step Completion & Outbox Event Emission
+
+Upon completing Step 3:
+1. Batch registry records execution in `public.kit_batch_steps` (step name `clean`, status `cleaned`).
+2. Batch status in `public.kit_batches` transitions to `cleaned` with updated `rejected_rows` count.
+3. Outbox event `batch.cleaned` is committed atomically:
+   ```json
+   {
+     "eventType": "batch.cleaned",
+     "aggregateType": "kit_batch",
+     "aggregateId": "BATCH_UUID",
+     "payload": {
+       "batchId": "BATCH_UUID",
+       "module": "crm",
+       "cleanedRows": 925,
+       "rejectedRows": 75,
+       "totalRows": 1000,
+       "durationMs": 185,
+       "ruleVersion": "1.0.0"
+     }
+   }
+   ```

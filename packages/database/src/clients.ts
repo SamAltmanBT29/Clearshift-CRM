@@ -40,7 +40,12 @@ export function assertModuleOwnership(invokingModule: CrmModuleName, targetTable
   }
 
   const expectedPrefix = MODULE_SCHEMA_MAP[invokingModule]?.prefix;
-  const isKitOwned = invokingModule === 'kit' && (targetTableName === 'raw_rows' || targetTableName.startsWith('kit_'));
+  const isKitOwned =
+    invokingModule === 'kit' &&
+    (targetTableName === 'raw_rows' ||
+      targetTableName === 'stg_rows' ||
+      targetTableName.startsWith('kit_') ||
+      targetTableName.startsWith('stg_'));
   if (!expectedPrefix || (!targetTableName.startsWith(expectedPrefix) && !isKitOwned)) {
     throw new Error(
       `[PLT-03 Ownership Violation] Module '${invokingModule}' is not permitted to mutate table '${targetTableName}'. Target table belongs to '${targetTableName.split('_')[0]}' ownership domain.`

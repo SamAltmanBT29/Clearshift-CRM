@@ -9,6 +9,7 @@
     "./common": "./src/common.ts",
     "./events": "./src/events.ts",
     "./crm-1": "./src/crm-1.ts",
+    "./crm-2": "./src/crm-2.ts",
     "./crm-5": "./src/crm-5.ts",
     "./openapi": "./openapi"
   },
