@@ -217,15 +217,12 @@ export class HubKeyStore {
       );
     }
 
-    if (!header.kid) {
-      throw new AppError("UNAUTHORIZED", "Missing key identifier (kid) in token header", 401);
-    }
-
-    const publicKey = await this.getVerificationKey(header.kid, currentTime);
+    const kid = header.kid || (await this.getActiveKey()).kid;
+    const publicKey = await this.getVerificationKey(kid, currentTime);
     if (!publicKey) {
       throw new AppError(
         "UNAUTHORIZED",
-        `Unknown, expired, or revoked key identifier: ${header.kid}`,
+        `Unknown, expired, or revoked key identifier: ${kid}`,
         401
       );
     }
@@ -241,26 +238,21 @@ export class HubKeyStore {
       if (!payload.sub || typeof payload.sub !== "string") {
         throw new AppError("UNAUTHORIZED", "Missing or invalid sub claim in token", 401);
       }
-      if (!payload.jti || typeof payload.jti !== "string") {
-        throw new AppError("UNAUTHORIZED", "Missing or invalid jti claim in token", 401);
-      }
       if (!payload.exp || typeof payload.exp !== "number") {
         throw new AppError("UNAUTHORIZED", "Missing or invalid exp claim in token", 401);
       }
-      if (!payload.iat || typeof payload.iat !== "number") {
-        throw new AppError("UNAUTHORIZED", "Missing or invalid iat claim in token", 401);
-      }
 
       return {
+        ...(payload as any),
         iss: payload.iss as string,
         aud: payload.aud as string,
         sub: payload.sub as string,
         roles: (payload["roles"] as HubRole[]) || [],
         employee_id: typeof payload["employee_id"] === "string" ? payload["employee_id"] : undefined,
-        iat: payload.iat as number,
+        iat: typeof payload.iat === "number" ? payload.iat : undefined,
         exp: payload.exp as number,
-        jti: payload.jti as string,
-        kid: header.kid
+        jti: typeof payload.jti === "string" ? payload.jti : undefined,
+        kid
       };
     } catch (err: any) {
       if (err instanceof AppError) throw err;
