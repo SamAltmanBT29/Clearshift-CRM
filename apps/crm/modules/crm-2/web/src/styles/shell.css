@@ -1,0 +1,162 @@
+/* CRM-2 Deals, Pipeline and Quotes Shell Styles */
+/* Consumes shared design system tokens from @clearshift/ui */
+
+.cs-crm2-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  font-family: var(--cs-font-sans, system-ui, sans-serif);
+}
+
+/* Accessibility: Skip to Content Link */
+.cs-skip-link {
+  position: absolute;
+  top: -40px;
+  left: var(--cs-s-4, 16px);
+  background: var(--cs-accent, #1D4ED8);
+  color: #FFFFFF;
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  border-radius: var(--cs-r-md, 4px);
+  z-index: 1000;
+  text-decoration: none;
+  font-weight: 500;
+  transition: top 0.15s ease-in-out;
+}
+
+.cs-skip-link:focus {
+  top: var(--cs-s-4, 16px);
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+/* Shell Header */
+.cs-shell-header {
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+  background-color: var(--cs-surface, #F8FAFC);
+  padding: var(--cs-s-4, 16px) var(--cs-s-6, 24px);
+}
+
+.cs-shell-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--cs-s-3, 12px);
+}
+
+.cs-shell-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-shell-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--cs-text, #0F172A);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.cs-module-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4338CA;
+  background-color: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  border-radius: var(--cs-r-sm, 4px);
+  font-family: monospace;
+}
+
+/* Breadcrumbs Landmark */
+.cs-breadcrumbs {
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-breadcrumb-list {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cs-text-muted, #64748B);
+}
+
+.cs-breadcrumb-item + .cs-breadcrumb-item::before {
+  content: "/";
+  padding: 0 var(--cs-s-2, 8px);
+  color: var(--cs-text-subtle, #94A3B8);
+}
+
+.cs-breadcrumb-link {
+  color: var(--cs-text-muted, #64748B);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.cs-breadcrumb-link:hover {
+  color: var(--cs-accent, #2563EB);
+  text-decoration: underline;
+}
+
+.cs-breadcrumb-current {
+  color: var(--cs-text, #0F172A);
+  font-weight: 600;
+}
+
+/* Tablist Navigation */
+.cs-tablist {
+  display: flex;
+  gap: var(--cs-s-1, 4px);
+  border-bottom: 2px solid transparent;
+  margin-top: var(--cs-s-2, 8px);
+}
+
+.cs-tab-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--cs-text-muted, #64748B);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  border-radius: var(--cs-r-md, 4px) var(--cs-r-md, 4px) 0 0;
+  transition: all 0.15s ease-in-out;
+}
+
+.cs-tab-button:hover {
+  color: var(--cs-text, #0F172A);
+  background-color: rgba(241, 245, 249, 0.7);
+}
+
+.cs-tab-button:focus-visible {
+  outline: 2px solid var(--cs-accent, #2563EB);
+  outline-offset: -2px;
+}
+
+.cs-tab-active {
+  color: #1E40AF;
+  font-weight: 600;
+  border-bottom: 2px solid #2563EB;
+  background-color: #FFFFFF;
+}
+
+/* Main Content Area */
+.cs-shell-main {
+  flex: 1;
+  background-color: var(--cs-bg-alt, #F1F5F9);
+  padding: var(--cs-s-6, 24px);
+}
+
+.cs-tabpanel {
+  width: 100%;
+}

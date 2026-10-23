@@ -13,13 +13,14 @@ import {
   CreateCrm1ImportInputSchema,
   Crm1RejectsQuerySchema,
 } from '@clearshift/contracts';
-import type { RoleType } from '@cs/identity';
+import { Roles, type RoleType } from '@cs/identity';
 import { requireRoles } from '../plugins/auth.js';
 import { CRM1_ENDPOINT_ROLES } from '../policies/roles.js';
 import { redactSensitiveObject } from '../policies/masking.js';
 import { Crm1Service } from '../services/crm1.service.js';
 import { Crm1AuditService, crm1Audit } from '../services/audit.js';
 import { crm1CleaningService } from '../services/crm1-cleaning.service.js';
+import { crm1MappingService } from '../services/crm1-mapping.service.js';
 import { DomainValidationError } from '../domain/errors.js';
 import {
   createEndpointAuthPreHandlers,
@@ -795,5 +796,176 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     const { rows, options, batchId } = parsed.data;
     const result = crm1CleaningService.processBatchCleaning(rows, batchId, options);
     return reply.status(200).send(result);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 6. Mapping Templates & Dry-Run Validation Endpoints (#121, [CRM1-28])
+  // ---------------------------------------------------------------------------
+
+  fastify.get('/mappings/templates', {
+    preHandler: endpointPreHandlers(fastify, [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.MIGRATION_RUNNER, Roles.ADMIN]),
+  }, async (request, reply) => {
+    const QuerySchema = z.object({
+      entity: z.enum(['crm1_contacts', 'crm1_companies', 'crm1_leads']).optional(),
+    });
+    const parsed = QuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid entity filter for templates',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const templates = crm1MappingService.listTemplates(parsed.data.entity);
+    const enums = crm1MappingService.getEnumDictionaries();
+    return reply.status(200).send({
+      templates: templates.map((t) => ({
+        ...t,
+        checksum: crm1MappingService.getTemplate(t.id, t.version).checksum,
+      })),
+      enums,
+    });
+  });
+
+  fastify.get('/mappings/templates/:id', {
+    preHandler: endpointPreHandlers(fastify, [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.MIGRATION_RUNNER, Roles.ADMIN]),
+  }, async (request, reply) => {
+    const ParamsSchema = z.object({ id: z.string().min(1) });
+    const QuerySchema = z.object({ version: z.coerce.number().optional() });
+
+    const pParsed = ParamsSchema.safeParse(request.params);
+    const qParsed = QuerySchema.safeParse(request.query);
+    if (!pParsed.success || !qParsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid template lookup parameters',
+          details: [
+            ...(!pParsed.success ? pParsed.error.issues : []),
+            ...(!qParsed.success ? qParsed.error.issues : []),
+          ],
+        },
+      });
+    }
+
+    try {
+      const result = crm1MappingService.getTemplate(pParsed.data.id, qParsed.data.version);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      if (err.code === 'TEMPLATE_NOT_FOUND') {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.post('/mappings/validate', {
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
+  }, async (request, reply) => {
+    const ValidateRequestSchema = z.object({
+      templateId: z.string().min(1),
+      sourceColumns: z.array(z.string().min(1)),
+      version: z.number().optional(),
+    });
+
+    const parsed = ValidateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid mapping validation payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const result = crm1MappingService.validateDryRun(
+        parsed.data.templateId,
+        parsed.data.sourceColumns,
+        parsed.data.version
+      );
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      if (err.code === 'TEMPLATE_NOT_FOUND') {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      if (err.code === 'MAPPING_INCOMPLETE') {
+        return reply.status(400).send({
+          error: {
+            code: 'MAPPING_INCOMPLETE',
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.post('/mappings/map', {
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
+  }, async (request, reply) => {
+    const MapRequestSchema = z.object({
+      templateId: z.string().min(1),
+      rows: z.array(z.record(z.unknown())),
+      version: z.number().optional(),
+      sourceColumns: z.array(z.string()).optional(),
+    });
+
+    const parsed = MapRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid row mapping payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const result = crm1MappingService.processBatchMapping(
+        parsed.data.templateId,
+        parsed.data.rows,
+        {
+          version: parsed.data.version,
+          sourceColumns: parsed.data.sourceColumns,
+        }
+      );
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      if (err.code === 'TEMPLATE_NOT_FOUND') {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      if (err.code === 'MAPPING_INCOMPLETE') {
+        return reply.status(400).send({
+          error: {
+            code: 'MAPPING_INCOMPLETE',
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
   });
 };

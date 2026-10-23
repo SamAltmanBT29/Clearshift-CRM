@@ -378,3 +378,25 @@ export async function evaluateQuoteDuplicate(
     ...options,
   });
 }
+
+export const crm2Api = {
+  getDeals,
+  getDealById,
+  createDeal,
+  updateDeal,
+  getStages,
+  getQuotes,
+  getQuoteById,
+  createQuote,
+  updateQuote,
+  executeBatchLoad,
+  getBatchReport,
+  getImportReceipts,
+  detectDuplicates,
+  getHeldDuplicates,
+  resolveDuplicate,
+  getDuplicateAuditLogs,
+  evaluateDealDuplicate,
+  evaluateQuoteDuplicate,
+};
+
