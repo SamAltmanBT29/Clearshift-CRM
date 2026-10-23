@@ -16,7 +16,7 @@ import { ControlCenterService } from '../services/control-center.service.js';
 import { Crm5AuditService, crm5Audit } from '../services/audit.js';
 import { CRM5_ENDPOINT_ROLES } from '../policies/roles.js';
 import { redactSensitiveObject } from '../policies/masking.js';
-import { requireRoles } from '../plugins/auth.js';
+import { requireRoles, assertTenantIsolation, assertRecordOwnership, type AuthenticatedUser } from '../plugins/auth.js';
 import {
   DomainValidationError,
   DomainConflictError,
@@ -190,6 +190,11 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
           details: parsed.error.issues,
         },
       });
+    }
+
+    if (authEnabled && request.user) {
+      const payloadTenant = (parsed.data.metadata?.['tenant_id'] || parsed.data.metadata?.['tenantId']) as string | undefined;
+      assertTenantIsolation(request.user as AuthenticatedUser, payloadTenant, request);
     }
 
     try {
@@ -451,6 +456,11 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
       });
     }
 
+    if (authEnabled && request.user) {
+      assertTenantIsolation(request.user as AuthenticatedUser, undefined, request);
+      assertRecordOwnership(request.user as AuthenticatedUser, parsed.data.actorId);
+    }
+
     try {
       const audit = service.resolveDuplicate(parsed.data);
 
@@ -523,6 +533,10 @@ export const controlCenterRoutes: FastifyPluginAsync<ControlCenterRouteOptions> 
           details: parsed.error.issues,
         },
       });
+    }
+
+    if (authEnabled && request.user) {
+      assertTenantIsolation(request.user as AuthenticatedUser, undefined, request);
     }
 
     try {
