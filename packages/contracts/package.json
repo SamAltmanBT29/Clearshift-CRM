@@ -11,6 +11,8 @@
     "./crm-1": "./src/crm-1.ts",
     "./crm-2": "./src/crm-2.ts",
     "./crm-5": "./src/crm-5.ts",
+    "./crm-5-events": "./src/crm-5-events.ts",
+    "./crm-5-mock": "./src/crm-5-mock.ts",
     "./openapi": "./openapi"
   },
   "dependencies": {

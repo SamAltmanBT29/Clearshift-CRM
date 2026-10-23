@@ -476,3 +476,40 @@ CRM-5 implements an entity creation form for migration run projections adhering 
 * **WAI-ARIA Status Semantics:** Renders floating toast notification (`role="status"`, `aria-live="polite"`, `.cs-toast`, `.cs-toast-success`).
 * **Auto-Dismiss & Manual Close:** Supports configurable auto-dismiss timer (default: 5000ms) with clean timer teardown and accessible manual dismissal button (`.cs-toast-close`, `aria-label="Dismiss notification"`).
 
+---
+
+## 14. Public Contracts, Domain Events, and Deterministic Mock Package (Gate G1 / CRM5-01 / Issue #187)
+
+### 14.1 OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-5.yaml`)
+* **Base URL:** `/api/v1/crm-control`
+* **Specification Version:** `1.0.0` (OpenAPI `3.1.0`)
+* **Authentication Scheme:** `bearerAuth` (HTTP Bearer JWT) with RBAC capabilities:
+  - `control:read`: Read-only access to `/runs`, `/scores`, `/rejects`, `/reconciliation`, `/reconciliation/{batch}`, `/duplicates/held`, `/duplicates/audit`, `/batches/{batch}`
+  - `control:export`: Export capabilities for CSV reporting routes
+  - `control:admin`: Administrative access for duplicate resolution and row-level import loader
+* **Public Route:** `GET /health` requires zero authentication for container liveness probes.
+
+### 14.2 Domain Event Taxonomy & Outbox Envelopes (`packages/contracts/src/crm-5-events.ts`)
+Conforms to standard outbox event envelope mandated by PLT-04 & PLT-09:
+
+| Event Type Constant | Wire Event Name | Producer | Aggregate Type | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `RUN_PROJECTED` | `crm.migration.run_projected` | `crm-5` | `crm5_run` | Migration execution event recorded from pipeline |
+| `SCORE_COMPUTED` | `crm.migration.score_computed` | `crm-5` | `crm5_score` | 5-dimension quality scorecard calculated |
+| `REJECT_RECORDED` | `crm.migration.reject_recorded` | `crm-5` | `crm5_reject` | Row-level validation failure recorded with SHA-256 payload hash |
+| `RECONCILIATION_COMPLETED` | `crm.migration.reconciliation_completed` | `crm-5` | `crm5_reconciliation_report` | Batch row conservation verified (`status: OK` iff `unaccounted = 0`) |
+| `DUPLICATE_DETECTED` | `crm.migration.duplicate_detected` | `crm-5` | `crm5_duplicate_candidate` | Exact normalized duplicate detected and held for review |
+| `DUPLICATE_RESOLVED` | `crm.migration.duplicate_resolved` | `crm-5` | `crm5_duplicate_candidate` | Operator human review decision applied (`MERGE`, `REJECT_DUPLICATE`, `KEEP_SEPARATE`) |
+
+### 14.3 Deterministic Mock Server & In-Memory Store (`packages/contracts/src/crm-5-mock.ts`)
+* **State Store (`Crm5MockStateStore`):** In-memory fixture repository pre-seeded with 100% synthetic runs, 5-dimension quality scores, row rejections, balanced reconciliation reports, and duplicate candidates.
+* **Fastify Plugin (`crm5MockServerPlugin`):** Mounts deterministic mock routes matching all `/api/v1/crm-control/*` endpoints for local testing and cross-module integration by dependent groups.
+* **Standard Error Handling:** Rejects `pageSize > 100` with HTTP 400 and returns HTTP 404 for missing batches/candidates using the standard ClearShift error envelope `{ code, message, details, correlation_id }`.
+
+### 14.4 Versioned Contract Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G1-001`
+* **Milestone:** Gate G1 — Design Complete (Weeks 1–2)
+* **Date:** 2026-10-23
+* **Status:** Approved & Frozen for V1
+* **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
+
