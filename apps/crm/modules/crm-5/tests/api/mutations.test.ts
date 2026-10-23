@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { Roles, signAccessToken } from '@cs/identity';
 import { buildApp } from '../../src/app.js';
 import { ControlCenterService } from '../../src/services/control-center.service.js';
 import {
@@ -12,11 +13,28 @@ import {
 describe('CRM-5 Mutation API & Domain Validation (Issue #48)', () => {
   let app: ReturnType<typeof buildApp>;
   let service: ControlCenterService;
+  let adminToken: string;
 
-  beforeEach(() => {
+  beforeAll(async () => {
+    adminToken = await signAccessToken('synthetic-admin', [Roles.ADMIN]);
+  });
+
+  beforeEach(async () => {
     service = new ControlCenterService();
     service.clear(); // start with clean slate
     app = buildApp({ service });
+    await app.ready();
+    const rawInject = app.inject.bind(app);
+    app.inject = ((opts: any) => {
+      const headers = {
+        authorization: `Bearer ${adminToken}`,
+        ...(opts?.headers || {}),
+      };
+      return rawInject({
+        ...opts,
+        headers,
+      });
+    }) as any;
   });
 
   // ---------------------------------------------------------------------------
