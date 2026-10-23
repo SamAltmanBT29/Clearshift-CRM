@@ -418,6 +418,91 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /import/row:
+    post:
+      summary: Ingest single migration row with idempotency guarantees (KIT-08 Target Adapter)
+      operationId: importSingleRow
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Stable idempotency key for exactly-once processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Crm2ImportRow'
+      responses:
+        '201':
+          description: Row processed and target mutation committed with receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportResult'
+        '200':
+          description: Idempotent replay; original receipt returned without second mutation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportResult'
+        '400':
+          description: Invalid import payload or missing Idempotency-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied (requires MIGRATION_RUNNER or ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Idempotency conflict (key reused with different payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Domain validation failure or unresolved cross-module reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /import/batch:
+    post:
+      summary: Batch ingest migration rows using type-safe UPSERT operations (KIT-08 loadBatch)
+      operationId: loadBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Crm2BatchImportRequest'
+      responses:
+        '200':
+          description: Batch execution complete with loaded results and error ledger
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2BatchImportResponse'
+        '400':
+          description: Invalid batch payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied (requires MIGRATION_RUNNER or ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /import/receipts:
     get:
       summary: List durable migration import receipts
@@ -429,6 +514,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Crm2ImportReceiptsResponse'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /import/receipts/{idempotencyKey}:
+    get:
+      summary: Retrieve a single durable import receipt by idempotency key
+      operationId: getImportReceiptByKey
+      parameters:
+        - name: idempotencyKey
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Idempotency key of the receipt
+      responses:
+        '200':
+          description: Durable import receipt details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Crm2ImportReceipt'
+        '404':
+          description: Receipt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Permission denied
           content:
@@ -647,7 +763,6 @@ paths:
               schema:
                 type: object
 
->>>>>>> origin/main
 components:
   schemas:
     HealthResponse:
@@ -984,24 +1099,25 @@ components:
       required:
         - batchId
         - sourceRow
-        - sourceSystem
         - entity
         - idempotencyKey
         - data
       properties:
         batchId:
           type: string
-          format: uuid
         sourceRow:
           type: integer
           minimum: 1
         sourceSystem:
           type: string
+          default: kit_import
         entity:
           type: string
           enum:
             - deal
             - quote
+            - stage
+            - quote_line
         idempotencyKey:
           type: string
         data:
@@ -1026,7 +1142,6 @@ components:
           format: uuid
         batchId:
           type: string
-          format: uuid
         sourceRow:
           type: integer
         entity:
@@ -1042,6 +1157,16 @@ components:
           type: string
         payloadHash:
           type: string
+        kind:
+          type: string
+          enum:
+            - created
+            - linked
+        outcome:
+          type: string
+          enum:
+            - created
+            - linked
         createdAt:
           type: string
           format: date-time
@@ -1062,6 +1187,60 @@ components:
           type: boolean
         correlation_id:
           type: string
+
+    Crm2BatchImportRequest:
+      type: object
+      required:
+        - batchId
+        - rows
+      properties:
+        batchId:
+          type: string
+        sourceSystem:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/Crm2ImportRow'
+
+    Crm2BatchImportResponse:
+      type: object
+      required:
+        - batchId
+        - loadedCount
+        - rejectedCount
+        - loaded
+        - errors
+      properties:
+        batchId:
+          type: string
+        loadedCount:
+          type: integer
+        rejectedCount:
+          type: integer
+        loaded:
+          type: array
+          items:
+            $ref: '#/components/schemas/Crm2ImportResult'
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+              - sourceRow
+              - error
+            properties:
+              sourceRow:
+                type: integer
+              error:
+                type: object
+                properties:
+                  reasonCode:
+                    type: string
+                  message:
+                    type: string
+                  field:
+                    type: string
 
     Crm2ImportReceiptsResponse:
       type: object
