@@ -12,9 +12,11 @@ import {
   CRM4ConsentSetSchema,
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
+import { z } from 'zod';
 import type { RoleType } from '@cs/identity';
 import { Crm4Service, crm4Service, type IdempotencyContext } from '../services/crm4.service.js';
 import { Crm4AuditService, crm4Audit } from '../services/audit.js';
+import { crm4MappingService } from '../services/crm4-mapping.service.js';
 import { CRM4_ENDPOINT_ROLES } from '../policies/roles.js';
 import { requireRoles } from '../plugins/auth.js';
 import { assertNoImmutableFieldMutation } from '../interface/authz.js';
@@ -408,6 +410,193 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       const { contact } = request.params as { contact: string };
       const consent = await service.getConsent(contact);
       return reply.send(consent);
+    }
+  );
+
+  // =========================================================================
+  // 5. Mapping Templates & Dry-Run Validation Endpoints (#181, [CRM4-28])
+  // =========================================================================
+
+  fastify.get(
+    '/mappings/templates',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_READ, authEnabled),
+    },
+    async (request, reply) => {
+      const QuerySchema = z.object({
+        entity: z.enum(['crm4_lists', 'crm4_campaigns', 'crm4_members', 'crm4_consents']).optional(),
+      });
+      const parsed = QuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid entity filter for templates',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const templates = crm4MappingService.listTemplates(parsed.data.entity);
+      const enums = crm4MappingService.getEnumDictionaries();
+      return reply.status(200).send({
+        templates: templates.map((t) => ({
+          ...t,
+          checksum: crm4MappingService.getTemplate(t.id, t.version).checksum,
+        })),
+        enums,
+      });
+    }
+  );
+
+  fastify.get(
+    '/mappings/templates/:id',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_READ, authEnabled),
+    },
+    async (request, reply) => {
+      const ParamsSchema = z.object({ id: z.string().min(1) });
+      const QuerySchema = z.object({ version: z.coerce.number().optional() });
+
+      const pParsed = ParamsSchema.safeParse(request.params);
+      const qParsed = QuerySchema.safeParse(request.query);
+      if (!pParsed.success || !qParsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid template lookup parameters',
+            details: [
+              ...(!pParsed.success ? pParsed.error.issues : []),
+              ...(!qParsed.success ? qParsed.error.issues : []),
+            ],
+          },
+        });
+      }
+
+      try {
+        const result = crm4MappingService.getTemplate(pParsed.data.id, qParsed.data.version);
+        return reply.status(200).send(result);
+      } catch (err: any) {
+        if (err.code === 'TEMPLATE_NOT_FOUND') {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        throw err;
+      }
+    }
+  );
+
+  fastify.post(
+    '/mappings/validate',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_EXECUTE, authEnabled),
+    },
+    async (request, reply) => {
+      const ValidateRequestSchema = z.object({
+        templateId: z.string().min(1),
+        sourceColumns: z.array(z.string().min(1)),
+        version: z.number().optional(),
+      });
+
+      const parsed = ValidateRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid mapping validation payload',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      try {
+        const result = crm4MappingService.validateDryRun(
+          parsed.data.templateId,
+          parsed.data.sourceColumns,
+          parsed.data.version
+        );
+        return reply.status(200).send(result);
+      } catch (err: any) {
+        if (err.code === 'TEMPLATE_NOT_FOUND') {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        if (err.code === 'MAPPING_INCOMPLETE') {
+          return reply.status(400).send({
+            error: {
+              code: 'MAPPING_INCOMPLETE',
+              message: err.message,
+              details: err.details,
+            },
+          });
+        }
+        throw err;
+      }
+    }
+  );
+
+  fastify.post(
+    '/mappings/map',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_EXECUTE, authEnabled),
+    },
+    async (request, reply) => {
+      const MapRequestSchema = z.object({
+        templateId: z.string().min(1),
+        rows: z.array(z.record(z.unknown())),
+        version: z.number().optional(),
+        sourceColumns: z.array(z.string()).optional(),
+      });
+
+      const parsed = MapRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid row mapping payload',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      try {
+        const result = crm4MappingService.processBatchMapping(
+          parsed.data.templateId,
+          parsed.data.rows,
+          {
+            version: parsed.data.version,
+            sourceColumns: parsed.data.sourceColumns,
+          }
+        );
+        return reply.status(200).send(result);
+      } catch (err: any) {
+        if (err.code === 'TEMPLATE_NOT_FOUND') {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        if (err.code === 'MAPPING_INCOMPLETE') {
+          return reply.status(400).send({
+            error: {
+              code: 'MAPPING_INCOMPLETE',
+              message: err.message,
+              details: err.details,
+            },
+          });
+        }
+        throw err;
+      }
     }
   );
 };

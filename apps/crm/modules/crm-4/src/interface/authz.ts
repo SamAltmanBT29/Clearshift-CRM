@@ -36,6 +36,9 @@ export const CRM4_ENDPOINT_CAPABILITIES: Record<Crm4EndpointKey, CapabilityType>
 
   CONSENTS_READ: Capabilities.MODULE_READ,
   CONSENTS_SET: Capabilities.MODULE_WRITE,
+
+  MAPPINGS_READ: Capabilities.MODULE_READ,
+  MAPPINGS_EXECUTE: Capabilities.MODULE_WRITE,
 };
 
 /**

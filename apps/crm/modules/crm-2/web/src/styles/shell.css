@@ -160,3 +160,1089 @@
 .cs-tabpanel {
   width: 100%;
 }
+
+/* ==========================================================================
+   Main Data Table, Skeleton, Empty State & Error Alert Styles (CRM2-17)
+   Consumes shared ClearShift design tokens.
+   ========================================================================== */
+
+.cs-table-card {
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  background-color: var(--cs-bg, #FFFFFF);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.cs-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cs-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.cs-thead {
+  background-color: var(--cs-surface, #F8FAFC);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+}
+
+.cs-th {
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  white-space: nowrap;
+}
+
+.cs-th-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-s-1, 4px);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--cs-r-sm, 2px);
+}
+
+.cs-th-sort-btn:focus-visible {
+  outline: 2px solid var(--cs-accent, #1D4ED8);
+}
+
+.cs-sort-icon {
+  color: var(--cs-accent, #1D4ED8);
+  font-size: 0.75rem;
+}
+
+.cs-sort-icon-idle {
+  color: var(--cs-text-muted, #4B5563);
+  opacity: 0.4;
+  font-size: 0.75rem;
+}
+
+.cs-td {
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+  color: var(--cs-text, #111827);
+  white-space: nowrap;
+}
+
+.cs-tr:last-child .cs-td {
+  border-bottom: none;
+}
+
+.cs-tr:hover {
+  background-color: var(--cs-surface, #F8FAFC);
+}
+
+/* Text alignment utilities */
+.cs-text-left { text-align: left; }
+.cs-text-center { text-align: center; }
+.cs-text-right { text-align: right; }
+.cs-font-semibold { font-weight: 600; }
+
+/* Pagination Toolbar */
+.cs-pagination-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  background-color: var(--cs-surface, #F8FAFC);
+  border-top: 1px solid var(--cs-border, #D0D5DD);
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-pagination-info {
+  color: var(--cs-text-muted, #4B5563);
+  font-size: 0.8125rem;
+}
+
+.cs-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-page-size-select {
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-sm, 4px);
+  background-color: #FFFFFF;
+  color: var(--cs-text, #111827);
+}
+
+.cs-pagination-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-1, 4px);
+}
+
+.cs-pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-sm, 4px);
+  background-color: #FFFFFF;
+  color: var(--cs-text, #111827);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.cs-pagination-btn:hover:not(:disabled) {
+  background-color: var(--cs-surface, #F1F5F9);
+  border-color: #94A3B8;
+}
+
+.cs-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cs-pagination-current-page {
+  font-size: 0.8125rem;
+  color: var(--cs-text-muted, #4B5563);
+  padding: 0 6px;
+}
+
+/* Skeleton Loader */
+.cs-skeleton-line {
+  background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+  background-size: 200% 100%;
+  animation: cs-skeleton-pulse 1.5s infinite;
+  border-radius: 4px;
+}
+
+.cs-skeleton-header-cell {
+  height: 14px;
+}
+
+.cs-skeleton-cell {
+  height: 16px;
+}
+
+@keyframes cs-skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Empty State */
+.cs-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--cs-s-12, 48px) var(--cs-s-6, 24px);
+}
+
+.cs-empty-icon {
+  font-size: 2.25rem;
+  margin-bottom: var(--cs-s-3, 12px);
+}
+
+.cs-empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cs-text, #0F172A);
+  margin: 0 0 var(--cs-s-1, 4px) 0;
+}
+
+.cs-empty-text {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #64748B);
+  max-width: 400px;
+  margin: 0 0 var(--cs-s-6, 24px) 0;
+  line-height: 1.4;
+}
+
+.cs-empty-actions {
+  display: flex;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-btn-primary {
+  background-color: var(--cs-accent, #2563EB);
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  border-radius: var(--cs-r-md, 6px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cs-btn-primary:hover {
+  background-color: #1D4ED8;
+}
+
+.cs-btn-secondary {
+  background-color: #FFFFFF;
+  color: var(--cs-text, #0F172A);
+  border: 1px solid var(--cs-border, #CBD5E1);
+  padding: 8px 16px;
+  border-radius: var(--cs-r-md, 6px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Error Banner */
+.cs-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cs-s-4, 16px);
+  background-color: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: var(--cs-r-md, 6px);
+  margin: var(--cs-s-4, 16px);
+}
+
+.cs-error-banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-error-icon {
+  font-size: 1.25rem;
+}
+
+.cs-error-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #991B1B;
+  margin: 0 0 2px 0;
+}
+
+.cs-error-message {
+  font-size: 0.8125rem;
+  color: #B91C1C;
+  margin: 0;
+}
+
+.cs-error-retry-btn {
+  padding: 4px 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background-color: #FFFFFF;
+  border: 1px solid #FCA5A5;
+  color: #991B1B;
+  border-radius: var(--cs-r-sm, 4px);
+  cursor: pointer;
+}
+
+/* Access Denied Card */
+.cs-access-denied-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--cs-s-12, 48px) var(--cs-s-6, 24px);
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  margin: var(--cs-s-6, 24px) auto;
+  max-width: 560px;
+}
+
+.cs-access-denied-icon-wrapper {
+  font-size: 2.5rem;
+  margin-bottom: var(--cs-s-4, 16px);
+}
+
+.cs-access-denied-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #DC2626;
+  background-color: #FEE2E2;
+  border: 1px solid #FCA5A5;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-access-denied-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--cs-text, #0F172A);
+  margin: 0 0 var(--cs-s-2, 8px) 0;
+}
+
+.cs-access-denied-desc {
+  font-size: 0.875rem;
+  color: var(--cs-text-muted, #475569);
+  margin: 0 0 var(--cs-s-4, 16px) 0;
+  line-height: 1.5;
+}
+
+.cs-access-denied-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-2, 8px);
+  background-color: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  padding: var(--cs-s-3, 12px) var(--cs-s-4, 16px);
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: var(--cs-s-6, 24px);
+  text-align: left;
+}
+
+.cs-access-denied-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+}
+
+.cs-meta-label {
+  color: var(--cs-text-muted, #64748B);
+  font-weight: 500;
+}
+
+.cs-meta-code {
+  background-color: #FFFFFF;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  color: var(--cs-text, #0F172A);
+  border: 1px solid #CBD5E1;
+}
+
+.cs-current-role {
+  color: #64748B;
+}
+
+.cs-access-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cs-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* CRM-2 Filter Toolbar & Debounced Search Bar                                 */
+/* -------------------------------------------------------------------------- */
+.cs-filter-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-3, 12px);
+  margin-bottom: var(--cs-s-4, 16px);
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  padding: var(--cs-s-4, 16px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.cs-filter-toolbar-top {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-3, 12px);
+  flex-wrap: wrap;
+}
+
+/* Search Bar & Input */
+.cs-search-bar {
+  flex: 1;
+  min-width: 240px;
+}
+
+.cs-search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.cs-search-icon {
+  position: absolute;
+  left: var(--cs-s-3, 12px);
+  color: var(--cs-text-muted, #4B5563);
+  font-size: 0.875rem;
+  pointer-events: none;
+  user-select: none;
+}
+
+.cs-search-input {
+  width: 100%;
+  height: 38px;
+  padding: var(--cs-s-2, 8px) var(--cs-s-8, 32px) var(--cs-s-2, 8px) var(--cs-s-9, 36px);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 4px);
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  font-size: 0.875rem;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cs-search-input:hover {
+  border-color: #9CA3AF;
+}
+
+.cs-search-input:focus {
+  outline: none;
+  border-color: var(--cs-accent, #1D4ED8);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
+
+.cs-search-input::placeholder {
+  color: var(--cs-text-muted, #4B5563);
+  opacity: 0.8;
+}
+
+.cs-search-clear-btn {
+  position: absolute;
+  right: var(--cs-s-2, 8px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background-color: #E5E7EB;
+  color: #4B5563;
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.cs-search-clear-btn:hover {
+  background-color: #D1D5DB;
+  color: #111827;
+}
+
+.cs-search-clear-btn:focus-visible {
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+/* Faceted Filters Group */
+.cs-facet-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-3, 12px);
+  flex-wrap: wrap;
+}
+
+.cs-filter-facet {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+}
+
+.cs-facet-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--cs-text-muted, #4B5563);
+  white-space: nowrap;
+}
+
+.cs-facet-select {
+  height: 38px;
+  padding: var(--cs-s-1, 4px) var(--cs-s-3, 12px);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 4px);
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.cs-facet-select:hover {
+  border-color: #9CA3AF;
+}
+
+.cs-facet-select:focus {
+  outline: none;
+  border-color: var(--cs-accent, #1D4ED8);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
+
+/* Active Filter Pill Tags */
+.cs-active-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+  flex-wrap: wrap;
+  padding-top: var(--cs-s-2, 8px);
+  border-top: 1px solid #F3F4F6;
+}
+
+.cs-filter-pills-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cs-text-muted, #4B5563);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.cs-filter-pills-list {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-s-2, 8px);
+  flex-wrap: wrap;
+}
+
+.cs-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-s-1, 4px);
+  background-color: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  color: #1E40AF;
+  border-radius: 9999px;
+  padding: 2px var(--cs-s-2, 8px);
+  font-size: 0.75rem;
+  font-weight: 500;
+  animation: cs-fade-in 0.15s ease-out;
+}
+
+@keyframes cs-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.cs-filter-pill-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cs-filter-pill-label {
+  font-weight: 600;
+  color: #1D4ED8;
+}
+
+.cs-filter-pill-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #3B82F6;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+  line-height: 1;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.cs-filter-pill-remove:hover {
+  background-color: #DBEAFE;
+  color: #1E3A8A;
+}
+
+.cs-filter-pill-remove:focus-visible {
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+.cs-clear-all-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--cs-s-2, 8px);
+  border: 1px solid #D0D5DD;
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text-muted, #4B5563);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--cs-r-md, 4px);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cs-clear-all-filters-btn:hover {
+  background-color: #FEE2E2;
+  border-color: #FCA5A5;
+  color: #B91C1C;
+}
+
+.cs-clear-all-filters-btn:focus-visible {
+  outline: var(--cs-focus, 2px solid #1D4ED8);
+}
+
+/* Faceted Filter Sidebar */
+.cs-filter-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-4, 16px);
+  padding: var(--cs-s-4, 16px);
+  background-color: var(--cs-surface, #F5F6F8);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.cs-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+  padding-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-sidebar-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cs-sidebar-reset-btn {
+  background: none;
+  border: none;
+  color: var(--cs-accent, #1D4ED8);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cs-sidebar-reset-btn:hover {
+  text-decoration: underline;
+}
+
+.cs-sidebar-facets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-sidebar-facet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-1, 4px);
+}
+
+/* Empty Search/Filter State */
+.cs-empty-filter-state {
+  border-color: #93C5FD;
+  background-color: #F0F9FF;
+}
+
+.cs-empty-icon {
+  font-size: 2rem;
+  margin-bottom: var(--cs-s-2, 8px);
+}
+
+.cs-empty-reset-btn {
+  margin-top: var(--cs-s-3, 12px);
+  padding: var(--cs-s-2, 8px) var(--cs-s-4, 16px);
+}
+
+/* -------------------------------------------------------------------------- */
+/* CRM-2 Modal Dialog, Create Form & Toast Styles (CRM2-20)                   */
+/* -------------------------------------------------------------------------- */
+
+.cs-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cs-s-4, 16px);
+}
+
+.cs-modal-card {
+  background-color: var(--cs-bg, #FFFFFF);
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-lg, 8px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cs-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--cs-s-4, 16px) var(--cs-s-6, 24px);
+  border-bottom: 1px solid var(--cs-border, #D0D5DD);
+}
+
+.cs-modal-header-text {
+  flex: 1;
+}
+
+.cs-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0;
+}
+
+.cs-modal-subtitle {
+  font-size: 0.8125rem;
+  color: var(--cs-text-muted, #4B5563);
+  margin: var(--cs-s-1, 4px) 0 0 0;
+}
+
+.cs-modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--cs-text-muted, #4B5563);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--cs-r-sm, 4px);
+}
+
+.cs-modal-close-btn:hover,
+.cs-modal-close-btn:focus-visible {
+  color: var(--cs-text, #111827);
+  background-color: var(--cs-surface, #F5F6F8);
+}
+
+.cs-modal-body {
+  padding: var(--cs-s-5, 20px) var(--cs-s-6, 24px);
+}
+
+/* Form Layout & Controls */
+.cs-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-5, 20px);
+}
+
+.cs-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-3, 12px);
+}
+
+.cs-form-section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cs-text, #111827);
+  margin: 0;
+  padding-bottom: var(--cs-s-2, 6px);
+  border-bottom: 1px solid var(--cs-border, #E5E7EB);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cs-form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--cs-s-4, 16px);
+}
+
+.cs-form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--cs-s-4, 16px);
+}
+
+.cs-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-s-1, 4px);
+}
+
+.cs-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--cs-text, #374151);
+}
+
+.cs-field-required {
+  color: #DC2626;
+  margin-left: 2px;
+}
+
+.cs-field-helper {
+  font-size: 0.75rem;
+  color: var(--cs-text-muted, #6B7280);
+  margin: 0;
+}
+
+.cs-field-error {
+  font-size: 0.75rem;
+  color: #DC2626;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cs-input,
+.cs-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--cs-border, #D0D5DD);
+  border-radius: var(--cs-r-md, 6px);
+  background-color: var(--cs-bg, #FFFFFF);
+  color: var(--cs-text, #111827);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.cs-input:focus,
+.cs-select:focus {
+  border-color: var(--cs-accent, #1D4ED8);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
+
+.cs-input-error,
+.cs-select.cs-input-error {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
+}
+
+.cs-input-error:focus,
+.cs-select.cs-input-error:focus {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25) !important;
+}
+
+.cs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--cs-r-md, 6px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease-in-out;
+}
+
+.cs-btn-primary {
+  background-color: var(--cs-accent, #1D4ED8);
+  border-color: var(--cs-accent, #1D4ED8);
+  color: #FFFFFF;
+}
+
+.cs-btn-primary:hover:not(:disabled) {
+  background-color: #1E40AF;
+  border-color: #1E40AF;
+}
+
+.cs-btn-secondary {
+  background-color: var(--cs-surface, #F5F6F8);
+  border-color: var(--cs-border, #D0D5DD);
+  color: var(--cs-text, #374151);
+}
+
+.cs-btn-secondary:hover:not(:disabled) {
+  background-color: #E5E7EB;
+}
+
+.cs-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cs-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cs-s-3, 12px);
+  padding-top: var(--cs-s-4, 16px);
+  border-top: 1px solid var(--cs-border, #E5E7EB);
+}
+
+.cs-spinner-sm {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: cs-spin 0.6s linear infinite;
+}
+
+/* Validation Summary */
+.cs-form-validation-summary {
+  padding: 12px 16px;
+  background-color: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--cs-r-md, 6px);
+  margin-bottom: var(--cs-s-4, 16px);
+}
+
+.cs-form-validation-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cs-form-validation-summary-icon {
+  font-size: 1rem;
+}
+
+.cs-form-validation-summary-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #991B1B;
+  margin: 0;
+}
+
+.cs-form-validation-summary-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.8125rem;
+  color: #B91C1C;
+}
+
+.cs-form-validation-summary-item {
+  margin-bottom: 3px;
+}
+
+.cs-form-validation-field-name {
+  font-weight: 600;
+}
+
+/* Confirmation Toast */
+.cs-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  max-width: 440px;
+  padding: 12px 16px;
+  border-radius: var(--cs-r-md, 8px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  animation: cs-toast-in 0.2s ease-out;
+}
+
+.cs-toast-success {
+  border-left: 4px solid #16A34A;
+}
+
+.cs-toast-error {
+  border-left: 4px solid #DC2626;
+}
+
+.cs-toast-warning {
+  border-left: 4px solid #D97706;
+}
+
+.cs-toast-info {
+  border-left: 4px solid #2563EB;
+}
+
+.cs-toast-icon {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.cs-toast-success .cs-toast-icon {
+  color: #16A34A;
+}
+
+.cs-toast-error .cs-toast-icon {
+  color: #DC2626;
+}
+
+.cs-toast-body {
+  flex: 1;
+}
+
+.cs-toast-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0F172A;
+  margin-bottom: 2px;
+}
+
+.cs-toast-message {
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+.cs-toast-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #94A3B8;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.cs-toast-close:hover {
+  color: #0F172A;
+}
+
+@keyframes cs-toast-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+

@@ -42,6 +42,7 @@ This Requirement-to-Test Traceability Matrix maps 100% of functional requirement
 | **`MIG-CRM4-03`** | Bounded batching (500 rows) and stop migration when failures exceed 10% of attempted rows. | **Must** | ClearShift Core Rules & SDS §4.11 | Migration | Unit | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM4-26`** | Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #179 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/profiler.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM4-27`** | Module cleaning configuration: standard cleaners, field-level change audit trail, structured rejections, and row conservation. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #180 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/cleaner.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM4-28`** | Mapping and value translation configuration: canonical/legacy mapping templates, deterministic type coercion, enum allowlists/translations, dry-run guards, and BR-CRM4-01 monotonic opt-out rule. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #181 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/mapping.test.ts` | **VERIFIED (Green)** |
 
 ---
 
@@ -57,6 +58,7 @@ apps/crm/modules/crm-4/tests/
 │   └── dirty-pack.test.ts               (22 tests) — Canonical 100-row dirty data pack & manifest
 ├── kit/
 │   ├── cleaner.test.ts                  (22 tests) — Standard cleaners, field-level audit & row rejections
+│   ├── mapping.test.ts                  — Mapping templates, type coercions, enum translations & dry-run guards
 │   └── profiler.test.ts                 (21 tests) — Profiling stats, duplicate detection & manifest comparison
 ├── security/
 │   └── authorization.test.ts            (46 tests) — EdDSA auth, RBAC capability matrix, tenant isolation

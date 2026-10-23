@@ -52,18 +52,6 @@ paths:
             minimum: 1
             maximum: 100
           description: Alternative limit parameter for records per page (capped at 100)
-            minimum: 1
-            maximum: 100
-          description: Number of records per page (capped at 100)
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 10
-            minimum: 1
-            maximum: 100
-          description: Alternative limit parameter for records per page (capped at 100)
         - name: search
           in: query
           required: false
@@ -76,6 +64,32 @@ paths:
           schema:
             $ref: '#/components/schemas/StageName'
           description: Filter deals by pipeline stage
+        - name: is_orphan
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter deals by orphan status (true for unlinked deals, false for linked deals)
+        - name: source_system
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter deals by original ingest source system (e.g. hubspot, salesforce, csv_import, manual)
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Column field to sort by (e.g. name, value, stage_name, close_date, created_at)
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort direction (ascending or descending)
       responses:
         '200':
           description: Paginated deals list
@@ -253,6 +267,20 @@ paths:
             minimum: 1
             maximum: 100
           description: Alternative limit parameter for records per page (capped at 100)
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Column field to sort quotes by (e.g. quote_number, amount, quote_date, created_at)
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort direction (ascending or descending)
       responses:
         '200':
           description: Paginated quotes list
