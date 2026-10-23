@@ -478,9 +478,49 @@ CRM-5 implements an entity creation form for migration run projections adhering 
 
 ---
 
-## 14. Public Contracts, Domain Events, and Deterministic Mock Package (Gate G1 / CRM5-01 / Issue #187)
+## 14. Rejection Audit Screen, Module Context Identifiers & Formula-Safe Export (CRM5-23 / Issue #196)
 
-### 14.1 OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-5.yaml`)
+### 14.1 Module Context Identifiers
+In the shared rejection review screen (`RejectsOverviewPage`), failed rows display domain-specific natural identifier columns alongside machine error codes, enabling cross-module operators to immediately locate the corresponding source entity:
+
+| Target Module | Natural Entity Context | Extracted Identifier Columns | Context Fallback |
+| :--- | :--- | :--- | :--- |
+| **CRM-1** | Contacts & Accounts | `contact_id`, `email`, `company` | `email` or `contact_id` |
+| **CRM-2** | Deals & Pipelines | `deal_id`, `quote_number`, `pipeline` | `deal_id` or `quote_number` |
+| **CRM-3** | Support Tickets & Cases | `ticket_id`, `case_number`, `account_id` | `ticket_id` or `case_number` |
+| **CRM-4** | Marketing Campaigns | `campaign_id`, `campaign_name`, `lead_id` | `campaign_id` or `lead_id` |
+| **CRM-5** | Migration Control & Catalog | `batch_id`, `sku`, `tax_id` | `sku` or `batch_id` |
+
+When source payload context is unavailable, identifiers degrade deterministically to `Batch Correlation ID: <batchId>` (`Row #<index>`) without UI breakage or layout shift.
+
+### 14.2 Categorization & Human-Readable Remediation
+Machine error codes are mapped into 5 standardized audit categories:
+* **Constraint Violation:** Unique key conflicts, natural key collisions (`DUPLICATE_SKU`, `EXACT_DUPLICATE`, `UNIQUE_KEY_VIOLATION`).
+* **Integrity & Conservation:** Source-to-target count conservation discrepancies (`COUNT_INVARIANT_VIOLATION`, `SOURCE_TARGET_UNBALANCED`).
+* **Security & Injection:** Spreadsheet formula injection prefixes (`FORMULA_PREFIX`, `FORMULA_INJECTION_RISK`).
+* **Lifecycle & Chronology:** State machine or timestamp chronology violations (`INVALID_STAGE_TRANSITION`, `CHRONOLOGY_VIOLATION`).
+* **Data Validation:** Missing required fields, malformed syntax (`REQUIRED_FIELD_MISSING`, `INVALID_TAX_ID`, `MALFORMED_UUID`).
+
+Every error code provides an operator-friendly explanation and clear remediation instructions pointing to the exact corrective workflow (e.g., routing to exact duplicate resolution, updating source catalog, or reconciling batch counters).
+
+### 14.3 Sensitive Field Masking Policy (PLT-06 / PLT-12)
+All raw row payloads inspected in the detail modal (`RejectDetailModal`) or exported via CSV undergo recursive sanitization:
+* **Bank & Account Data:** Account numbers, IBANs, and routing numbers are masked to `XXXX-XXXX-7890` (preserving only the final 4 digits).
+* **Government & Tax Identifiers:** SSNs, national tax IDs, and Aadhaar numbers are masked to `***-**-7890`.
+* **Credentials & Tokens:** Passwords, API keys, JWT tokens, and client secrets are strictly redacted to `[REDACTED]`.
+* **Employee Compensation:** Salaries, wages, and hourly compensation are masked to `XX,XXX`.
+
+### 14.4 Formula-Safe CSV Export (CWE-1236 / PLT-12)
+The rejection audit screen includes a one-click formula-safe CSV export action (`generateFormulaSafeRejectsCsv` / `downloadRejectsCsv`):
+* **Spreadsheet Formula Neutralization:** All text cells starting with formula trigger characters (`=`, `+`, `-`, `@`) are prepended with a single quote (`'`), neutralizing dynamic execution in spreadsheet applications (Microsoft Excel, LibreOffice, Google Sheets).
+* **RFC-4180 Compliance:** Proper field quoting and CRLF row terminators implemented via `@cs/core` (`exportCsvSafe`).
+* **Standardized Header Schema:** Export files contain uniform columns: `Row Index`, `Target Module`, `Batch Correlation ID`, `Context Identifier Label`, `Context Identifier Value`, `Error Code`, `Error Category`, `Failure Explanation`, `Remediation Guidance`, `Payload SHA-256 Hash`, `Masked Payload Sample`, and `Recorded At`.
+
+---
+
+## 15. Public Contracts, Domain Events, and Deterministic Mock Package (Gate G1 / CRM5-01 / Issue #187)
+
+### 15.1 OpenAPI 3.1 Contract Specification (`packages/contracts/openapi/crm-5.yaml`)
 * **Base URL:** `/api/v1/crm-control`
 * **Specification Version:** `1.0.0` (OpenAPI `3.1.0`)
 * **Authentication Scheme:** `bearerAuth` (HTTP Bearer JWT) with RBAC capabilities:
@@ -489,7 +529,7 @@ CRM-5 implements an entity creation form for migration run projections adhering 
   - `control:admin`: Administrative access for duplicate resolution and row-level import loader
 * **Public Route:** `GET /health` requires zero authentication for container liveness probes.
 
-### 14.2 Domain Event Taxonomy & Outbox Envelopes (`packages/contracts/src/crm-5-events.ts`)
+### 15.2 Domain Event Taxonomy & Outbox Envelopes (`packages/contracts/src/crm-5-events.ts`)
 Conforms to standard outbox event envelope mandated by PLT-04 & PLT-09:
 
 | Event Type Constant | Wire Event Name | Producer | Aggregate Type | Description |
@@ -501,15 +541,16 @@ Conforms to standard outbox event envelope mandated by PLT-04 & PLT-09:
 | `DUPLICATE_DETECTED` | `crm.migration.duplicate_detected` | `crm-5` | `crm5_duplicate_candidate` | Exact normalized duplicate detected and held for review |
 | `DUPLICATE_RESOLVED` | `crm.migration.duplicate_resolved` | `crm-5` | `crm5_duplicate_candidate` | Operator human review decision applied (`MERGE`, `REJECT_DUPLICATE`, `KEEP_SEPARATE`) |
 
-### 14.3 Deterministic Mock Server & In-Memory Store (`packages/contracts/src/crm-5-mock.ts`)
+### 15.3 Deterministic Mock Server & In-Memory Store (`packages/contracts/src/crm-5-mock.ts`)
 * **State Store (`Crm5MockStateStore`):** In-memory fixture repository pre-seeded with 100% synthetic runs, 5-dimension quality scores, row rejections, balanced reconciliation reports, and duplicate candidates.
 * **Fastify Plugin (`crm5MockServerPlugin`):** Mounts deterministic mock routes matching all `/api/v1/crm-control/*` endpoints for local testing and cross-module integration by dependent groups.
 * **Standard Error Handling:** Rejects `pageSize > 100` with HTTP 400 and returns HTTP 404 for missing batches/candidates using the standard ClearShift error envelope `{ code, message, details, correlation_id }`.
 
-### 14.4 Versioned Contract Change Record & Sign-off
+### 15.4 Versioned Contract Change Record & Sign-off
 * **Change Record ID:** `CR-CRM5-G1-001`
 * **Milestone:** Gate G1 — Design Complete (Weeks 1–2)
 * **Date:** 2026-10-23
 * **Status:** Approved & Frozen for V1
 * **Sign-off:** Role 2 (Integration/Backend Lead) & Role 4 (Data/QA Lead)
+
 
