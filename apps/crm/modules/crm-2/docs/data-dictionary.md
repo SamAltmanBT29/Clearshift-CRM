@@ -240,3 +240,58 @@ The main CRM-2 collection screens implement bounded paginated tables with stable
 - **Semantic UI States**: Full representation for skeleton loading, zero-data empty state with filter reset, error banner with sanitized message and retry, and 403 Forbidden access-denied view.
 
 
+
+
+---
+
+## 6. Create Form with Field-Level Validation (CRM2-20 / Issue #133)
+
+### 6.1 Zod Form Schema & Invariants (`CreateDealFormSchema`)
+The entity creation workflow enforces strict client-side validation using Zod:
+- **Required Fields**:
+  - `name`: 1–255 characters, non-empty after trimming.
+  - `value`: Non-negative decimal string (up to 4 decimal places).
+  - `closeDate`: Valid YYYY-MM-DD date string.
+  - `currency`: Explicit 3-letter ISO uppercase code (default `USD`).
+  - `stageName`: One of the 6 fixed stages (`New`, `Qualified`, `Proposal`, `Negotiation`, `Won`, `Lost`).
+- **Format Validation**:
+  - `contactEmail`: RFC-compliant email address regex pattern.
+  - `contactPhone`: International phone format (`+?[0-9\s\-().]{7,20}`) with minimum 7 digits.
+  - `contactId`: Standard UUIDv4 format linking to CRM-1 contact.
+- **Decimal Range Validation**:
+  - `probability`: Bounded decimal strictly between `0.00` and `1.00`.
+
+### 6.2 Inflight Request Double-Submit Prevention
+- When form submission is initiated, the submit button is immediately disabled (`disabled={inFlight}`) with `aria-busy="true"`.
+- Button label transitions to "Creating Deal..." alongside an animated spinner (`.cs-spinner-sm`), completely preventing double submission or race conditions.
+
+### 6.3 Server Error Mapping Protocol (`parseServerErrorToFieldErrors`)
+- Conforms to ClearShift HTTP 400 standard error envelope:
+  ```json
+  {
+    "statusCode": 400,
+    "code": "VALIDATION_ERROR",
+    "message": "Request payload validation failed",
+    "details": [
+      { "path": ["name"], "message": "Deal name already exists in active partition" },
+      { "path": ["contactPhone"], "message": "Phone country prefix unverified" }
+    ]
+  }
+  ```
+- Errors map directly to individual input fields with `.cs-input-error`, `aria-invalid="true"`, and accessible field error text.
+- Top-level `FormValidationSummary` banner renders accessible summary with `role="alert"` and `aria-live="polite"`.
+
+### 6.4 Modal Lifecycle & Table Cache Synchronization
+- **CreateDealModal (`CreateDealModal.tsx`)**:
+  - WAI-ARIA accessible modal dialog (`role="dialog"`, `aria-modal="true"`).
+  - Supports keyboard `Escape` dismissal, backdrop overlay click, and document body scroll locking.
+- **Table Cache Updates (`DataTableController`)**:
+  - `addRecordToCache(record)`: Prepends newly created deal record directly to table cache and increments total count.
+  - `getCachedData()` / `setCachedData()`: Read and write bounded in-memory collections.
+  - `updateRecordInCache()` / `removeRecordFromCache()` / `clearCache()`: Maintain cache coherence across lifecycle operations.
+- **Confirmation Toast (`ConfirmationToast.tsx`)**:
+  - Accessible notification banner (`role="status"`, `aria-live="polite"`).
+  - Renders success confirmation message with 5000ms auto-dismissal and manual close button.
+
+### 6.5 Automated Verification Suites (CRM2-20)
+- `apps/crm/modules/crm-2/tests/web/create-form.test.ts`: 40 comprehensive tests verifying Zod schema rules, client-side validation helpers, server 400 error mapping, FormValidationSummary accessibility, ConfirmationToast lifecycle, CreateDealModal behavior, DataTableController cache methods, double-submit button disabling, and DealsListPage integration.

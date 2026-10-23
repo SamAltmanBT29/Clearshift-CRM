@@ -9,11 +9,11 @@ import { sanitizeErrorMessage } from '../components/ErrorAlert.js';
 
 export interface DataTableControllerOptions<T extends Record<string, unknown> = Record<string, unknown>> {
   columns: DataTableColumn<T>[];
-  initialPage?: number;
-  initialPageSize?: number;
-  initialSort?: TableSortState;
-  initialFilters?: TableFilterState;
-  onQueryChange?: (params: Record<string, string>) => void;
+  initialPage?: number | undefined;
+  initialPageSize?: number | undefined;
+  initialSort?: TableSortState | undefined;
+  initialFilters?: TableFilterState | undefined;
+  onQueryChange?: ((params: Record<string, string>) => void) | undefined;
 }
 
 export const DEFAULT_PAGE_SIZE = 25;
