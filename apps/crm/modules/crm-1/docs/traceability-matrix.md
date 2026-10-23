@@ -57,16 +57,22 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-28-03`** | Unmapped required target fields raise validation error and block dry-run execution. | **Must** | Issue #121 [CRM1-28] | Migration / Service | Unit / API | `apps/crm/modules/crm-1/tests/services/crm1-mapping.service.test.ts`<br>`apps/crm/modules/crm-1/tests/api/mapping-routes.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM1-28-04`** | Templates are named, versioned, and reproducible across runs with SHA-256 stable checksums. | **Must** | Issue #121 [CRM1-28] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/kit/mapping.test.ts`<br>`CRM-1 mapping templates and value translation` | **VERIFIED (Green)** |
 | **`FR-CRM1-28-05`** | Mapping routes and React UI page for template inspection and enum translation review. | **Should** | Issue #121 [CRM1-28] | Web / API | Component / API | `apps/crm/modules/crm-1/tests/web/mapping-templates-page.test.ts`<br>`apps/crm/modules/crm-1/tests/api/mapping-routes.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM1-12-01`** | Module registers normalized exact keys (trimmed lowercase email, tax number, phone+name composite, phone, sku). | **Must** | Issue #105 [CRM1-12] / KIT-10 | Domain | Unit | `apps/crm/modules/crm-1/tests/domain/duplicate-policy.test.ts`<br>`CRM-1 Exact Duplicate Key Policy` | **VERIFIED (Green)** |
+| **`FR-CRM1-12-02`** | Identical normalized keys flagged deterministically as duplicate candidates; ambiguous candidates held for human review. | **Must** | Issue #105 [CRM1-12] / KIT-10 | Domain / API | Unit / API | `apps/crm/modules/crm-1/tests/domain/duplicate-policy.test.ts`<br>`apps/crm/modules/crm-1/tests/api/duplicates.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM1-12-03`** | Automatic fuzzy merging is strictly prohibited in V1; autoMerge requests throw `AutoMergeForbiddenError` (HTTP 422). | **Must** | ClearShift Core Rules & [CRM1-12] | Domain / API | Unit / API | `apps/crm/modules/crm-1/tests/domain/duplicate-policy.test.ts`<br>`apps/crm/modules/crm-1/tests/api/duplicates.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM1-12-04`** | Immutable audit log records human merge decisions with actor ID, timestamp, kept ID, merged ID, and reason. | **Must** | Issue #105 [CRM1-12] / KIT-10 | Domain / Security | Unit / API | `apps/crm/modules/crm-1/tests/domain/duplicate-policy.test.ts`<br>`apps/crm/modules/crm-1/tests/api/duplicates.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM1-12-05`** | REST endpoints for duplicate candidate detection, held queue listing, resolution, and audit log inspection under `/api/v1/crm-contacts/duplicates/*`. | **Must** | Issue #105 [CRM1-12] / KIT-10 | API | Contract | `apps/crm/modules/crm-1/tests/api/duplicates.test.ts`<br>`CRM-1 Duplicate Key Policy & Human Review API` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 20 executing test files:
+The CRM-1 automated test suite comprises 22 executing test files:
 
 ```
 apps/crm/modules/crm-1/tests/
 ├── api/
+│   ├── duplicates.test.ts                   (18 tests) — POST /duplicates/detect (422 autoMerge), GET /held, POST /resolve, GET /audit (Issue #105 / [CRM1-12])
 │   ├── list.test.ts                         (46 tests) — Server-side paged list/read contracts & search
 │   ├── mapping-routes.test.ts               (10 tests) — Mapping templates, dry-run validation & batch map
 │   ├── mutations.test.ts                    ( 3 tests) — Validated contact/company/lead CRUD & 422 errors
@@ -74,6 +80,7 @@ apps/crm/modules/crm-1/tests/
 ├── db/
 │   └── schema.test.ts                       ( 4 tests) — PostgreSQL 18 schema check constraints & FKs
 ├── domain/
+│   ├── duplicate-policy.test.ts             (27 tests) — Exact key registry, candidate detector, review queue, no fuzzy auto-merge (Issue #105 / [CRM1-12])
 │   ├── qa-g1-design.test.ts                 (15 tests) — Data dictionary, ERD, traceability, dirty pack
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
 ├── kit/
@@ -95,13 +102,19 @@ apps/crm/modules/crm-1/tests/
     ├── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
     └── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 302 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 347 tests (100% Green, 0 Failures)
 ```
 
 ---
 
 ## 4. Gate G3 Sign-Off Verification
 
+* [x] **Deterministic Key Registration:** Exact normalized keys registered for email, phone+name, tax number, phone, and SKU.
+* [x] **Deterministic Duplicate Grouping:** Identical keys grouped without non-deterministic heuristics.
+* [x] **Zero Fuzzy Auto-Merge:** Auto-merging strictly prohibited in V1; raises 422 `AUTO_MERGE_FORBIDDEN`.
+* [x] **Authorized Human Review:** Duplicate candidate groups held in `held_for_review` until explicit human decision.
+* [x] **Self-Merge Assertion:** Prohibits self-merge (`keptId === mergedId`) with structured 400 validation error.
+* [x] **Immutable Audit Log:** Captures actor ID, timestamp, kept ID, merged ID, and reason for every review decision.
 * [x] **Cleaning Execution:** All approved V1 cleaning rules execute deterministically.
 * [x] **Field Audit:** Every modified value generates an audit entry with before/after diff and rule ID.
 * [x] **Anomaly Rejection:** Unrecoverable required-field and syntax anomalies result in structured row rejections.
