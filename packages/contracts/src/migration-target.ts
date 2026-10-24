@@ -1118,6 +1118,219 @@ export const CRM_TARGET_ENTITIES: Record<string, TargetEntityDefinition> = {
   ...CRM5_TARGET_ENTITIES,
 };
 
+/**
+ * ---------------------------------------------------------------------------
+ * KIT-07: Dry-Run Planner with Strict No-Target-Mutation Guarantee Contracts
+ * SDS §§3-4, §4.8, §§11.1-11.9; Project Plan v3.0 §§9, 11, 17; Decision C9
+ * ---------------------------------------------------------------------------
+ */
+
+export const DryRunRowOutcomeSchema = z.enum([
+  'loaded',
+  'rejected',
+  'merged',
+  'skipped',
+]);
+export type DryRunRowOutcome = z.infer<typeof DryRunRowOutcomeSchema>;
+
+export const DryRunPlannedRowSchema = z.object({
+  sourceRow: z.number().int().min(1),
+  entity: z.string().min(1),
+  plannedOutcome: DryRunRowOutcomeSchema,
+  targetId: z.string().uuid().optional(),
+  existingTargetId: z.string().uuid().optional(),
+  reasonCode: z.string().optional(),
+  reasonMessage: z.string().optional(),
+  field: z.string().optional(),
+  validationErrors: z.array(z.string()).default([]),
+  duplicateOfRow: z.number().int().min(1).optional(),
+  duplicateOfTargetId: z.string().optional(),
+  payloadHash: z.string().length(64).optional(),
+});
+export type DryRunPlannedRow = z.infer<typeof DryRunPlannedRowSchema>;
+
+export const DryRunPlannedCountsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  loaded: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  merged: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  unaccounted: z.literal(0),
+});
+export type DryRunPlannedCounts = z.infer<typeof DryRunPlannedCountsSchema>;
+
+export const DryRunPolicyConfigSchema = z.object({
+  maxFailureRate: z.number().min(0).max(1).default(0.10), // Default 10% halt threshold (Decision C9)
+  minAttemptedRows: z.number().int().nonnegative().default(1),
+  allowPartial: z.boolean().default(false),
+  strictNoMutation: z.boolean().default(true),
+});
+export type DryRunPolicyConfig = z.infer<typeof DryRunPolicyConfigSchema>;
+
+export const DryRunRejectionDetailSchema = z.object({
+  sourceRow: z.number().int().min(1),
+  reasonCode: z.string().min(1),
+  message: z.string().min(1),
+  field: z.string().optional(),
+});
+export type DryRunRejectionDetail = z.infer<typeof DryRunRejectionDetailSchema>;
+
+export const DryRunPlanReportSchema = z.object({
+  planId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  module: z.string().min(1),
+  targetEntity: z.string().min(1),
+  token: z.string().length(64), // Deterministic SHA-256 fingerprint
+  planVersion: z.string().min(1).default('1.0.0'),
+  ruleVersion: z.string().min(1).default('1.0.0'),
+  codeVersion: z.string().min(1).default('1.0.0'),
+  mappingChecksum: z.string().length(64),
+  targetBaselineHash: z.string().length(64),
+  policyConfig: DryRunPolicyConfigSchema,
+  policyPassed: z.boolean(),
+  failureRate: z.number().min(0).max(1),
+  canProceedToLoad: z.boolean(),
+  plannedCounts: DryRunPlannedCountsSchema,
+  plannedRows: z.array(DryRunPlannedRowSchema),
+  rejections: z.array(DryRunRejectionDetailSchema),
+  targetWriteCalls: z.literal(0), // Non-negotiable invariant: 0 mutation calls
+  targetReceiptsCreated: z.literal(0), // Non-negotiable invariant: 0 receipts created
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.coerce.date(),
+});
+export type DryRunPlanReport = z.infer<typeof DryRunPlanReportSchema>;
+
+export const DryRunLoadPreconditionSchema = z.object({
+  batchId: z.string().uuid(),
+  token: z.string().length(64),
+  currentTargetBaselineHash: z.string().length(64),
+  currentMappingChecksum: z.string().length(64),
+  currentRuleVersion: z.string().min(1).default('1.0.0'),
+});
+export type DryRunLoadPrecondition = z.infer<typeof DryRunLoadPreconditionSchema>;
+
+/**
+ * Custom Error: Dry-Run Policy Violation (e.g. 40% invalid fixture exceeds max 10% failure rate)
+ */
+export class DryRunPolicyViolationError extends Error {
+  public readonly statusCode = 422;
+  public readonly code = 'DRY_RUN_POLICY_VIOLATION';
+
+  constructor(
+    public readonly failureRate: number,
+    public readonly maxAllowedRate: number,
+    message?: string
+  ) {
+    const defaultMsg = `Dry-run policy violation: failure rate ${(failureRate * 100).toFixed(1)}% exceeds maximum allowable threshold ${(maxAllowedRate * 100).toFixed(1)}%`;
+    super(message || defaultMsg);
+    this.name = 'DryRunPolicyViolationError';
+  }
+}
+
+/**
+ * Custom Error: Load Precondition Check Failure (e.g. invalid token, target baseline drift, mapping changed)
+ */
+export class DryRunPreconditionError extends Error {
+  public readonly statusCode = 412; // Precondition Failed
+  public readonly code = 'PRECONDITION_FAILED';
+
+  constructor(
+    public readonly reason: 'TOKEN_INVALID' | 'BASELINE_DRIFT' | 'MAPPING_CHANGED' | 'RULE_VERSION_CHANGED' | 'POLICY_FAILED' | 'CONSERVATION_VIOLATION',
+    message: string
+  ) {
+    super(message);
+    this.name = 'DryRunPreconditionError';
+  }
+}
+
+/**
+ * Custom Error: Target Mutation Forbidden during Dry-Run
+ */
+export class DryRunTargetMutationForbiddenError extends Error {
+  public readonly statusCode = 403;
+  public readonly code = 'TARGET_MUTATION_FORBIDDEN';
+
+  constructor(operation: string = 'mutation') {
+    super(`Forbidden: dry-run planner strictly forbids target write operation '${operation}'`);
+    this.name = 'DryRunTargetMutationForbiddenError';
+  }
+}
+
+/**
+ * Asserts dry-run row count conservation equation:
+ * source = loaded + rejected + merged + skipped; unaccounted = 0
+ */
+export function assertDryRunConservation(counts: {
+  total: number;
+  loaded: number;
+  rejected: number;
+  merged: number;
+  skipped: number;
+}): { ok: boolean; unaccounted: number } {
+  const sum = counts.loaded + counts.rejected + counts.merged + counts.skipped;
+  const unaccounted = counts.total - sum;
+  if (unaccounted !== 0) {
+    throw new DryRunPreconditionError(
+      'CONSERVATION_VIOLATION',
+      `Row conservation violated: total ${counts.total} != accounted ${sum} (unaccounted: ${unaccounted})`
+    );
+  }
+  return { ok: true, unaccounted: 0 };
+}
+
+/**
+ * Computes deterministic SHA-256 dry-run token from plan parameters
+ */
+export function computeDryRunToken(params: {
+  batchId: string;
+  mappingChecksum: string;
+  ruleVersion: string;
+  targetBaselineHash: string;
+  plannedCounts: {
+    total: number;
+    loaded: number;
+    rejected: number;
+    merged: number;
+    skipped: number;
+  };
+  policyConfig: {
+    maxFailureRate: number;
+  };
+}): string {
+  const payload = [
+    params.batchId,
+    params.mappingChecksum,
+    params.ruleVersion,
+    params.targetBaselineHash,
+    `total:${params.plannedCounts.total}`,
+    `loaded:${params.plannedCounts.loaded}`,
+    `rejected:${params.plannedCounts.rejected}`,
+    `merged:${params.plannedCounts.merged}`,
+    `skipped:${params.plannedCounts.skipped}`,
+    `maxFailureRate:${params.policyConfig.maxFailureRate.toFixed(4)}`,
+  ].join('|');
+
+  return createHash('sha256').update(payload, 'utf8').digest('hex');
+}
+
+/**
+ * Computes deterministic SHA-256 hash of target baseline records
+ */
+export function computeTargetBaselineHash(records: unknown[]): string {
+  if (records.length === 0) {
+    return createHash('sha256').update('empty_target_baseline', 'utf8').digest('hex');
+  }
+  const stringified = records.map((r) => {
+    if (typeof r === 'object' && r !== null) {
+      const keys = Object.keys(r as Record<string, unknown>).sort();
+      return '{' + keys.map((k) => `${k}:${JSON.stringify((r as any)[k])}`).join(',') + '}';
+    }
+    return String(r);
+  });
+  stringified.sort();
+  return createHash('sha256').update(stringified.join('\n'), 'utf8').digest('hex');
+}
+
 // ============================================================================
 // KIT-08: Generic Target Adapter, Stable Idempotency & Import Receipts
 // ============================================================================
@@ -1225,3 +1438,4 @@ export interface MigrationTargetAdapter<TRow = unknown> {
     | { ok: false; error: MigrationTargetAdapterError }
   >;
 }
+

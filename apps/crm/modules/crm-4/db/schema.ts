@@ -36,6 +36,7 @@ export const crm4Lists = crm4Schema.table(
     check('chk_crm4_lists_campaign_count_nonnegative', sql`${table.campaignCount} >= 0`),
     check('chk_crm4_lists_member_count_nonnegative', sql`${table.memberCount} >= 0`),
     index('idx_crm4_lists_name_search').on(sql`lower(${table.name})`),
+    index('idx_crm4_lists_created_at').on(sql`${table.createdAt} DESC`),
   ]
 );
 
@@ -60,6 +61,7 @@ export const crm4Campaigns = crm4Schema.table(
     check('chk_crm4_campaigns_member_count_nonnegative', sql`${table.memberCount} >= 0`),
     index('idx_crm4_campaigns_list_id').on(table.listId),
     index('idx_crm4_campaigns_date').on(table.campaignDate),
+    index('idx_crm4_campaigns_created_at').on(sql`${table.createdAt} DESC`),
   ]
 );
 
@@ -84,7 +86,10 @@ export const crm4Members = crm4Schema.table(
       sql`${table.status} IN ('sent', 'opened', 'clicked')`
     ),
     uniqueIndex('idx_crm4_members_campaign_contact').on(table.campaignId, table.contactId),
+    index('idx_crm4_members_campaign_id').on(table.campaignId),
     index('idx_crm4_members_contact_id').on(table.contactId),
+    index('idx_crm4_members_status').on(table.status),
+    index('idx_crm4_members_created_at').on(sql`${table.createdAt} DESC`),
   ]
 );
 
@@ -109,6 +114,8 @@ export const crm4Consents = crm4Schema.table(
     ),
     check('chk_crm4_consents_source_nonempty', sql`length(btrim(${table.source})) > 0`),
     uniqueIndex('idx_crm4_consents_contact_id').on(table.contactId),
+    index('idx_crm4_consents_status').on(table.status),
+    index('idx_crm4_consents_updated_at').on(sql`${table.updatedAt} DESC`),
   ]
 );
 
@@ -236,3 +243,4 @@ export const crm4MarketingLists = crm4Lists;
 export const crm4MarketingCampaigns = crm4Campaigns;
 export const crm4CampaignMembers = crm4Members;
 export const crm4ContactConsents = crm4Consents;
+export const crm4ConsentRecords = crm4Consents;
