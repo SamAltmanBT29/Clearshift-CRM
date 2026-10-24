@@ -24,11 +24,16 @@ import {
   CRM1ImportRowSchema,
   Crm1DetectDuplicatesInputSchema,
   Crm1ResolveDuplicateInputSchema,
+  Crm1ExecuteBatchLoadInputSchema,
 } from "@clearshift/contracts";
 import {
   DuplicateReviewQueue,
   detectExactDuplicates,
 } from "../domain/duplicate-policy.js";
+import {
+  executeCrm1ChunkedBatchLoad,
+  type Crm1BatchExecutionReport,
+} from "../domain/batch-loader.js";
 import { AppError } from "@cs/kernel";
 import { getDatabase } from "@cs/db";
 import {
@@ -746,6 +751,71 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
         page,
         pageSize,
       });
+    });
+
+    // -------------------------------------------------------------------------
+    // 7. Chunked Batch Loading & Idempotent Retry Endpoints (CRM1-13)
+    // -------------------------------------------------------------------------
+
+    const batchReports = new Map<string, Crm1BatchExecutionReport>();
+
+    const handleExecuteBatchLoad = async (request: any, reply: any) => {
+      const parsed = Crm1ExecuteBatchLoadInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        throw new AppError("BAD_REQUEST", "Invalid batch load input", 400);
+      }
+      try {
+        const report = await executeCrm1ChunkedBatchLoad(parsed.data);
+        batchReports.set(report.batchId, report);
+        return report;
+      } catch (err: any) {
+        if (err?.code === "STOPPED_EXCESSIVE_FAILURES" || err?.statusCode === 422) {
+          throw new AppError("STOPPED_EXCESSIVE_FAILURES", err.message, 422);
+        }
+        throw err;
+      }
+    };
+
+    fastify.post("/batches/execute-load", {
+      preHandler: endpointPreHandlers(fastify, "BATCH_EXECUTE_LOAD")
+    }, handleExecuteBatchLoad);
+
+    fastify.get("/batches/:batchId/report", {
+      preHandler: endpointPreHandlers(fastify, "BATCH_REPORT_READ")
+    }, async (request) => {
+      const { batchId } = request.params as { batchId: string };
+      const report = batchReports.get(batchId);
+      if (!report) {
+        throw new AppError("NOT_FOUND", `Batch report for batch '${batchId}' not found`, 404);
+      }
+      return report;
+    });
+
+    fastify.post("/import/batch", {
+      preHandler: endpointPreHandlers(fastify, "BATCH_EXECUTE_LOAD")
+    }, async (request, reply) => {
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      if (Array.isArray(body["records"])) {
+        return handleExecuteBatchLoad(request, reply);
+      }
+      const rawRows = body["rows"] ?? body["records"];
+      if (!Array.isArray(rawRows)) {
+        throw new AppError("BAD_REQUEST", "Missing or invalid rows array in batch import payload", 400);
+      }
+      const batchId = (body["batchId"] ?? body["batch_id"] ?? `batch-crm1-${Date.now()}`) as string;
+      const records = rawRows.map((r, idx) => ({
+        sourceRow: (r as any).sourceRow ?? (r as any).source_row ?? idx + 1,
+        idempotencyKey: (r as any).idempotencyKey ?? (r as any).idempotency_key ?? `${batchId}-row-${idx + 1}`,
+        data: (r as any).data ?? r,
+      }));
+      (request as any).body = {
+        batchId,
+        module: "crm-1",
+        step: "load",
+        chunkSize: Number(body["chunkSize"] ?? body["chunk_size"] ?? 500),
+        records,
+      };
+      return handleExecuteBatchLoad(request, reply);
     });
   };
 }

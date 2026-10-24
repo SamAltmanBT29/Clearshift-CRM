@@ -16,6 +16,7 @@ import {
   Crm1ResolveDuplicateInputSchema,
   Crm1EvaluateContactDuplicateInputSchema,
   Crm1EvaluateCompanyDuplicateInputSchema,
+  Crm1ExecuteBatchLoadInputSchema,
 } from '@clearshift/contracts';
 import { Roles, type RoleType } from '@cs/identity';
 import { requireRoles } from '../plugins/auth.js';
@@ -1185,5 +1186,131 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
       ...result,
       correlation_id: correlationId,
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 7. Chunked Batch Loading & Idempotent Retry Endpoints (CRM1-13)
+  // ---------------------------------------------------------------------------
+
+  const handleExecuteBatchLoad = async (request: any, reply: any) => {
+    const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const parsed = Crm1ExecuteBatchLoadInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'BAD_REQUEST',
+        message: 'Invalid batch load input',
+        details: parsed.error.issues,
+        correlation_id: correlationId,
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid batch load input',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const report = await service.executeBatchLoad(parsed.data);
+
+      await auditService.logEvent({
+        actor: request.user?.sub ?? 'system',
+        action: 'crm1.batch.executed',
+        entity: 'batch_load',
+        batchId: parsed.data.batchId,
+        metadata: {
+          status: report.status,
+          totalRecords: report.totalRecords,
+          committedRecords: report.committedRecords,
+          failedRecords: report.failedRecords,
+          failureRate: report.failureRate,
+        },
+        result: report.status === 'STOPPED_EXCESSIVE_FAILURES' ? 'halted' : report.status === 'FAILED' ? 'failure' : 'success',
+      });
+
+      return reply.status(200).send({
+        ...report,
+        correlation_id: correlationId,
+      });
+    } catch (err: any) {
+      if (err?.code === 'STOPPED_EXCESSIVE_FAILURES' || err?.statusCode === 422) {
+        return reply.status(422).send({
+          code: 'STOPPED_EXCESSIVE_FAILURES',
+          message: err.message || 'Batch execution stopped immediately: row failures exceeded the 10% threshold.',
+          correlation_id: correlationId,
+          error: {
+            code: 'STOPPED_EXCESSIVE_FAILURES',
+            message: err.message || 'Batch execution stopped immediately: row failures exceeded the 10% threshold.',
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  };
+
+  fastify.post('/batches/execute-load', {
+    preHandler: endpointPreHandlers(fastify, 'BATCH_EXECUTE_LOAD'),
+  }, handleExecuteBatchLoad);
+
+  fastify.get<{ Params: { batchId: string } }>('/batches/:batchId/report', {
+    preHandler: endpointPreHandlers(fastify, 'BATCH_REPORT_READ'),
+  }, async (request, reply) => {
+    const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
+    const { batchId } = request.params;
+    const report = service.getBatchReport(batchId);
+    if (!report) {
+      return reply.status(404).send({
+        code: 'NOT_FOUND',
+        message: `Batch report for batch '${batchId}' not found`,
+        correlation_id: correlationId,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Batch report for batch '${batchId}' not found`,
+        },
+      });
+    }
+    return reply.status(200).send({
+      ...report,
+      correlation_id: correlationId,
+    });
+  });
+
+  fastify.post('/import/batch', {
+    preHandler: endpointPreHandlers(fastify, 'BATCH_EXECUTE_LOAD'),
+  }, async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (Array.isArray(body['records'])) {
+      return handleExecuteBatchLoad(request, reply);
+    }
+    const batchId = (body['batchId'] ?? body['batch_id'] ?? `batch-crm1-${Date.now()}`) as string;
+    const rawRows = body['rows'] ?? body['records'];
+    if (!Array.isArray(rawRows)) {
+      return reply.status(400).send({
+        code: 'BAD_REQUEST',
+        message: 'Missing or invalid rows array in batch import payload',
+        correlation_id: (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now(),
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Missing or invalid rows array in batch import payload',
+        },
+      });
+    }
+
+    const records = rawRows.map((r, idx) => ({
+      sourceRow: (r as any).sourceRow ?? (r as any).source_row ?? idx + 1,
+      idempotencyKey: (r as any).idempotencyKey ?? (r as any).idempotency_key ?? `${batchId}-row-${idx + 1}`,
+      data: (r as any).data ?? r,
+    }));
+
+    const executeInput = {
+      batchId,
+      module: 'crm-1' as const,
+      step: 'load' as const,
+      chunkSize: Number(body['chunkSize'] ?? body['chunk_size'] ?? 500),
+      records,
+    };
+    (request as any).body = executeInput;
+    return handleExecuteBatchLoad(request, reply);
   });
 };
