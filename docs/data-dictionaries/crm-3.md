@@ -123,3 +123,35 @@ CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
 * **Skip Link:** Provides `<a href="#main-content" class="cs-skip-link">Skip to main content</a>` for keyboard accessibility.
 * **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
 * **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.
+
+---
+
+## 5. Domain Event Taxonomy (Redis Streams & Transactional Outbox)
+
+As mandated by PLT-04 and SDS ClearShift CRM v2.0 §4.4 / §4.10, CRM-3 publishes events to the transactional outbox conforming to `EventEnvelope<T>`:
+
+| Event Type | Aggregate Type | Description | Cross-Module Consumers |
+|---|---|---|---|
+| `crm.ticket.created` | `Ticket` | Published when a support ticket is created. | CRM-1 Contacts, Audit |
+| `crm.ticket.updated` | `Ticket` | Published when mutable ticket fields are updated. | Audit |
+| `crm.ticket.status_changed` | `Ticket` | Published on ticket lifecycle transition (New -> Open -> Waiting -> Solved -> Closed). | SLA Monitor, Audit |
+| `crm.ticket.priority_changed` | `Ticket` | Published on ticket priority update (Low, Normal, High, Urgent). | SLA Monitor, Audit |
+| `crm.ticket.note_added` | `Note` | Published when an append-only note is attached to a ticket. | Audit, Activity Timeline |
+| `crm.ticket.import_batch_loaded` | `ImportBatch` | Published when a migration batch terminates. | Migration Kit, Audit |
+
+---
+
+## 6. Deterministic Mock Server (`crm3MockServerPlugin`)
+
+Available in `@clearshift/contracts` for downstream module development and contract testing:
+- **Synthetic Fixtures**: `createDeterministicMockTickets()` and `createDeterministicMockNotes()` generate 100% synthetic, deterministic payloads with zero PII or company credentials.
+- **State Store**: `Crm3MockStateStore` manages in-memory tickets, notes, and import batch receipts.
+- **Fastify Plugin**: `crm3MockServerPlugin` serves all V1 routes under `/api/v1/crm-tickets` with strict Zod validation, deterministic error envelopes, bounded pagination, and import batch stubs.
+
+---
+
+## 7. Change Record & Formal Gate Sign-off
+
+| Version | Date | Author / Role | Description / Justification |
+|---|---|---|---|
+| `1.0.0` | 2026-10-24 | Integration Lead / CRM-3 Group | Gate G1 baseline release for CRM-3 contracts, OpenAPI 3.1, domain events taxonomy, and deterministic mock server (Issue #147, [CRM3-14]). |

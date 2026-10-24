@@ -207,6 +207,49 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "404":
           $ref: "#/components/responses/NotFoundError"
+    post:
+      operationId: addCRM3TicketNoteByTicketId
+      tags: [CRM-3]
+      summary: Append a note to a ticket by ticket ID
+      description: Append a new note directly referencing the parent ticket path parameter. Allowed roles - editor, admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - noteText
+              properties:
+                noteText:
+                  type: string
+                  minLength: 1
+                authorId:
+                  type: string
+      responses:
+        "201":
+          description: Note appended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteRead"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "422":
+          $ref: "#/components/responses/ValidationError"
 
   /api/v1/crm-tickets/notes:
     post:
@@ -237,6 +280,59 @@ paths:
           $ref: "#/components/responses/NotFoundError"
         "422":
           $ref: "#/components/responses/ValidationError"
+
+  /api/v1/crm-tickets/imports:
+    post:
+      operationId: createCRM3Import
+      tags: [CRM-3]
+      summary: Create an import batch for tickets/notes
+      description: Import migration batch processed and receipts persisted. Allowed roles - migration_runner, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportCreate"
+      responses:
+        "201":
+          description: Import batch created and loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBatch"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/crm-tickets/imports/{batch}:
+    get:
+      operationId: getCRM3Import
+      tags: [CRM-3]
+      summary: Get import batch status and receipts
+      description: Retrieve import batch metadata and committed row receipts. Allowed roles - viewer, analyst, admin.
+      parameters:
+        - name: batch
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Import batch detail with receipts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBatchDetail"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
 
 components:
   securitySchemes:
@@ -421,6 +517,124 @@ components:
           type: integer
         total:
           type: integer
+
+    ImportStatus:
+      type: string
+      enum: [pending, processing, completed, failed]
+
+    ImportCreate:
+      type: object
+      required:
+        - sourceSystem
+      properties:
+        sourceSystem:
+          type: string
+          minLength: 1
+        batchId:
+          type: string
+          format: uuid
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              sourceRow:
+                type: integer
+                minimum: 1
+              entity:
+                type: string
+                enum: [ticket, note]
+              sourceId:
+                type: string
+
+    ImportBatch:
+      type: object
+      required:
+        - id
+        - sourceSystem
+        - status
+        - loadedCount
+        - rejectedCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceSystem:
+          type: string
+        status:
+          $ref: "#/components/schemas/ImportStatus"
+        idempotencyKey:
+          type: string
+          nullable: true
+        requestHash:
+          type: string
+          nullable: true
+        loadedCount:
+          type: integer
+          minimum: 0
+        rejectedCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ImportReceipt:
+      type: object
+      required:
+        - id
+        - batchId
+        - sourceRow
+        - entity
+        - sourceSystem
+        - sourceId
+        - targetId
+        - idempotencyKey
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+          format: uuid
+        sourceRow:
+          type: integer
+          minimum: 1
+        entity:
+          type: string
+          enum: [ticket, note]
+        sourceSystem:
+          type: string
+        sourceId:
+          type: string
+        targetId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ImportBatchDetail:
+      allOf:
+        - $ref: "#/components/schemas/ImportBatch"
+        - type: object
+          properties:
+            receipts:
+              type: array
+              items:
+                $ref: "#/components/schemas/ImportReceipt"
 
     ErrorEnvelope:
       type: object
