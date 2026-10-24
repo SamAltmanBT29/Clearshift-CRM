@@ -150,8 +150,32 @@ Available in `@clearshift/contracts` for downstream module development and contr
 
 ---
 
-## 7. Change Record & Formal Gate Sign-off
+## 8. Search, Faceted Filters, and Active Filter Tags (CRM3-18)
+
+Conforms to Gate G2 requirements for Issue #151 ([CRM3-18]). Provides server-side debounced search, faceted filter dimensions, active pill tags, and bidirectional URL parameter synchronization.
+
+### Debounced Search Input Protocol
+- **Debounce Threshold**: Fixed at `300ms` (`SEARCH_DEBOUNCE_MS = 300`).
+- **Immediate Execution**: Pressing `Enter` or calling `flushSearch()` bypasses timer delay and executes search immediately.
+- **Immediate Cancellation / Reset**: Pressing `Escape` or activating the `×` button flushes or clears search term immediately.
+- **Server Match Targets**: Case-insensitive match on `subject` and `orderRef`.
+
+### Standard Faceted Filter Dimensions
+- **`status` Facet**: All Statuses, `New`, `Open`, `Waiting`, `Solved`, `Closed`.
+- **`priority` Facet**: All Priorities, `Low`, `Normal`, `High`, `Urgent`.
+
+### Active Filter Pills & State Reset
+- Active search and facet selections generate removable filter pills (`ActiveFilterPill`).
+- Filter pills can be cleared individually via `removeFilter(key)`.
+- Global `clearAll()` / "Clear All" action clears search and resets all faceted selections simultaneously.
+- When search or filter modifications occur, table pagination automatically resets to `page = 1` to prevent phantom page errors.
+- Empty states under active filter conditions render `cs-empty-filter-state` with "Reset All Filters" CTA.
+
+---
+
+## 9. Change Record & Formal Gate Sign-off
 
 | Version | Date | Author / Role | Description / Justification |
 |---|---|---|---|
 | `1.0.0` | 2026-10-24 | Integration Lead / CRM-3 Group | Gate G1 baseline release for CRM-3 contracts, OpenAPI 3.1, domain events taxonomy, and deterministic mock server (Issue #147, [CRM3-14]). |
+| `1.1.0` | 2026-10-24 | Frontend / Review-screen Engineer | Gate G2 delivery for Search, Filters, and Sorting Controls (Issue #151, [CRM3-18]). |

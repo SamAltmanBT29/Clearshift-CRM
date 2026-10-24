@@ -29,6 +29,26 @@ export interface TableFilterState {
   [key: string]: string | undefined;
 }
 
+export interface ActiveFilterPill {
+  key: string;
+  label: string;
+  value: string;
+  displayValue: string;
+}
+
+export interface FilterFacetOption {
+  value: string;
+  label: string;
+  count?: number;
+}
+
+export interface FilterFacet {
+  id: string;
+  label: string;
+  paramKey: string;
+  options: FilterFacetOption[];
+}
+
 export interface TableState<T = Record<string, unknown>> {
   columns: DataTableColumn<T>[];
   data: T[];
