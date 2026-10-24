@@ -28,12 +28,16 @@ export const CRM4_ENDPOINT_ROLES = {
 
   MEMBERS_LIST: [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
   MEMBERS_CREATE: [Roles.EDITOR, Roles.ADMIN] as RoleType[],
+  MEMBERS_UPDATE: [Roles.EDITOR, Roles.ADMIN] as RoleType[],
 
   CONSENTS_READ: [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
   CONSENTS_SET: [Roles.EDITOR, Roles.ADMIN] as RoleType[],
 
   MAPPINGS_READ: [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
   MAPPINGS_EXECUTE: [Roles.EDITOR, Roles.ADMIN] as RoleType[],
+
+  DUPLICATES_DETECT: [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  DUPLICATES_RESOLVE: [Roles.EDITOR, Roles.ADMIN] as RoleType[],
 } as const;
 
 export type Crm4EndpointKey = keyof typeof CRM4_ENDPOINT_ROLES;

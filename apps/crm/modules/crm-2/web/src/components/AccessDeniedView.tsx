@@ -14,7 +14,7 @@ export interface AccessDeniedViewProps {
 
 /**
  * 403 Forbidden Access-Denied View Component
- * Conforms to ClearShift V1 Issue #130 (CRM2-17).
+ * Conforms to ClearShift V1 Issue #132 (CRM2-19).
  * Renders when authorization check fails, clearly explaining the missing role or capability.
  */
 export const AccessDeniedView: React.FC<AccessDeniedViewProps> = ({

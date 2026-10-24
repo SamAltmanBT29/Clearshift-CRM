@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { AppError } from '@cs/kernel';
+import { AppError, type ReferenceResolver } from '@cs/kernel';
 import {
   type CRM4List,
   type CRM4ListCreate,
@@ -9,12 +9,32 @@ import {
   type CRM4CampaignPatch,
   type CRM4Member,
   type CRM4MemberCreate,
+  type CRM4MemberPatch,
   type CRM4Consent,
   type CRM4ConsentSet,
   assertMonotonicOptOut,
   assertValidMemberStatus,
 } from '@clearshift/contracts';
 import { sanitizeCsvField, redactSensitiveObject } from '../policies/masking.js';
+import {
+  assertValidMemberStatusTransition,
+  assertValidConsentStatusTransition,
+  assertContactExists,
+} from '../domain/relationships.js';
+import {
+  type Crm4DuplicateCandidate,
+  type Crm4DuplicateAuditLogEntry,
+  type Crm4DetectDuplicatesInput,
+  type Crm4ResolveDuplicateInput,
+  type DuplicateEvaluationResult,
+  buildListExactKey,
+  buildListBusinessKey,
+  buildCampaignExactKey,
+  buildMemberExactKey,
+  buildConsentExactKey,
+  evaluateListDuplicate,
+  evaluateCampaignDuplicate,
+} from '@clearshift/contracts';
 
 export interface ImportReceipt {
   id: string;
@@ -39,8 +59,12 @@ export class Crm4Service {
   private members: Map<string, CRM4Member> = new Map();
   private consents: Map<string, CRM4Consent> = new Map(); // Keyed by contactId
   private receipts: Map<string, ImportReceipt> = new Map(); // Keyed by idempotencyKey
+  private duplicateCandidates: Map<string, Crm4DuplicateCandidate> = new Map();
+  private duplicateAuditLogs: Crm4DuplicateAuditLogEntry[] = [];
+  private contactResolver?: ReferenceResolver | undefined;
 
-  constructor() {
+  constructor(options?: { contactResolver?: ReferenceResolver | undefined }) {
+    this.contactResolver = options?.contactResolver;
     this.seedSyntheticData();
   }
 
@@ -56,6 +80,33 @@ export class Crm4Service {
     };
     this.receipts.set(key, full);
     return full;
+  }
+
+  /**
+   * Captures an in-memory snapshot of all owned entity state for transactional atomicity & rollback.
+   */
+  public snapshotState() {
+    return {
+      lists: new Map(this.lists),
+      campaigns: new Map(this.campaigns),
+      members: new Map(this.members),
+      consents: new Map(this.consents),
+    };
+  }
+
+  /**
+   * Restores in-memory state from a previously captured snapshot.
+   */
+  public restoreState(snapshot: {
+    lists: Map<string, CRM4List>;
+    campaigns: Map<string, CRM4Campaign>;
+    members: Map<string, CRM4Member>;
+    consents: Map<string, CRM4Consent>;
+  }): void {
+    this.lists = new Map(snapshot.lists);
+    this.campaigns = new Map(snapshot.campaigns);
+    this.members = new Map(snapshot.members);
+    this.consents = new Map(snapshot.consents);
   }
 
   /**
@@ -424,6 +475,9 @@ export class Crm4Service {
       }
     }
 
+    // Cross-module integrity: Assert referenced contact exists in CRM-1
+    await assertContactExists(this.contactResolver, data.contactId);
+
     const campaign = await this.getCampaignById(data.campaignId);
 
     // Assert status invariant: strictly sent, opened, clicked
@@ -453,6 +507,12 @@ export class Crm4Service {
     this.members.set(member.id, member);
     campaign.memberCount += 1;
 
+    // Increment associated list memberCount if list exists
+    const list = this.lists.get(campaign.listId);
+    if (list) {
+      list.memberCount += 1;
+    }
+
     if (idempotency?.key) {
       this.recordReceipt(idempotency.key, {
         batchId: idempotency.batchId,
@@ -465,6 +525,33 @@ export class Crm4Service {
     }
 
     return member;
+  }
+
+  public async patchMember(
+    campaignId: string,
+    memberId: string,
+    data: CRM4MemberPatch
+  ): Promise<CRM4Member> {
+    await this.getCampaignById(campaignId);
+
+    const member = this.members.get(memberId);
+    if (!member || member.campaignId !== campaignId) {
+      throw new AppError('NOT_FOUND', `Member '${memberId}' not found in campaign '${campaignId}'`, 404);
+    }
+
+    if (data.status !== undefined) {
+      // Enforce valid lifecycle status transitions: sent -> opened -> clicked
+      assertValidMemberStatusTransition(member.status, data.status);
+    }
+
+    const updated: CRM4Member = {
+      ...member,
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.unsubscribed !== undefined ? { unsubscribed: data.unsubscribed } : {}),
+    };
+
+    this.members.set(memberId, updated);
+    return updated;
   }
 
   // =========================================================================
@@ -538,6 +625,24 @@ export class Crm4Service {
     return consent;
   }
 
+  public async getListByName(name: string): Promise<CRM4List | undefined> {
+    const trimmed = name.trim().toLowerCase();
+    return Array.from(this.lists.values()).find((l) => l.name.trim().toLowerCase() === trimmed);
+  }
+
+  public async getCampaignByName(name: string, listId?: string): Promise<CRM4Campaign | undefined> {
+    const trimmed = name.trim().toLowerCase();
+    return Array.from(this.campaigns.values()).find(
+      (c) => c.name.trim().toLowerCase() === trimmed && (!listId || c.listId === listId)
+    );
+  }
+
+  public async getMember(campaignId: string, contactId: string): Promise<CRM4Member | undefined> {
+    return Array.from(this.members.values()).find(
+      (m) => m.campaignId === campaignId && m.contactId === contactId
+    );
+  }
+
   // =========================================================================
   // CSV Export with Consent Re-check & Formula Injection Protection
   // =========================================================================
@@ -566,6 +671,144 @@ export class Crm4Service {
     }
 
     return rows.join('\n');
+  }
+
+  // =========================================================================
+  // Deterministic Duplicate Key Policy & Human Review ([CRM4-12] / Issue #165)
+  // =========================================================================
+
+  public async detectDuplicates(input: Crm4DetectDuplicatesInput): Promise<{
+    candidates: Crm4DuplicateCandidate[];
+    totalDuplicates: number;
+    heldForReviewCount: number;
+  }> {
+    const keyMap = new Map<string, string[]>();
+
+    for (const record of input.records) {
+      let normKey = record.keyValue.trim().toLowerCase();
+      if (input.keyType === 'list_name') {
+        normKey = buildListBusinessKey(record.keyValue);
+      }
+      const existing = keyMap.get(normKey) || [];
+      existing.push(record.id);
+      keyMap.set(normKey, existing);
+    }
+
+    const detectedCandidates: Crm4DuplicateCandidate[] = [];
+
+    for (const [normKey, recordIds] of keyMap.entries()) {
+      if (recordIds.length > 1) {
+        const candidate: Crm4DuplicateCandidate = {
+          id: randomUUID(),
+          batchId: input.batchId,
+          module: 'crm-4',
+          entity: input.entity,
+          keyType: input.keyType,
+          normalizedKey: normKey,
+          recordIds,
+          status: 'held_for_review', // Strictly held for human review in V1 (zero auto-merge)
+          detectedAt: new Date(),
+          metadata: {
+            detectedCount: recordIds.length,
+          },
+        };
+        this.duplicateCandidates.set(candidate.id, candidate);
+        detectedCandidates.push(candidate);
+      }
+    }
+
+    return {
+      candidates: detectedCandidates,
+      totalDuplicates: detectedCandidates.length,
+      heldForReviewCount: detectedCandidates.length,
+    };
+  }
+
+  public async getDuplicateCandidates(params: {
+    entity?: string | undefined;
+    status?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  } = {}): Promise<{
+    items: Crm4DuplicateCandidate[];
+    pagination: { page: number; pageSize: number; totalCount: number; totalPages: number };
+  }> {
+    let all = Array.from(this.duplicateCandidates.values());
+
+    if (params.entity) {
+      all = all.filter((c) => c.entity === params.entity);
+    }
+    if (params.status) {
+      all = all.filter((c) => c.status === params.status);
+    }
+
+    const page = Math.max(1, params.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize || 25));
+    const totalCount = all.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const startIndex = (page - 1) * pageSize;
+    const items = all.slice(startIndex, startIndex + pageSize);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+      },
+    };
+  }
+
+  public async resolveDuplicate(input: Crm4ResolveDuplicateInput): Promise<Crm4DuplicateAuditLogEntry> {
+    const candidate = this.duplicateCandidates.get(input.candidateId);
+    if (!candidate) {
+      throw new AppError('NOT_FOUND', `Duplicate candidate '${input.candidateId}' not found`, 404);
+    }
+
+    if (candidate.status === 'resolved') {
+      throw new AppError('CONFLICT', `Duplicate candidate '${input.candidateId}' has already been resolved`, 409);
+    }
+
+    if (!candidate.recordIds.includes(input.keptId)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Kept entity ID '${input.keptId}' does not belong to duplicate candidate recordIds: [${candidate.recordIds.join(', ')}]`,
+        400
+      );
+    }
+
+    if (!candidate.recordIds.includes(input.mergedId)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Merged entity ID '${input.mergedId}' does not belong to duplicate candidate recordIds: [${candidate.recordIds.join(', ')}]`,
+        400
+      );
+    }
+
+    candidate.status = 'resolved';
+
+    const auditEntry: Crm4DuplicateAuditLogEntry = {
+      id: randomUUID(),
+      candidateId: candidate.id,
+      decision: input.decision,
+      actorId: input.actorId,
+      timestamp: new Date(),
+      keptId: input.keptId,
+      mergedId: input.mergedId,
+      reason: input.reason,
+      keyType: candidate.keyType,
+      normalizedKey: candidate.normalizedKey,
+      entity: candidate.entity,
+      metadata: input.metadata,
+    };
+
+    this.duplicateAuditLogs.push(auditEntry);
+    return auditEntry;
+  }
+
+  public getDuplicateAuditLogs(): Crm4DuplicateAuditLogEntry[] {
+    return [...this.duplicateAuditLogs];
   }
 }
 

@@ -14,7 +14,7 @@ export interface EmptyStateProps {
 
 /**
  * Accessible Zero-Data Empty State Component
- * Conforms to ClearShift V1 Issue #130 (CRM2-17).
+ * Conforms to ClearShift V1 Issue #132 (CRM2-19).
  * Displays informative message and actionable call-to-action button when data collection is empty.
  */
 export const EmptyState: React.FC<EmptyStateProps> = ({
