@@ -124,34 +124,145 @@ CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
 * **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
 * **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.
 
----
+<<<<<<< HEAD
+## 5. Ticket Status Transitions & Relationship Integrity (CRM3-06 / #31)
 
-## 5. Domain Event Taxonomy (Redis Streams & Transactional Outbox)
+### Status transition map (user edits via `PATCH /tickets/{id}`)
+Source of truth: `CRM3_TICKET_STATUS_TRANSITIONS` in `packages/contracts/src/crm-3.ts`.
 
-As mandated by PLT-04 and SDS ClearShift CRM v2.0 §4.4 / §4.10, CRM-3 publishes events to the transactional outbox conforming to `EventEnvelope<T>`:
+| From | Allowed next statuses |
+|---|---|
+| `New` | `Open` |
+| `Open` | `Waiting`, `Solved` |
+| `Waiting` | `Open`, `Solved` |
+| `Solved` | `Closed`, `Open` (reopen) |
+| `Closed` | none (terminal) |
 
-| Event Type | Aggregate Type | Description | Cross-Module Consumers |
+- Setting the same status again is an idempotent no-op and is accepted.
+- An illegal transition returns `422 INVALID_TICKET_STATUS_TRANSITION` (detail code `invalid_transition`, message lists the allowed next statuses). The rule is checked before any write, so the stored ticket is unchanged.
+- Edits to the same ticket are serialized in the service, so two concurrent edits cannot both validate against the same stale status.
+- The map applies to edits only. Ticket creation (API and Migration Kit import) may use any valid status, because legacy history contains `Solved` and `Closed` tickets.
+
+### Relationship rules
+| Relationship | Rule | Failure |
+|---|---|---|
+| Ticket → CRM-1 contact (`contact_id`) | Required. Checked on create and on any edit that changes it, through the `ReferenceResolver` port (decision C7). No cross-schema foreign key; CRM-3 never reads or writes CRM-1 tables. | `422 VALIDATION_ERROR`, detail code `invalid_contact_reference`; nothing is written |
+| Note → ticket (`ticket_id`) | The ticket must exist in this module before the note is written. | `404 NOT_FOUND`, detail code `ticket_not_found` |
+| Ticket → ERP order (`order_ref`) | Plain text in V1, not validated against ERP. | — |
+
+### Read-model consistency
+- `GET /tickets/{id}` and the module's public `Crm3ReferenceResolver` read the same authoritative store, so status, contact link and order reference agree immediately after a successful write.
+- A contact that can no longer be resolved is shown with `contactName`/`contactEmail` = `null`; the ticket is still returned.
+- The public resolver projects only `id, subject, status, priority, contactId` (no note text, no contact PII).
+
+## 6. Authorization Policy (CRM3-15 / #148)
+
+Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/roles.ts`. Every route runs the shared Hub `jwtPlugin` (`@cs/identity`): EdDSA signature, `exp`, issuer `clearshift-hub` and audience `clearshift` are verified. `admin` passes every check.
+
+| Route | viewer | editor | migration_runner | analyst | admin | no token |
+|---|---|---|---|---|---|---|
+| `GET /tickets` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `GET /tickets/{id}/notes` | 200 | 200 | 403 | 200 | 200 | 401 |
+| `POST /tickets` | 403 | 201 | 201 | 403 | 201 | 401 |
+| `PATCH /tickets/{id}` | 403 | 200 | 403 | 403 | 200 | 401 |
+| `POST /notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+| `POST /tickets/{id}/notes` | 403 | 201 | 403 | 403 | 201 | 401 |
+
+- 401 `UNAUTHORIZED` and 403 `FORBIDDEN` use the standard envelope `{ code, message, details, correlation_id }`.
+- Roles, not `@cs/rbac` capabilities, decide access: the SDS lets `migration_runner` create tickets although that role has no `module.write` capability.
+- **Fail closed:** registering the routes with auth enabled but without the Hub `jwtPlugin` throws at startup instead of serving unauthenticated routes. `enforceAuth: false` exists only for isolated tests.
+- **Note author:** always the authenticated user (`sub`). A body `authorId` naming someone else returns 403 `AUTHOR_MISMATCH` (detail code `author_mismatch`) and nothing is written.
+- **Protected fields:** `PATCH /tickets/{id}` rejects `id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId` with 400 (strict schema); nothing is written.
+- **Multi-tenancy:** V1 has no tenant or owner column on tickets, so there is no tenant isolation rule to enforce.
+
+## 7. Migration Kit Target Adapter & Import Receipts (CRM3-11 / #144)
+
+`Crm3TargetAdapter` (`apps/crm/modules/crm-3/src/migration/target-adapter.ts`) implements the shared Kit `TargetAdapter` port (module `crm-3`, entity `ticket`, schema version 1). It runs in-process and calls the CRM-3 service directly (decision C4); there is no HTTP import route.
+
+### Clean row (input)
+| Field | Required | Rule |
+|---|---|---|
+| `subject` | yes | Non-empty after trim |
+| `status` | yes | Exactly one of `New, Open, Waiting, Solved, Closed` (any status may be imported; the transition map applies to edits only). Variants such as `open`/`NEW` must be normalized by the cleaner first. |
+| `priority` | yes | Exactly one of `Low, Normal, High, Urgent` |
+| `customerEmail` | yes | Valid email; normalized (trim + lowercase) and resolved to a CRM-1 contact through `ReferenceResolver.get('contact_by_email', email)` (decisions C6/C7) |
+| `text` | no | Becomes the ticket's first note, author `kit-import` |
+| `orderRef` | no | Plain text |
+| `sourceSystem`, `sourceId` | no | Default `legacy-csv` and `<batchId>:<sourceRow>` |
+
+### Behaviour
+- **Create-only (decision C8):** a row whose `(sourceSystem, sourceId)` already exists is rejected, never updated.
+- **Atomic:** the ticket, its first note, the batch record (created as `processing` on first load) and the receipts commit together; if any part fails nothing is kept.
+- **Receipts:** one `ticket` receipt (key supplied by the Kit) and, when `text` is present, one `note` receipt (key `computeIdempotencyKey(batchId, sourceRow, 'note', '1')`). Each stores `batch_id, source_row, entity, source_system, source_id, target_id, idempotency_key, created_at`.
+- **Idempotency key:** `computeIdempotencyKey(batchId, sourceRow, entity, schemaVersion)` from `@cs/core` (`buildCrm3IdempotencyKey`). A replay with the same key and the same canonical payload returns the existing receipt and creates nothing; the same key, or the same batch row under another key, with a different payload is rejected.
+- **Dry run (`preflight` / `assessRows`):** validates and resolves customers read-only; writes no tickets, notes, batches or receipts. Also flags a source key repeated within the batch.
+- **One outcome per row:** every call returns either a load (`created`) or a reject with a reason code; nothing is dropped silently.
+
+### Reason codes
+| Code | Kind | Meaning |
+|---|---|---|
+| `EMPTY_SUBJECT` | reject | Subject missing or blank |
+| `INVALID_STATUS` | reject | Status not an exact V1 value |
+| `INVALID_PRIORITY` | reject | Priority not an exact V1 value |
+| `INVALID_EMAIL` | reject | Customer email missing or malformed |
+| `CUSTOMER_UNRESOLVED` | reject | Email does not resolve to a CRM-1 contact (orphan ticket) |
+| `DUPLICATE_SOURCE_KEY` | reject | `(sourceSystem, sourceId)` already exists (or repeats in the batch during dry run) |
+| `IDEMPOTENCY_CONFLICT` | reject | Key or batch row reused with a different payload |
+| `INVALID_ROW`, `INVALID_BATCH_ID`, `INVALID_SOURCE_ROW`, `INVALID_IDEMPOTENCY_KEY` | reject | Caller supplied a malformed row, non-UUID batch id, non-positive row number or empty key |
+| `TARGET_UNAVAILABLE` | **retryable** | Infrastructure failure (e.g. contact resolver down, receipt write failed); nothing was written, retry with the same key |
+
+## 8. Batch Loader: 500-Row Chunks, Bounded Retry & 10% Stop (CRM3-13 / #146)
+
+`executeCrm3BatchLoad` (`apps/crm/modules/crm-3/src/domain/batch-loader.ts`) loads a batch through `Crm3TargetAdapter`.
+
+| Rule | Behaviour |
+|---|---|
+| Chunks | `DEFAULT_CHUNK_SIZE` = 500 rows (shared `@clearshift/contracts` constant; 1–1000 allowed). |
+| Retry | Only retryable codes (`TARGET_UNAVAILABLE`) are retried, up to `DEFAULT_MAX_RETRIES` = 3, waiting 50 ms × 2^attempt capped at 1 s. Every attempt reuses the same idempotency key. Bad-data rejects are never retried. |
+| Stop (decision C9) | After every row `shouldHaltBatch` (`@cs/kit`) runs: halt when failed / attempted > 10% with at least 50 attempted rows. Failures = rejects + rows that exhausted retries. |
+| No rollback | Rows and receipts committed before a halt stay. Re-running the same batch resumes: committed rows replay to their existing receipts, so nothing is duplicated. |
+| Accounting | `source = loaded + rejected + merged + skipped + notAttempted`, `unaccounted = 0` (`evaluateReconciliation`): `OK` when complete, `PARTIAL` after a halt. |
+
+### Batch status recorded on `crm3_import_batches`
+| Outcome | Report `status` | `crm3_import_batches.status` | `completed_at` |
 |---|---|---|---|
-| `crm.ticket.created` | `Ticket` | Published when a support ticket is created. | CRM-1 Contacts, Audit |
-| `crm.ticket.updated` | `Ticket` | Published when mutable ticket fields are updated. | Audit |
-| `crm.ticket.status_changed` | `Ticket` | Published on ticket lifecycle transition (New -> Open -> Waiting -> Solved -> Closed). | SLA Monitor, Audit |
-| `crm.ticket.priority_changed` | `Ticket` | Published on ticket priority update (Low, Normal, High, Urgent). | SLA Monitor, Audit |
-| `crm.ticket.note_added` | `Note` | Published when an append-only note is attached to a ticket. | Audit, Activity Timeline |
-| `crm.ticket.import_batch_loaded` | `ImportBatch` | Published when a migration batch terminates. | Migration Kit, Audit |
+| Halted by the stop rule | `STOPPED_EXCESSIVE_FAILURES` | `stopped_excessive_failures` | `NULL` (can be resumed) |
+| Every attempted row failed (no halt) | `FAILED` | `failed` | set |
+| Otherwise | `COMPLETED` | `completed` | set |
+
+`loaded_count` = ticket receipts in the batch; `rejected_count` = failed rows in the latest run.
 
 ---
 
-## 6. Deterministic Mock Server (`crm3MockServerPlugin`)
+## 9. Security, Sensitive-Field Masking & Audit Logging (CRM3-09 / #34)
 
-Available in `@clearshift/contracts` for downstream module development and contract testing:
-- **Synthetic Fixtures**: `createDeterministicMockTickets()` and `createDeterministicMockNotes()` generate 100% synthetic, deterministic payloads with zero PII or company credentials.
-- **State Store**: `Crm3MockStateStore` manages in-memory tickets, notes, and import batch receipts.
-- **Fastify Plugin**: `crm3MockServerPlugin` serves all V1 routes under `/api/v1/crm-tickets` with strict Zod validation, deterministic error envelopes, bounded pagination, and import batch stubs.
+### Authentication & Account Integrity
+- Asymmetric-signed EdDSA JWT access tokens from ClearShift Hub (`@cs/identity`) verified on every API request.
+- Tokens from disabled accounts (`disabled: true` or `status: "disabled"`) are rejected immediately with HTTP `401 Unauthorized` (`User account is disabled`).
+- Expired tokens, missing authorization headers, invalid issuers, or foreign audiences fail closed with HTTP `401 Unauthorized`.
+
+### Multi-Tenant Boundary & Field Protection
+- Token tenant (`tenant_id`, `tenantId`, `org_id`) is strictly validated against `x-tenant-id` request headers. Cross-tenant calls are rejected with HTTP `403 Forbidden` (`Multi-tenant boundary violation`).
+- Note author is resolved from `request.user.sub`; attempts to create a note with a conflicting `authorId` fail with HTTP `403 Forbidden` (`AUTHOR_MISMATCH`).
+- Immutable system fields (`id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId`) cannot be modified via PATCH requests.
+
+### Field-Level Sensitive Data Masking
+- **Bank details**: Masked to `XXXX-XXXX-7890` (preserving only the terminal 4 digits).
+- **Salary details**: Masked to `XX,XXX` or `"salary hidden"`.
+- **CSV export formula defense**: Any field prefixed with `=, +, -, @, \t, \r` is prepended with `'` to prevent DDE/formula injection.
+- **Log sanitization**: `maskSensitiveLog()` strips tokens, passwords, card/bank numbers, and salary from logs.
+
+### Append-Only Audit Trail
+- `Crm3AuditService` records an immutable audit trail capturing `actor`, `action`, `entity`, `entityId`, `batchId`, `result`, `diffRedacted`, and `metadata`.
+- Diff and metadata are automatically passed through `redactSensitiveObject()` to prevent storing raw credentials or unmasked PII.
+- Raw rows, tokens, and plaintext passwords are never copied into the audit log.
 
 ---
 
-## 7. Change Record & Formal Gate Sign-off
+## 10. Change Record & Formal Gate Sign-off
 
 | Version | Date | Author / Role | Description / Justification |
 |---|---|---|---|
-| `1.0.0` | 2026-10-24 | Integration Lead / CRM-3 Group | Gate G1 baseline release for CRM-3 contracts, OpenAPI 3.1, domain events taxonomy, and deterministic mock server (Issue #147, [CRM3-14]). |
+| `1.0.0` | 2026-10-24 | Integration Lead / CRM-3 Group | Baseline release for CRM-3 contracts, OpenAPI 3.1, domain events taxonomy, deterministic mock server, and security policy integration (Issues #147, #34). |
+

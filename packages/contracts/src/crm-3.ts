@@ -217,3 +217,36 @@ export const CRM3ImportReceiptSchema = z.object({
   createdAt: z.string().datetime()
 });
 export type CRM3ImportReceipt = z.infer<typeof CRM3ImportReceiptSchema>;
+
+// ---------------------------------------------------------------------------
+// 6. Security & Audit Schemas (Issue #34 / [CRM3-09])
+// ---------------------------------------------------------------------------
+
+export const CRM3AuditEventSchema = z.object({
+  id: z.string().uuid(),
+  actor: z.string().min(1),
+  action: z.string().min(1),
+  entity: z.string().min(1),
+  entityId: z.string().uuid().nullable().optional(),
+  batchId: z.string().nullable().optional(),
+  result: z.enum(['success', 'failure', 'rejected', 'halted']),
+  diffRedacted: z.record(z.string(), z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  createdAt: z.coerce.date(),
+});
+export type CRM3AuditEvent = z.infer<typeof CRM3AuditEventSchema>;
+
+export const CRM3ErrorEnvelopeSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.array(z.unknown()).optional(),
+  correlation_id: z.string().optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      details: z.array(z.unknown()).optional(),
+    })
+    .optional(),
+});
+export type CRM3ErrorEnvelope = z.infer<typeof CRM3ErrorEnvelopeSchema>;
