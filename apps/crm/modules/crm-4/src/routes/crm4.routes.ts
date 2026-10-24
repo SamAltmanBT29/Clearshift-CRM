@@ -11,6 +11,8 @@ import {
   CRM4MemberPatchSchema,
   CRM4MemberQuerySchema,
   CRM4ConsentSetSchema,
+  Crm4DetectDuplicatesInputSchema,
+  Crm4ResolveDuplicateInputSchema,
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
 import { z } from 'zod';
@@ -627,4 +629,84 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       }
     }
   );
+
+  // =========================================================================
+  // 6. Exact Duplicate Key Policy & Human Review ([CRM4-12] / Issue #165)
+  // =========================================================================
+
+  // POST /duplicates/detect
+  fastify.post(
+    '/duplicates/detect',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.DUPLICATES_DETECT, authEnabled),
+    },
+    async (request, reply) => {
+      const parsed = Crm4DetectDuplicatesInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid duplicate detection input', 400, parsed.error.issues);
+      }
+      const result = await service.detectDuplicates(parsed.data);
+      return reply.send(result);
+    }
+  );
+
+  // GET /duplicates/candidates
+  fastify.get(
+    '/duplicates/candidates',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.DUPLICATES_DETECT, authEnabled),
+    },
+    async (request, reply) => {
+      const query = request.query as {
+        entity?: string | undefined;
+        status?: string | undefined;
+        page?: string | undefined;
+        pageSize?: string | undefined;
+      };
+      const result = await service.getDuplicateCandidates({
+        entity: query.entity,
+        status: query.status,
+        page: query.page ? Number(query.page) : undefined,
+        pageSize: query.pageSize ? Number(query.pageSize) : undefined,
+      });
+      return reply.send(result);
+    }
+  );
+
+  // POST /duplicates/resolve
+  fastify.post(
+    '/duplicates/resolve',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.DUPLICATES_RESOLVE, authEnabled),
+    },
+    async (request, reply) => {
+      const parsed = Crm4ResolveDuplicateInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid duplicate resolution input', 400, parsed.error.issues);
+      }
+
+      const auditEntry = await service.resolveDuplicate(parsed.data);
+
+      const actor = (request.user as any)?.sub || (request.user as any)?.userId || parsed.data.actorId;
+      await auditService.logEvent({
+        actor,
+        action: 'crm4.duplicate.resolved',
+        entity: 'duplicate_candidate',
+        entityId: parsed.data.candidateId,
+        diff: {
+          decision: parsed.data.decision,
+          keptId: parsed.data.keptId,
+          mergedId: parsed.data.mergedId,
+          reason: parsed.data.reason,
+        },
+      });
+
+      return reply.send({
+        status: 'RESOLVED',
+        decision: parsed.data.decision,
+        auditLog: auditEntry,
+      });
+    }
+  );
 };
+

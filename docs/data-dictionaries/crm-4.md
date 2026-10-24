@@ -180,6 +180,26 @@
   - When a contact's consent changes to `unsubscribed`, new campaign membership records for that contact immediately reflect `unsubscribed = true`.
 - **Automated Verification:** Verified in domain unit and Fastify integration test suite [`apps/crm/modules/crm-4/tests/domain/relationships.test.ts`](../../apps/crm/modules/crm-4/tests/domain/relationships.test.ts).
 
+### 5.4 Exact Duplicate Key Policy, Normalization & Human Review ([CRM4-12] — Issue #165)
+- **Deterministic Exact Key Normalizers:**
+  - Marketing List source candidate key: `${trimmedLowerSourceSystem}#${trimmedLowerSourceId}` (`buildListExactKey`) (BR-CRM4-DUP-01).
+  - Marketing List business key: lowercased, trimmed, collapsed internal whitespace (`buildListBusinessKey`).
+  - Campaign composite candidate key: `${normalizedName}#${normalizedListId}#${trimmedCampaignDate}` (`buildCampaignExactKey`) (BR-CRM4-DUP-02).
+  - Campaign Member uniqueness candidate key: `${normalizedCampaignId}#${normalizedContactId}` (`buildMemberExactKey`) (BR-CRM4-DUP-03).
+  - Consent record candidate key: normalized `contactId` 1:1 (`buildConsentExactKey`).
+- **Zero Fuzzy Auto-Merge Rule:**
+  - Fuzzy auto-merging is strictly prohibited in V1 per Master Architecture Baseline 1.0-A and ClearShift Core Rules.
+  - Candidates matching multiple distinct entities are flagged as `AMBIGUOUS_REVIEW_REQUIRED` and held in `held_for_review` status for authorized human review.
+- **Human Review & Decision Endpoints:**
+  - `POST /api/v1/crm-marketing/duplicates/detect`: Scans candidate record batches and flags exact duplicates into `held_for_review`.
+  - `GET /api/v1/crm-marketing/duplicates/candidates`: Server-paginated listing of duplicate candidates by target entity and status.
+  - `POST /api/v1/crm-marketing/duplicates/resolve`: Executes human review decision (`MERGE`, `REJECT_DUPLICATE`, `KEEP_SEPARATE`).
+  - Access Control: Only authorized roles (`editor`, `admin`) can approve duplicate resolutions (`CRM4_ENDPOINT_ROLES.DUPLICATES_RESOLVE`). Migration Runners cannot resolve duplicates.
+- **Immutable Duplicate Audit Trail:**
+  - Every resolution commits an audit log entry (`crm4.duplicate.resolved`) recording `actorId`, `candidateId`, `decision`, `keptId`, `mergedId`, `normalizedKey`, `reason`, and `timestamp`.
+- **Review UI Shell:** Provided by [`apps/crm/modules/crm-4/web/src/pages/DuplicateReviewPage.tsx`](../../apps/crm/modules/crm-4/web/src/pages/DuplicateReviewPage.tsx).
+- **Automated Verification:** Verified in domain test suite [`apps/crm/modules/crm-4/tests/domain/duplicates.test.ts`](../../apps/crm/modules/crm-4/tests/domain/duplicates.test.ts) and component test suite [`apps/crm/modules/crm-4/web/tests/DuplicateReviewPage.test.tsx`](../../apps/crm/modules/crm-4/web/tests/DuplicateReviewPage.test.tsx).
+
 ---
 
 ## 6. Gate G1 Design Specifications, ERD, Traceability & Dirty Data Pack Plan ([CRM4-24] — Issue #177)
