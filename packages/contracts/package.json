@@ -10,6 +10,8 @@
     "./events": "./src/events.ts",
     "./crm-1": "./src/crm-1.ts",
     "./crm-2": "./src/crm-2.ts",
+    "./crm-2-events": "./src/crm-2-events.ts",
+    "./crm-2-mock": "./src/crm-2-mock.ts",
     "./crm-4": "./src/crm-4.ts",
     "./crm-4-events": "./src/crm-4-events.ts",
     "./crm-4-mock": "./src/crm-4-mock.ts",
