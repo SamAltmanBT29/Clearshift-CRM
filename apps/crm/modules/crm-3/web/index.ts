@@ -2,6 +2,7 @@ export * from './types.js';
 export * from './routes.js';
 export * from './auth/route-guard.js';
 export * from './shell/Crm3Shell.js';
+export * from './components/index.js';
 export * from './pages/TicketsListPage.js';
 export * from './pages/ActivitiesTimelinePage.js';
 export * from './pages/TicketNotesPage.js';
