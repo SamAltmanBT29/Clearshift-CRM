@@ -36,6 +36,32 @@ export class ContactReferenceError extends AppError {
   }
 }
 
+export class InvalidTicketStatusTransitionError extends AppError {
+  constructor(from: string, to: string, allowed: readonly string[]) {
+    const allowedText = allowed.length > 0 ? allowed.join(', ') : 'none (terminal status)';
+    super(
+      'INVALID_TICKET_STATUS_TRANSITION',
+      `Ticket status cannot transition from ${from} to ${to}`,
+      422,
+      [
+        {
+          field: 'status',
+          message: `Allowed next statuses from ${from}: ${allowedText}`,
+          code: 'invalid_transition',
+        },
+      ]
+    );
+    this.name = 'InvalidTicketStatusTransitionError';
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message: string, details: ErrorDetail[] = []) {
+    super('CONFLICT', message, 409, details);
+    this.name = 'ConflictError';
+  }
+}
+
 export class DomainValidationError extends AppError {
   constructor(message: string, details: ErrorDetail[] = [], statusCode = 400) {
     super('VALIDATION_ERROR', message, statusCode, details);

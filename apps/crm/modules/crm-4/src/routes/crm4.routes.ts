@@ -8,13 +8,18 @@ import {
   CRM4CampaignPatchSchema,
   CRM4CampaignQuerySchema,
   CRM4MemberCreateSchema,
+  CRM4MemberPatchSchema,
   CRM4MemberQuerySchema,
   CRM4ConsentSetSchema,
+  Crm4DetectDuplicatesInputSchema,
+  Crm4ResolveDuplicateInputSchema,
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
+import { z } from 'zod';
 import type { RoleType } from '@cs/identity';
-import { Crm4Service, crm4Service } from '../services/crm4.service.js';
+import { Crm4Service, crm4Service, type IdempotencyContext } from '../services/crm4.service.js';
 import { Crm4AuditService, crm4Audit } from '../services/audit.js';
+import { crm4MappingService } from '../services/crm4-mapping.service.js';
 import { CRM4_ENDPOINT_ROLES } from '../policies/roles.js';
 import { requireRoles } from '../plugins/auth.js';
 import { assertNoImmutableFieldMutation } from '../interface/authz.js';
@@ -31,6 +36,32 @@ function getCorrelationId(request: FastifyRequest): string {
     (request.headers['correlation-id'] as string) ||
     `corr-${Date.now()}-${randomUUID().slice(0, 8)}`
   );
+}
+
+function extractIdempotencyContext(request: FastifyRequest): IdempotencyContext | undefined {
+  const key =
+    (request.headers['idempotency-key'] as string) ||
+    (request.headers['x-idempotency-key'] as string) ||
+    (typeof request.body === 'object' && request.body !== null && 'idempotencyKey' in request.body
+      ? (request.body as any).idempotencyKey
+      : undefined);
+
+  if (!key) return undefined;
+
+  const batchId =
+    (request.headers['x-batch-id'] as string) ||
+    (typeof request.body === 'object' && request.body !== null && 'batchId' in request.body
+      ? (request.body as any).batchId
+      : undefined);
+
+  const rawRow =
+    (request.headers['x-source-row'] as string) ||
+    (typeof request.body === 'object' && request.body !== null && 'sourceRow' in request.body
+      ? (request.body as any).sourceRow
+      : undefined);
+  const sourceRow = rawRow !== undefined ? Number(rawRow) : undefined;
+
+  return { key, batchId, sourceRow };
 }
 
 function endpointPreHandlers(
@@ -77,11 +108,20 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.LISTS_CREATE, authEnabled),
     },
     async (request, reply) => {
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(201).send(existingReceipt.result);
+        }
+      }
+
       const parsed = CRM4ListCreateSchema.safeParse(request.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid list creation body', 400, parsed.error.issues);
       }
-      const list = await service.createList(parsed.data);
+      const list = await service.createList(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -166,11 +206,20 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.CAMPAIGNS_CREATE, authEnabled),
     },
     async (request, reply) => {
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(201).send(existingReceipt.result);
+        }
+      }
+
       const parsed = CRM4CampaignCreateSchema.safeParse(request.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid campaign creation body', 400, parsed.error.issues);
       }
-      const campaign = await service.createCampaign(parsed.data);
+      const campaign = await service.createCampaign(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -286,12 +335,21 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(201).send(existingReceipt.result);
+        }
+      }
+
       const body = { ...(request.body as Record<string, unknown>), campaignId: id };
       const parsed = CRM4MemberCreateSchema.safeParse(body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid member creation body', 400, parsed.error.issues);
       }
-      const member = await service.addCampaignMember(parsed.data);
+      const member = await service.addCampaignMember(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -306,6 +364,33 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
     }
   );
 
+  // PATCH /campaigns/:id/members/:memberId
+  fastify.patch(
+    '/campaigns/:id/members/:memberId',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MEMBERS_UPDATE, authEnabled),
+    },
+    async (request, reply) => {
+      const { id, memberId } = request.params as { id: string; memberId: string };
+      const parsed = CRM4MemberPatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid member patch body', 400, parsed.error.issues);
+      }
+      const member = await service.patchMember(id, memberId, parsed.data);
+
+      const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
+      await auditService.logEvent({
+        actor,
+        action: 'crm4.member.updated',
+        entity: 'campaign_member',
+        entityId: member.id,
+        diff: parsed.data,
+      });
+
+      return reply.send(member);
+    }
+  );
+
   // =========================================================================
   // 4. Consents & BR-CRM4-01
   // =========================================================================
@@ -317,11 +402,20 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.CONSENTS_SET, authEnabled),
     },
     async (request, reply) => {
+      const idempotency = extractIdempotencyContext(request);
+      if (idempotency?.key) {
+        const existingReceipt = service.getReceipt(idempotency.key);
+        if (existingReceipt) {
+          reply.header('x-idempotent-replay', 'true');
+          return reply.status(200).send(existingReceipt.result);
+        }
+      }
+
       const parsed = CRM4ConsentSetSchema.safeParse(request.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', 'Invalid consent payload', 400, parsed.error.issues);
       }
-      const consent = await service.setConsent(parsed.data);
+      const consent = await service.setConsent(parsed.data, idempotency);
 
       const actor = (request.user as any)?.sub || (request.user as any)?.userId || 'system';
       await auditService.logEvent({
@@ -348,4 +442,271 @@ export const crm4Routes: FastifyPluginAsync<Crm4RouteOptions> = async (
       return reply.send(consent);
     }
   );
+
+  // =========================================================================
+  // 5. Mapping Templates & Dry-Run Validation Endpoints (#181, [CRM4-28])
+  // =========================================================================
+
+  fastify.get(
+    '/mappings/templates',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_READ, authEnabled),
+    },
+    async (request, reply) => {
+      const QuerySchema = z.object({
+        entity: z.enum(['crm4_lists', 'crm4_campaigns', 'crm4_members', 'crm4_consents']).optional(),
+      });
+      const parsed = QuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid entity filter for templates',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      const templates = crm4MappingService.listTemplates(parsed.data.entity);
+      const enums = crm4MappingService.getEnumDictionaries();
+      return reply.status(200).send({
+        templates: templates.map((t) => ({
+          ...t,
+          checksum: crm4MappingService.getTemplate(t.id, t.version).checksum,
+        })),
+        enums,
+      });
+    }
+  );
+
+  fastify.get(
+    '/mappings/templates/:id',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_READ, authEnabled),
+    },
+    async (request, reply) => {
+      const ParamsSchema = z.object({ id: z.string().min(1) });
+      const QuerySchema = z.object({ version: z.coerce.number().optional() });
+
+      const pParsed = ParamsSchema.safeParse(request.params);
+      const qParsed = QuerySchema.safeParse(request.query);
+      if (!pParsed.success || !qParsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid template lookup parameters',
+            details: [
+              ...(!pParsed.success ? pParsed.error.issues : []),
+              ...(!qParsed.success ? qParsed.error.issues : []),
+            ],
+          },
+        });
+      }
+
+      try {
+        const result = crm4MappingService.getTemplate(pParsed.data.id, qParsed.data.version);
+        return reply.status(200).send(result);
+      } catch (err: any) {
+        if (err.code === 'TEMPLATE_NOT_FOUND') {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        throw err;
+      }
+    }
+  );
+
+  fastify.post(
+    '/mappings/validate',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_EXECUTE, authEnabled),
+    },
+    async (request, reply) => {
+      const ValidateRequestSchema = z.object({
+        templateId: z.string().min(1),
+        sourceColumns: z.array(z.string().min(1)),
+        version: z.number().optional(),
+      });
+
+      const parsed = ValidateRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid mapping validation payload',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      try {
+        const result = crm4MappingService.validateDryRun(
+          parsed.data.templateId,
+          parsed.data.sourceColumns,
+          parsed.data.version
+        );
+        return reply.status(200).send(result);
+      } catch (err: any) {
+        if (err.code === 'TEMPLATE_NOT_FOUND') {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        if (err.code === 'MAPPING_INCOMPLETE') {
+          return reply.status(400).send({
+            error: {
+              code: 'MAPPING_INCOMPLETE',
+              message: err.message,
+              details: err.details,
+            },
+          });
+        }
+        throw err;
+      }
+    }
+  );
+
+  fastify.post(
+    '/mappings/map',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.MAPPINGS_EXECUTE, authEnabled),
+    },
+    async (request, reply) => {
+      const MapRequestSchema = z.object({
+        templateId: z.string().min(1),
+        rows: z.array(z.record(z.unknown())),
+        version: z.number().optional(),
+        sourceColumns: z.array(z.string()).optional(),
+      });
+
+      const parsed = MapRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Invalid row mapping payload',
+            details: parsed.error.issues,
+          },
+        });
+      }
+
+      try {
+        const result = crm4MappingService.processBatchMapping(
+          parsed.data.templateId,
+          parsed.data.rows,
+          {
+            version: parsed.data.version,
+            sourceColumns: parsed.data.sourceColumns,
+          }
+        );
+        return reply.status(200).send(result);
+      } catch (err: any) {
+        if (err.code === 'TEMPLATE_NOT_FOUND') {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+            },
+          });
+        }
+        if (err.code === 'MAPPING_INCOMPLETE') {
+          return reply.status(400).send({
+            error: {
+              code: 'MAPPING_INCOMPLETE',
+              message: err.message,
+              details: err.details,
+            },
+          });
+        }
+        throw err;
+      }
+    }
+  );
+
+  // =========================================================================
+  // 6. Exact Duplicate Key Policy & Human Review ([CRM4-12] / Issue #165)
+  // =========================================================================
+
+  // POST /duplicates/detect
+  fastify.post(
+    '/duplicates/detect',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.DUPLICATES_DETECT, authEnabled),
+    },
+    async (request, reply) => {
+      const parsed = Crm4DetectDuplicatesInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid duplicate detection input', 400, parsed.error.issues);
+      }
+      const result = await service.detectDuplicates(parsed.data);
+      return reply.send(result);
+    }
+  );
+
+  // GET /duplicates/candidates
+  fastify.get(
+    '/duplicates/candidates',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.DUPLICATES_DETECT, authEnabled),
+    },
+    async (request, reply) => {
+      const query = request.query as {
+        entity?: string | undefined;
+        status?: string | undefined;
+        page?: string | undefined;
+        pageSize?: string | undefined;
+      };
+      const result = await service.getDuplicateCandidates({
+        entity: query.entity,
+        status: query.status,
+        page: query.page ? Number(query.page) : undefined,
+        pageSize: query.pageSize ? Number(query.pageSize) : undefined,
+      });
+      return reply.send(result);
+    }
+  );
+
+  // POST /duplicates/resolve
+  fastify.post(
+    '/duplicates/resolve',
+    {
+      preHandler: endpointPreHandlers(fastify, CRM4_ENDPOINT_ROLES.DUPLICATES_RESOLVE, authEnabled),
+    },
+    async (request, reply) => {
+      const parsed = Crm4ResolveDuplicateInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid duplicate resolution input', 400, parsed.error.issues);
+      }
+
+      const auditEntry = await service.resolveDuplicate(parsed.data);
+
+      const actor = (request.user as any)?.sub || (request.user as any)?.userId || parsed.data.actorId;
+      await auditService.logEvent({
+        actor,
+        action: 'crm4.duplicate.resolved',
+        entity: 'duplicate_candidate',
+        entityId: parsed.data.candidateId,
+        diff: {
+          decision: parsed.data.decision,
+          keptId: parsed.data.keptId,
+          mergedId: parsed.data.mergedId,
+          reason: parsed.data.reason,
+        },
+      });
+
+      return reply.send({
+        status: 'RESOLVED',
+        decision: parsed.data.decision,
+        auditLog: auditEntry,
+      });
+    }
+  );
 };
+

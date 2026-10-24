@@ -237,6 +237,15 @@ $$\text{source} (1000) = \text{loaded} (780) + \text{rejected} (140) + \text{mer
 
 *Complete plan & sample payloads: See [dirty-data-pack-plan.md](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/docs/dirty-data-pack-plan.md).*
 
+### 4.1 V1 Data Quality Rules & Committed Sample Data (`[CRM1-08]`)
+
+* **Ruleset Version:** 1 (`CRM1-DQ-001` through `CRM1-DQ-019`)
+* **Rule Engine Implementation:** [`apps/crm/modules/crm-1/src/migration/rules.ts`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/src/migration/rules.ts)
+* **Rule Specification Catalogue:** [`apps/crm/modules/crm-1/docs/data-quality-rules.md`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/docs/data-quality-rules.md)
+* **Committed Sample Fixture:** [`sample-data/crm-1/dirty-data-v1.csv`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/dirty-data-v1.csv) (100 synthetic rows)
+* **Expected Profile Assertions:** [`sample-data/crm-1/expected-profile.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/expected-profile.json) (SHA-256: `23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0`)
+* **Canonical Mapping Template:** [`sample-data/crm-1/mapping-template.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/mapping-template.json) (Checksum: `d6e91b238861236b25fa135146765bcecac26ea9aadd1d5378909858c4e735d5`)
+
 ---
 
 ## 5. Public API Endpoints (`/api/v1/crm-contacts`) & Authorization Matrix
@@ -472,3 +481,75 @@ All error payloads rendered in user-facing components (`ErrorAlert`, `DataTableC
 - **File System Paths**: Strips absolute or relative paths matching `(/[\w.-]+)+:\d+:\d+`.
 - **Database / Internal Diagnostics**: Masks SQL queries, syntax errors, and database connection strings into human-readable messages (`"An unexpected error occurred while communicating with the server."`).
 - **Sanitized Fallback**: Null, undefined, empty, or whitespace-only messages fall back to `"An unexpected error occurred. Please try again."`.
+
+---
+
+## 18. Exact Duplicate Key Policy & Human Review Audit Trail ([CRM1-12] — Issue #105 / KIT-10)
+
+Governs deterministic exact duplicate matching, candidate detection, and authorized human merge resolution across contacts, companies, and leads.
+
+### 18.1 Deterministic Key Normalization Rules
+
+| Key Type | Target Entity | Normalization Formula | Duplicate Grouping Invariant |
+| :--- | :--- | :--- | :--- |
+| `email` | `crm1_contacts` | `normalizeEmail(email)` (trimmed, lowercase) | Identical email yields exact match candidate |
+| `phone_name` | `crm1_contacts` | `${normalizePhone(phone)}#${normalizeName(first + " " + last)}` | Normalized phone + name composite key |
+| `tax_number` / `tax_id` | `crm1_companies` | `normalizeTaxNumber(taxNumber)` (uppercase, stripped punctuation/spaces) | Company tax identifier exact match |
+| `phone` | `crm1_contacts` | `normalizePhone(phone)` (stripped non-digits, preserved `+`) | Deterministic telephone key |
+| `sku` | Shared reference | `normalizeSku(sku)` (uppercase, single-spaced) | Exact SKU matching |
+
+### 18.2 Invariants & Human Review Policy
+
+1. **Deterministic Grouping**: Identical normalized keys partition records into unique entries versus held duplicate candidates.
+2. **Strict Prohibition of Fuzzy Auto-Merge**: Automatic fuzzy or unreviewed merging is strictly forbidden in ClearShift V1. If `autoMerge: true` is requested, the system throws `AutoMergeForbiddenError` (HTTP 422).
+3. **Review Queue**: All duplicate candidates are held in `held_for_review` state pending authorized human review.
+4. **Merge Decision Invariants**:
+   - For `MERGE` decisions, `keptId !== mergedId` is strictly asserted (rejects self-merge with HTTP 400).
+   - `keptId` and `mergedId` must be valid member record IDs of the candidate group.
+   - `actorId` and `reason` are mandatory.
+5. **Immutable Audit Trail**: Every human review decision durably captures actor ID, timestamp, kept ID, merged ID, reason code, and normalized key.
+
+### 18.3 API Endpoints & Role Access Matrix
+
+| Endpoint | Method | Allowed Roles | Description |
+| :--- | :---: | :--- | :--- |
+| `/api/v1/crm-contacts/duplicates/detect` | `POST` | `analyst`, `migration_runner`, `admin` | Detects candidates; returns unique records and held groups. Throws 422 on auto-merge. |
+| `/api/v1/crm-contacts/duplicates/held` | `GET` | `viewer`, `analyst`, `editor`, `admin` | Lists candidate groups held for human review. |
+| `/api/v1/crm-contacts/duplicates/resolve` | `POST` | `editor`, `analyst`, `admin` | Records human merge decision and emits immutable audit log entry. |
+| `/api/v1/crm-contacts/duplicates/audit` | `GET` | `viewer`, `analyst`, `admin` | Queries paginated audit trail of human merge decisions. |
+| `/api/v1/crm-contacts/duplicates/evaluate/contact` | `POST` | `analyst`, `migration_runner`, `admin` | Evaluates contact candidate against existing database contacts. |
+| `/api/v1/crm-contacts/duplicates/evaluate/company` | `POST` | `analyst`, `migration_runner`, `admin` | Evaluates company candidate against existing database companies. |
+
+---
+
+## 19. Chunked Batch Ingestion & 10% Partial-Load Stop Policy ([CRM1-13] — Issue #106 / KIT-12)
+
+Governs high-throughput batch ingestion, chunked processing, bounded exponential backoff retries, idempotent receipt preservation, and immediate batch halting when row failure rate exceeds the 10% threshold.
+
+### 19.1 Batch Ingestion Execution Invariants
+
+| Invariant | Specification | Enforcement Mechanism |
+| :--- | :--- | :--- |
+| **Chunk Size** | Process records in chunks of 500 rows (`CRM1_DEFAULT_CHUNK_SIZE = 500`, bounded [1, 1000]). | `chunkArray(records, chunkSize)` slices inputs into isolated chunks. |
+| **Bounded Retry** | Transient row errors retry up to 3 times (`CRM1_DEFAULT_MAX_RETRIES = 3`, bounded [0, 5]) with bounded exponential backoff: `min(1000, 50 * 2^(attempt - 1))`. | `executeCrm1ChunkedBatchLoad` retries transient failures and preserves unchanged idempotency key. |
+| **Failure Rate Threshold** | Batch halts immediately when failure rate exceeds 10% (`CRM1_DEFAULT_FAILURE_THRESHOLD = 0.10`) after minimum 50 attempted rows (`CRM1_DEFAULT_MIN_ATTEMPTED_ROWS = 50`). | `shouldHaltBatch(failed, attempted, threshold, minRows)` triggers `BatchLoadHaltedError`. |
+| **Durable Partial Commits** | Committed rows and receipts prior to halt remain durable in the ledger; no rollback saga or destructive uncommitted data loss occurs. | Terminal batch state is `STOPPED_EXCESSIVE_FAILURES` with complete audit receipts. |
+| **Zero Fuzzy Auto-Merge** | Exact normalized key matching only; ambiguous records are rejected or held for human review. | Strict deterministic validation via domain processor. |
+
+### 19.2 Batch Execution Status Transitions
+
+```
+[ PENDING ] ──> [ IN_PROGRESS ] ──> ( All chunks completed ) ────────────> [ COMPLETED ]
+                       │
+                       └──> ( Failures > 10% after >= 50 attempted rows ) ──> [ STOPPED_EXCESSIVE_FAILURES ]
+                       │
+                       └──> ( Fatal unhandled exception ) ─────────────────> [ FAILED ]
+```
+
+### 19.3 API Endpoints & Role Access Matrix
+
+| Endpoint | Method | Allowed Roles | Required Capability | Description |
+| :--- | :---: | :--- | :--- | :--- |
+| `/api/v1/crm-contacts/batches/execute-load` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Executes chunked batch ingestion with bounded retries and 10% stop policy. |
+| `/api/v1/crm-contacts/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | `KIT_READ` | Retrieves durable execution report, receipts, and failed rows. |
+| `/api/v1/crm-contacts/import/batch` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Compatibility alias for batch load execution. |

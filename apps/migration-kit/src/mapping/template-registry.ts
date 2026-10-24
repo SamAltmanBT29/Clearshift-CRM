@@ -211,20 +211,24 @@ export class DrizzleMappingTemplateRepository implements IMappingTemplateReposit
       }
     }
 
+    const insertPayload: typeof kitMappings.$inferInsert = {
+      module: validated.module,
+      name: validated.name,
+      version: validated.version,
+      targetEntity: validated.targetEntity,
+      mappingJson: validated.fieldMappings,
+      valueConversionsJson: validated.valueConversions,
+      createdBy: validated.createdBy,
+      createdAt: validated.createdAt ?? now,
+      updatedAt: now,
+    };
+    if (validated.id) {
+      insertPayload.id = validated.id;
+    }
+
     const [inserted] = await this.db
       .insert(kitMappings)
-      .values({
-        id: validated.id,
-        module: validated.module,
-        name: validated.name,
-        version: validated.version,
-        targetEntity: validated.targetEntity,
-        mappingJson: validated.fieldMappings,
-        valueConversionsJson: validated.valueConversions,
-        createdBy: validated.createdBy,
-        createdAt: validated.createdAt ?? now,
-        updatedAt: now,
-      })
+      .values(insertPayload)
       .returning();
 
     if (!inserted) {

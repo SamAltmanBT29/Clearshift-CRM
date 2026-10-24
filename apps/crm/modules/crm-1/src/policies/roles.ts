@@ -34,6 +34,14 @@ export const CRM1_ENDPOINT_ROLES = {
   IMPORTS_START: [Roles.MIGRATION_RUNNER, Roles.ADMIN] as RoleType[],
   IMPORTS_STATUS: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
   IMPORTS_REJECTS: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+
+  DUPLICATES_DETECT: [Roles.ANALYST, Roles.MIGRATION_RUNNER, Roles.ADMIN] as RoleType[],
+  DUPLICATES_HELD: [Roles.VIEWER, Roles.ANALYST, Roles.EDITOR, Roles.ADMIN] as RoleType[],
+  DUPLICATES_RESOLVE: [Roles.EDITOR, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+  DUPLICATES_AUDIT: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
+
+  BATCH_EXECUTE_LOAD: [Roles.MIGRATION_RUNNER, Roles.ADMIN] as RoleType[],
+  BATCH_REPORT_READ: [Roles.VIEWER, Roles.ANALYST, Roles.ADMIN] as RoleType[],
 } as const;
 
 export type Crm1EndpointKey = keyof typeof CRM1_ENDPOINT_ROLES;

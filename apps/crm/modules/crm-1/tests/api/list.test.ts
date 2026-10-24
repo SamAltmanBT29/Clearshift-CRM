@@ -13,7 +13,10 @@ import {
   Crm1ImportRunSchema,
 } from '@clearshift/contracts';
 
-describe('CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])', () => {
+const databaseUrl = process.env["DATABASE_URL_TEST"];
+const listSuite = databaseUrl ? describe : describe.skip;
+
+listSuite('CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])', () => {
   let app: ReturnType<typeof buildApp>;
   let service: Crm1Service;
   let authHeaders: { authorization: string };

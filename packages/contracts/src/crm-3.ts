@@ -45,6 +45,30 @@ export function assertValidTicketPriority(priority: string): asserts priority is
   }
 }
 
+/**
+ * Allowed ticket status transitions for user edits (PATCH). Closed is terminal;
+ * Solved may be reopened. A same-status update is an idempotent no-op.
+ * Migration imports may create a ticket in any valid status (historical data),
+ * so this map applies to edits only.
+ */
+export const CRM3_TICKET_STATUS_TRANSITIONS: Readonly<
+  Record<CRM3TicketStatus, readonly CRM3TicketStatus[]>
+> = {
+  New: ["Open"],
+  Open: ["Waiting", "Solved"],
+  Waiting: ["Open", "Solved"],
+  Solved: ["Closed", "Open"],
+  Closed: []
+};
+
+export function isTicketStatusTransitionAllowed(
+  from: CRM3TicketStatus,
+  to: CRM3TicketStatus
+): boolean {
+  if (from === to) return true;
+  return CRM3_TICKET_STATUS_TRANSITIONS[from].includes(to);
+}
+
 export const CRM3EntityTypeSchema = z.enum(["ticket", "note"]);
 export type CRM3EntityType = z.infer<typeof CRM3EntityTypeSchema>;
 
@@ -52,7 +76,9 @@ export const CRM3ImportStatusSchema = z.enum([
   "pending",
   "processing",
   "completed",
-  "failed"
+  "failed",
+  // Load halted on the 10% row-failure threshold (decision C9); committed rows are kept.
+  "stopped_excessive_failures"
 ]);
 export type CRM3ImportStatus = z.infer<typeof CRM3ImportStatusSchema>;
 

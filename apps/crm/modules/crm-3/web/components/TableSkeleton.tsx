@@ -1,0 +1,79 @@
+import React from 'react';
+
+export interface TableSkeletonProps {
+  rowCount?: number | undefined;
+  columnCount?: number | undefined;
+  ariaLabel?: string | undefined;
+  className?: string | undefined;
+  columnWidths?: (string | number)[] | undefined;
+}
+
+/**
+ * Animated Table Skeleton Loader Component
+ * Conforms to ClearShift V1 Issue #152 (CRM3-19).
+ * Displays accessible table-structured shimmer placeholders during initial data fetching.
+ * Paired with EmptyState when zero records or no records are returned.
+ */
+export const TableSkeleton: React.FC<TableSkeletonProps> = ({
+  rowCount = 5,
+  columnCount = 6,
+  ariaLabel = 'Loading table data...',
+  className = '',
+  columnWidths,
+}) => {
+  const rows = Array.from({ length: Math.max(1, rowCount) }, (_, i) => i);
+  const cols = Array.from({ length: Math.max(1, columnCount) }, (_, i) => i);
+
+  return (
+    <div
+      className={`cs-table-card cs-skeleton-card ${className}`.trim()}
+      aria-busy="true"
+      aria-label={ariaLabel}
+      role="status"
+    >
+      <span className="cs-sr-only">{ariaLabel}</span>
+      <div className="cs-table-responsive">
+        <table className="cs-table cs-skeleton-table" role="table">
+          <thead className="cs-thead">
+            <tr className="cs-tr">
+              {cols.map((colIndex) => {
+                const customWidth = columnWidths?.[colIndex];
+                return (
+                  <th
+                    key={`th-skel-${colIndex}`}
+                    className="cs-th"
+                    scope="col"
+                    style={customWidth ? { width: customWidth } : undefined}
+                  >
+                    <div
+                      className="cs-skeleton-line cs-skeleton-header-cell"
+                      style={{ width: `${Math.floor(60 + (colIndex % 3) * 15)}%` }}
+                    />
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody className="cs-tbody">
+            {rows.map((rowIndex) => (
+              <tr key={`tr-skel-${rowIndex}`} className="cs-tr cs-skeleton-row">
+                {cols.map((colIndex) => {
+                  const variance = ((rowIndex + colIndex) % 4) * 10;
+                  const cellWidth = Math.min(95, Math.max(45, 75 - variance));
+                  return (
+                    <td key={`td-skel-${rowIndex}-${colIndex}`} className="cs-td">
+                      <div
+                        className="cs-skeleton-line cs-skeleton-cell"
+                        style={{ width: `${cellWidth}%` }}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
