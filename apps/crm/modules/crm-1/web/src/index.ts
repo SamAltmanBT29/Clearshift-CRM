@@ -2,6 +2,12 @@
  * CRM-1 Contacts, Companies and Leads — Web Module Exports
  */
 export * from './api/crm-1.js';
+export * from './components/ContactsTable.js';
+export * from './components/CompaniesTable.js';
+export * from './components/LeadsTable.js';
+export * from './pages/ContactsListPage.js';
+export * from './pages/CompaniesListPage.js';
+export * from './pages/LeadsListPage.js';
 export * from './components/forms/ConfirmModal.js';
 export * from './components/forms/FormValidationSummary.js';
 export * from './components/forms/ContactForm.js';
