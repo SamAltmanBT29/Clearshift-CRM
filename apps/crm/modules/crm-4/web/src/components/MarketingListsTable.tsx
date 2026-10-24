@@ -11,12 +11,31 @@ import {
 } from '@cs/ui';
 import type { CRM4List } from '@clearshift/contracts';
 import type { TableSortState, TablePaginationState } from '../../table/types.js';
+import { TableSkeleton } from './TableSkeleton.js';
+import { EmptyState } from './EmptyState.js';
+import { ErrorAlert } from './ErrorAlert.js';
+import { AccessDeniedView } from './AccessDeniedView.js';
 
 export interface MarketingListsTableProps {
   lists: CRM4List[];
   loading?: boolean | undefined;
+  loadingRowCount?: number | undefined;
+  error?: string | Error | { code?: string | undefined; message?: string | undefined; details?: unknown } | null | undefined;
+  onRetry?: (() => void) | undefined;
   emptyTitle?: string | undefined;
   emptyDescription?: string | undefined;
+  emptyActionLabel?: string | undefined;
+  onEmptyAction?: (() => void) | undefined;
+  secondaryActionLabel?: string | undefined;
+  onSecondaryAction?: (() => void) | undefined;
+  hasActiveFilters?: boolean | undefined;
+  onClearFilters?: (() => void) | undefined;
+  isAccessDenied?: boolean | undefined;
+  httpStatus?: number | undefined;
+  requiredCapability?: string | undefined;
+  requiredRole?: string | undefined;
+  currentRole?: string | undefined;
+  onAccessBack?: (() => void) | undefined;
   onSelectList?: ((list: CRM4List) => void) | undefined;
   onViewCampaigns?: ((list: CRM4List) => void) | undefined;
   sort?: TableSortState | undefined;
@@ -43,8 +62,23 @@ export function formatDateValue(dateStr: string): string {
 export function MarketingListsTable({
   lists,
   loading = false,
+  loadingRowCount = 5,
+  error = null,
+  onRetry,
   emptyTitle = 'No marketing lists found',
   emptyDescription = 'No marketing lists or segmentation criteria have been created yet.',
+  emptyActionLabel,
+  onEmptyAction,
+  secondaryActionLabel,
+  onSecondaryAction,
+  hasActiveFilters = false,
+  onClearFilters,
+  isAccessDenied = false,
+  httpStatus,
+  requiredCapability = 'module.read',
+  requiredRole,
+  currentRole,
+  onAccessBack,
   onSelectList,
   onViewCampaigns,
   sort,
@@ -53,16 +87,61 @@ export function MarketingListsTable({
   onPageChange,
   onPageSizeChange,
 }: MarketingListsTableProps) {
-  if (loading) {
+  // 403 Access Denied State
+  if (isAccessDenied || httpStatus === 403) {
     return (
-      <div className="p-12 text-center" role="status" aria-label="Loading marketing lists">
-        <div className="animate-spin inline-block w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-3" />
-        <p className="text-sm font-medium text-slate-600">Loading marketing lists from server...</p>
+      <AccessDeniedView
+        requiredCapability={requiredCapability}
+        requiredRole={requiredRole}
+        currentRole={currentRole}
+        resourceName="Marketing Lists and Campaign History"
+        onBack={onAccessBack}
+      />
+    );
+  }
+
+  // Error State
+  if (error) {
+    return (
+      <div className="cs-table-card cs-table-error-wrapper" role="region" aria-label="Table Error">
+        <ErrorAlert error={error} onRetry={onRetry} />
       </div>
     );
   }
 
+  // Loading State
+  if (loading) {
+    return (
+      <div
+        className="cs-table-card cs-skeleton-card"
+        role="status"
+        aria-label="Loading marketing lists"
+        aria-busy="true"
+      >
+        <TableSkeleton
+          rowCount={loadingRowCount}
+          columnCount={5}
+          ariaLabel="Loading marketing lists"
+        />
+      </div>
+    );
+  }
+
+  // Empty State
   if (lists.length === 0) {
+    if (emptyActionLabel && onEmptyAction) {
+      return (
+        <EmptyState
+          title={emptyTitle}
+          description={emptyDescription}
+          actionLabel={emptyActionLabel}
+          onAction={onEmptyAction}
+          secondaryActionLabel={secondaryActionLabel}
+          onSecondaryAction={onSecondaryAction}
+          className={hasActiveFilters ? 'cs-empty-filter-state' : ''}
+        />
+      );
+    }
     return (
       <div className="p-12 text-center" role="status">
         <h3 className="text-base font-semibold text-slate-900">{emptyTitle}</h3>
@@ -274,3 +353,5 @@ export function MarketingListsTable({
     </div>
   );
 }
+
+export default MarketingListsTable;
