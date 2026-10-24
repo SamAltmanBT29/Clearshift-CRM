@@ -1,0 +1,101 @@
+source_row,entity_type,source_system,source_id,name,value,currency,stage_name,close_date,contact_id,quote_number,deal_id,note
+1,deal,pipedrive_legacy,deal_legacy_0001,Acme Cloud Infrastructure Expansion,70000.00,USD,New,2026-02-02,a1b2c3d4-e5f6-7a8b-9c0d-000000000001,,,Standard verified deal 1
+2,deal,pipedrive_legacy,deal_legacy_0002,Apex Enterprise SaaS Subscription,31000.00,EUR,Qualified,2026-03-03,a1b2c3d4-e5f6-7a8b-9c0d-000000000002,,,Standard verified deal 2
+3,deal,pipedrive_legacy,deal_legacy_0003,Beacon Data Platform Migration,149000.00,GBP,Proposal,2026-04-04,a1b2c3d4-e5f6-7a8b-9c0d-000000000003,,,Standard verified deal 3
+4,deal,pipedrive_legacy,deal_legacy_0004,Catalyst Cybersecurity Defense Suite,63000.00,USD,Negotiation,2026-05-05,a1b2c3d4-e5f6-7a8b-9c0d-000000000004,,,Standard verified deal 4
+5,deal,pipedrive_legacy,deal_legacy_0005,Crestview Analytics Dashboard Rollout,100000.00,EUR,New,2026-06-06,a1b2c3d4-e5f6-7a8b-9c0d-000000000005,,,Standard verified deal 5
+6,deal,pipedrive_legacy,deal_legacy_0006,Delta Global Multi-Region Network,16000.00,GBP,Qualified,2026-07-07,a1b2c3d4-e5f6-7a8b-9c0d-000000000006,,,Standard verified deal 6
+7,deal,pipedrive_legacy,deal_legacy_0007,Echo Digital Transformation Program,117000.00,USD,Proposal,2026-08-08,a1b2c3d4-e5f6-7a8b-9c0d-000000000007,,,Standard verified deal 7
+8,deal,pipedrive_legacy,deal_legacy_0008,Horizon Core Ledger Modernization,38000.00,EUR,Negotiation,2026-09-09,a1b2c3d4-e5f6-7a8b-9c0d-000000000008,,,Standard verified deal 8
+9,deal,pipedrive_legacy,deal_legacy_0009,Ironclad AI Integration Framework,220000.00,GBP,New,2026-10-10,a1b2c3d4-e5f6-7a8b-9c0d-000000000009,,,Standard verified deal 9
+10,deal,pipedrive_legacy,deal_legacy_0010,'=CMD('calc')!A1 Enterprise Cloud Migration,249000.00,USD,Qualified,2026-11-11,a1b2c3d4-e5f6-7a8b-9c0d-000000000010,,,Standard verified deal 10
+11,deal,pipedrive_legacy,deal_legacy_0011,Meridian Cloud Infrastructure Expansion,215000.00,EUR,Proposal,2026-12-12,a1b2c3d4-e5f6-7a8b-9c0d-000000000011,,,Standard verified deal 11
+12,deal,pipedrive_legacy,deal_legacy_0012,Nexus Enterprise SaaS Subscription,130000.00,GBP,Negotiation,2026-01-13,a1b2c3d4-e5f6-7a8b-9c0d-000000000012,,,Standard verified deal 12
+13,deal,pipedrive_legacy,deal_legacy_0013,Omni Data Platform Migration,164000.00,USD,New,2026-02-14,a1b2c3d4-e5f6-7a8b-9c0d-000000000013,,,Standard verified deal 13
+14,deal,pipedrive_legacy,deal_legacy_0014,Pinnacle Cybersecurity Defense Suite,217000.00,EUR,Qualified,2026-03-15,a1b2c3d4-e5f6-7a8b-9c0d-000000000014,,,Standard verified deal 14
+15,deal,pipedrive_legacy,deal_legacy_0015,Quantum Analytics Dashboard Rollout,153000.00,GBP,Proposal,2026-04-16,a1b2c3d4-e5f6-7a8b-9c0d-000000000015,,,Standard verified deal 15
+16,deal,pipedrive_legacy,deal_legacy_0016,Radiant Global Multi-Region Network,31000.00,USD,Negotiation,2026-05-17,a1b2c3d4-e5f6-7a8b-9c0d-000000000016,,,Standard verified deal 16
+17,deal,pipedrive_legacy,deal_legacy_0017,Starlight Digital Transformation Program,43000.00,EUR,New,2026-06-18,a1b2c3d4-e5f6-7a8b-9c0d-000000000017,,,Standard verified deal 17
+18,deal,pipedrive_legacy,deal_legacy_0018,Summit Core Ledger Modernization,238000.00,GBP,Qualified,2026-07-19,a1b2c3d4-e5f6-7a8b-9c0d-000000000018,,,Standard verified deal 18
+19,deal,pipedrive_legacy,deal_legacy_0019,Titan AI Integration Framework,232000.00,USD,Proposal,2026-08-20,a1b2c3d4-e5f6-7a8b-9c0d-000000000019,,,Standard verified deal 19
+20,deal,pipedrive_legacy,deal_legacy_0020,Vanguard Automated DevOps Pipeline,224000.00,EUR,Negotiation,2026-09-21,a1b2c3d4-e5f6-7a8b-9c0d-000000000020,,,Standard verified deal 20
+21,deal,pipedrive_legacy,deal_legacy_0021,Vertex Cloud Infrastructure Expansion,142000.00,GBP,New,2026-10-22,a1b2c3d4-e5f6-7a8b-9c0d-000000000021,,,Standard verified deal 21
+22,deal,pipedrive_legacy,deal_legacy_0022,Zephyr Enterprise SaaS Subscription,53000.00,USD,Qualified,2026-11-23,a1b2c3d4-e5f6-7a8b-9c0d-000000000022,,,Standard verified deal 22
+23,deal,pipedrive_legacy,deal_legacy_0023,München Data Platform Migration,142000.00,EUR,Proposal,2026-12-24,a1b2c3d4-e5f6-7a8b-9c0d-000000000023,,,Standard verified deal 23
+24,deal,pipedrive_legacy,deal_legacy_0024,São Paulo Cybersecurity Defense Suite,72000.00,GBP,Negotiation,2026-01-25,a1b2c3d4-e5f6-7a8b-9c0d-000000000024,,,Standard verified deal 24
+25,deal,pipedrive_legacy,deal_legacy_0025,Zürich Analytics Dashboard Rollout,237000.00,USD,New,2026-02-26,a1b2c3d4-e5f6-7a8b-9c0d-000000000025,,,Standard verified deal 25
+26,deal,pipedrive_legacy,deal_legacy_0026,Tokyo Global Multi-Region Network,207000.00,EUR,Qualified,2026-03-27,a1b2c3d4-e5f6-7a8b-9c0d-000000000026,,,Standard verified deal 26
+27,deal,pipedrive_legacy,deal_legacy_0027,Singapore Digital Transformation Program,47000.00,GBP,Proposal,2026-04-28,a1b2c3d4-e5f6-7a8b-9c0d-000000000027,,,Standard verified deal 27
+28,deal,pipedrive_legacy,deal_legacy_0028,London Core Ledger Modernization,209000.00,USD,Negotiation,2026-05-01,a1b2c3d4-e5f6-7a8b-9c0d-000000000028,,,Standard verified deal 28
+29,deal,pipedrive_legacy,deal_legacy_0029,Acme AI Integration Framework,122000.00,EUR,New,2026-06-02,a1b2c3d4-e5f6-7a8b-9c0d-000000000029,,,Standard verified deal 29
+30,deal,pipedrive_legacy,deal_legacy_0030,Apex Automated DevOps Pipeline,24000.00,GBP,Qualified,2026-07-03,a1b2c3d4-e5f6-7a8b-9c0d-000000000030,,,Standard verified deal 30
+31,deal,pipedrive_legacy,deal_legacy_0031,Beacon Cloud Infrastructure Expansion,15000.00,USD,Proposal,2026-08-04,a1b2c3d4-e5f6-7a8b-9c0d-000000000031,,,Standard verified deal 31
+32,deal,pipedrive_legacy,deal_legacy_0032,Catalyst Enterprise SaaS Subscription,139000.00,EUR,Negotiation,2026-09-05,a1b2c3d4-e5f6-7a8b-9c0d-000000000032,,,Standard verified deal 32
+33,deal,pipedrive_legacy,deal_legacy_0033,Crestview Data Platform Migration,210000.00,GBP,New,2026-10-06,a1b2c3d4-e5f6-7a8b-9c0d-000000000033,,,Standard verified deal 33
+34,deal,pipedrive_legacy,deal_legacy_0034,Delta Cybersecurity Defense Suite,213000.00,USD,Qualified,2026-11-07,a1b2c3d4-e5f6-7a8b-9c0d-000000000034,,,Standard verified deal 34
+35,deal,pipedrive_legacy,deal_legacy_0035,Echo Analytics Dashboard Rollout,174000.00,EUR,Proposal,2026-12-08,a1b2c3d4-e5f6-7a8b-9c0d-000000000035,,,Standard verified deal 35
+36,deal,pipedrive_legacy,deal_legacy_0036,Horizon Global Multi-Region Network,101000.00,GBP,Negotiation,2026-01-09,a1b2c3d4-e5f6-7a8b-9c0d-000000000036,,,Standard verified deal 36
+37,deal,pipedrive_legacy,deal_legacy_0037,Ironclad Digital Transformation Program,151000.00,USD,New,2026-02-10,a1b2c3d4-e5f6-7a8b-9c0d-000000000037,,,Standard verified deal 37
+38,deal,pipedrive_legacy,deal_legacy_0038,Lumina Core Ledger Modernization,177000.00,EUR,Qualified,2026-03-11,a1b2c3d4-e5f6-7a8b-9c0d-000000000038,,,Standard verified deal 38
+39,deal,pipedrive_legacy,deal_legacy_0039,Meridian AI Integration Framework,181000.00,GBP,Proposal,2026-04-12,a1b2c3d4-e5f6-7a8b-9c0d-000000000039,,,Standard verified deal 39
+40,deal,pipedrive_legacy,deal_legacy_0040,Nexus Automated DevOps Pipeline,183000.00,USD,Negotiation,2026-05-13,a1b2c3d4-e5f6-7a8b-9c0d-000000000040,,,Standard verified deal 40
+41,deal,pipedrive_legacy,deal_legacy_0041,Omni Cloud Infrastructure Expansion,248000.00,EUR,New,2026-06-14,a1b2c3d4-e5f6-7a8b-9c0d-000000000041,,,Standard verified deal 41
+42,deal,pipedrive_legacy,deal_legacy_0042,Pinnacle Enterprise SaaS Subscription,118000.00,GBP,Qualified,2026-07-15,a1b2c3d4-e5f6-7a8b-9c0d-000000000042,,,Standard verified deal 42
+43,deal,pipedrive_legacy,deal_legacy_0043,Quantum Data Platform Migration,33000.00,USD,Proposal,2026-08-16,a1b2c3d4-e5f6-7a8b-9c0d-000000000043,,,Standard verified deal 43
+44,deal,pipedrive_legacy,deal_legacy_0044,Radiant Cybersecurity Defense Suite,56000.00,EUR,Negotiation,2026-09-17,a1b2c3d4-e5f6-7a8b-9c0d-000000000044,,,Standard verified deal 44
+45,deal,pipedrive_legacy,deal_legacy_0045,Starlight Analytics Dashboard Rollout,117000.00,GBP,New,2026-10-18,a1b2c3d4-e5f6-7a8b-9c0d-000000000045,,,Standard verified deal 45
+46,deal,pipedrive_legacy,deal_legacy_0046,Summit Global Multi-Region Network,40000.00,USD,Qualified,2026-11-19,a1b2c3d4-e5f6-7a8b-9c0d-000000000046,,,Standard verified deal 46
+47,deal,pipedrive_legacy,deal_legacy_0047,Titan Digital Transformation Program,195000.00,EUR,Proposal,2026-12-20,a1b2c3d4-e5f6-7a8b-9c0d-000000000047,,,Standard verified deal 47
+48,deal,pipedrive_legacy,deal_legacy_0048,Vanguard Core Ledger Modernization,153000.00,GBP,Negotiation,2026-01-21,a1b2c3d4-e5f6-7a8b-9c0d-000000000048,,,Standard verified deal 48
+49,deal,pipedrive_legacy,deal_legacy_0049,Vertex AI Integration Framework,203000.00,USD,New,2026-02-22,a1b2c3d4-e5f6-7a8b-9c0d-000000000049,,,Standard verified deal 49
+50,deal,pipedrive_legacy,deal_legacy_0050,Zephyr Automated DevOps Pipeline,103000.00,EUR,Qualified,2026-03-23,a1b2c3d4-e5f6-7a8b-9c0d-000000000050,,,Standard verified deal 50
+51,deal,pipedrive_legacy,deal_legacy_0051,München Cloud Infrastructure Expansion,62000.00,GBP,Proposal,2026-04-24,a1b2c3d4-e5f6-7a8b-9c0d-000000000051,,,Standard verified deal 51
+52,deal,pipedrive_legacy,deal_legacy_0052,São Paulo Enterprise SaaS Subscription,75000.00,USD,Negotiation,2026-05-25,a1b2c3d4-e5f6-7a8b-9c0d-000000000052,,,Standard verified deal 52
+53,deal,pipedrive_legacy,deal_legacy_0053,Zürich Data Platform Migration,14000.00,EUR,New,2026-06-26,a1b2c3d4-e5f6-7a8b-9c0d-000000000053,,,Standard verified deal 53
+54,deal,pipedrive_legacy,deal_legacy_0054,Tokyo Cybersecurity Defense Suite,76000.00,GBP,Qualified,2026-07-27,a1b2c3d4-e5f6-7a8b-9c0d-000000000054,,,Standard verified deal 54
+55,deal,pipedrive_legacy,deal_legacy_0055,Singapore Analytics Dashboard Rollout,90000.00,USD,Proposal,2026-08-28,a1b2c3d4-e5f6-7a8b-9c0d-000000000055,,,Standard verified deal 55
+56,deal,pipedrive_legacy,deal_orphan_0056,London Inbound Opportunity,45000.00,USD,New,2026-12-01,,,,Inbound orphan deal 56 with null contact
+57,deal,pipedrive_legacy,deal_orphan_0057,Acme Inbound Opportunity,48000.00,USD,New,2026-12-02,,,,Inbound orphan deal 57 with null contact
+58,deal,pipedrive_legacy,deal_orphan_0058,Apex Inbound Opportunity,13000.00,USD,New,2026-12-03,,,,Inbound orphan deal 58 with null contact
+59,deal,pipedrive_legacy,deal_orphan_0059,Beacon Inbound Opportunity,45000.00,USD,New,2026-12-04,,,,Inbound orphan deal 59 with null contact
+60,deal,pipedrive_legacy,deal_orphan_0060,Catalyst Inbound Opportunity,31000.00,USD,New,2026-12-05,,,,Inbound orphan deal 60 with null contact
+61,deal,pipedrive_legacy,deal_orphan_0061,Crestview Inbound Opportunity,20000.00,USD,New,2026-12-06,,,,Inbound orphan deal 61 with null contact
+62,deal,pipedrive_legacy,deal_orphan_0062,Delta Inbound Opportunity,19000.00,USD,New,2026-12-07,,,,Inbound orphan deal 62 with null contact
+63,deal,pipedrive_legacy,deal_orphan_0063,Echo Inbound Opportunity,10000.00,USD,New,2026-12-08,,,,Inbound orphan deal 63 with null contact
+64,deal,pipedrive_legacy,deal_orphan_0064,Horizon Inbound Opportunity,50000.00,USD,New,2026-12-09,,,,Inbound orphan deal 64 with null contact
+65,deal,pipedrive_legacy,deal_orphan_0065,Ironclad Inbound Opportunity,9000.00,USD,New,2026-12-10,,,,Inbound orphan deal 65 with null contact
+66,quote,salesforce_quotes,quote_legacy_0066,,70000.00,USD,,2026-10-23,,Q-2026-0066,d1000000-0000-4000-8000-000000000001,Formal binding quote for deal deal_legacy_0001. Valid 30 calendar days.
+67,quote,salesforce_quotes,quote_legacy_0067,,31000.00,EUR,,2026-10-23,,Q-2026-0067,d1000000-0000-4000-8000-000000000002,Formal binding quote for deal deal_legacy_0002. Valid 30 calendar days.
+68,quote,salesforce_quotes,quote_legacy_0068,,149000.00,GBP,,2026-10-23,,Q-2026-0068,d1000000-0000-4000-8000-000000000003,Formal binding quote for deal deal_legacy_0003. Valid 30 calendar days.
+69,quote,salesforce_quotes,quote_legacy_0069,,63000.00,USD,,2026-10-23,,Q-2026-0069,d1000000-0000-4000-8000-000000000004,Formal binding quote for deal deal_legacy_0004. Valid 30 calendar days.
+70,quote,salesforce_quotes,quote_legacy_0070,,100000.00,EUR,,2026-10-23,,Q-2026-0070,d1000000-0000-4000-8000-000000000005,Formal binding quote for deal deal_legacy_0005. Valid 30 calendar days.
+71,quote,salesforce_quotes,quote_legacy_0071,,16000.00,GBP,,2026-10-23,,Q-2026-0071,d1000000-0000-4000-8000-000000000006,Formal binding quote for deal deal_legacy_0006. Valid 30 calendar days.
+72,quote,salesforce_quotes,quote_legacy_0072,,117000.00,USD,,2026-10-23,,Q-2026-0072,d1000000-0000-4000-8000-000000000007,Formal binding quote for deal deal_legacy_0007. Valid 30 calendar days.
+73,quote,salesforce_quotes,quote_legacy_0073,,38000.00,EUR,,2026-10-23,,Q-2026-0073,d1000000-0000-4000-8000-000000000008,Formal binding quote for deal deal_legacy_0008. Valid 30 calendar days.
+74,quote,salesforce_quotes,quote_legacy_0074,,220000.00,GBP,,2026-10-23,,Q-2026-0074,d1000000-0000-4000-8000-000000000009,Formal binding quote for deal deal_legacy_0009. Valid 30 calendar days.
+75,quote,salesforce_quotes,quote_legacy_0075,,249000.00,USD,,2026-10-23,,Q-2026-0075,d1000000-0000-4000-8000-000000000010,Formal binding quote for deal deal_legacy_0010. Valid 30 calendar days.
+76,deal,pipedrive_legacy,deal_dup_001_a,Global Logistics ERP Upgrade,95000.00,USD,Proposal,2026-11-30,a1b2c3d4-e5f6-7a8b-9c0d-000000000076,,,Duplicate Deal Candidate 1A
+77,deal,pipedrive_legacy,deal_dup_001_b,  Global Logistics ERP Upgrade  ,95000.00,USD,Proposal,2026-11-30,a1b2c3d4-e5f6-7a8b-9c0d-000000000076,,,Duplicate Deal Candidate 1B
+78,deal,pipedrive_legacy,deal_dup_002_a,Nordic Telecom Cloud Core,135000.00,EUR,Qualified,2026-12-15,,,,Duplicate Deal Candidate 2A (Orphan)
+79,deal,pipedrive_legacy,deal_dup_002_b,nordic telecom cloud core,135000.00,EUR,Qualified,2026-12-15,,,,Duplicate Deal Candidate 2B (Orphan)
+80,quote,salesforce_quotes,quote_dup_001_a,,50000.00,USD,,2026-10-23,,Q-2026-0880,d1000000-0000-4000-8000-000000000001,Exact Quote Duplicate Candidate 1A
+81,quote,salesforce_quotes,quote_dup_001_b,,50000.00,USD,,2026-10-23,,  q-2026-0880  ,d1000000-0000-4000-8000-000000000001,Exact Quote Duplicate Candidate 1B
+82,quote,salesforce_quotes,quote_dup_002_a,,82000.00,EUR,,2026-10-23,,Q-2026-0881,d1000000-0000-4000-8000-000000000002,Exact Quote Duplicate Candidate 2A
+83,quote,salesforce_quotes,quote_dup_002_b,,82000.00,EUR,,2026-10-23,,Q-2026-0881,d1000000-0000-4000-8000-000000000002,Exact Quote Duplicate Candidate 2B
+84,deal,pipedrive_legacy,deal_neg_001,Corrupted Legacy Contract A,-1500.00,USD,New,2026-11-20,a1b2c3d4-e5f6-7a8b-9c0d-000000000084,,,Seeded negative value defect
+85,deal,pipedrive_legacy,deal_neg_002,Corrupted Legacy Contract B,-50000.50,EUR,Qualified,2026-11-25,a1b2c3d4-e5f6-7a8b-9c0d-000000000085,,,Seeded negative value defect
+86,deal,pipedrive_legacy,deal_neg_003,Corrupted Legacy Contract C,-0.01,GBP,Proposal,2026-11-28,a1b2c3d4-e5f6-7a8b-9c0d-000000000086,,,Seeded negative value defect
+87,deal,pipedrive_legacy,deal_curr_001,European Distributor Expansion,30000.00,euros,Qualified,2026-12-05,a1b2c3d4-e5f6-7a8b-9c0d-000000000087,,,Seeded invalid currency defect
+88,deal,pipedrive_legacy,deal_curr_002,North American Fleet Renewal,75000.00,US,Proposal,2026-12-10,a1b2c3d4-e5f6-7a8b-9c0d-000000000088,,,Seeded invalid currency defect
+89,deal,pipedrive_legacy,deal_curr_003,Asian Logistics Hub Buildout,120000.00,$$$,Negotiation,2026-12-15,a1b2c3d4-e5f6-7a8b-9c0d-000000000089,,,Seeded invalid currency defect
+90,deal,pipedrive_legacy,deal_name_001,,15000.00,USD,New,2026-11-20,a1b2c3d4-e5f6-7a8b-9c0d-000000000090,,,Seeded empty deal name
+91,deal,pipedrive_legacy,deal_name_002,   ,22000.00,USD,Qualified,2026-11-22,a1b2c3d4-e5f6-7a8b-9c0d-000000000091,,,Seeded whitespace deal name
+92,deal,pipedrive_legacy,deal_name_003,		,35000.00,EUR,Proposal,2026-11-25,a1b2c3d4-e5f6-7a8b-9c0d-000000000092,,,Seeded whitespace deal name
+93,deal,pipedrive_legacy,deal_stage_001,Government Infrastructure Deal,180000.00,USD,Draft,2026-12-01,a1b2c3d4-e5f6-7a8b-9c0d-000000000093,,,Seeded invalid stage defect
+94,deal,pipedrive_legacy,deal_stage_002,Healthcare Compliance System,90000.00,USD,In Review,2026-12-05,a1b2c3d4-e5f6-7a8b-9c0d-000000000094,,,Seeded invalid stage defect
+95,deal,pipedrive_legacy,deal_stage_003,Retail Omnichannel Rollout,64000.00,GBP,Cancelled,2026-12-10,a1b2c3d4-e5f6-7a8b-9c0d-000000000095,,,Seeded invalid stage defect
+96,deal,pipedrive_legacy,deal_date_001,Supply Chain Optimization,42000.00,USD,Proposal,31/12/2026,a1b2c3d4-e5f6-7a8b-9c0d-000000000096,,,Seeded broken date defect
+97,deal,pipedrive_legacy,deal_date_002,Renewable Energy Integration,58000.00,EUR,Qualified,Q4-2026,a1b2c3d4-e5f6-7a8b-9c0d-000000000097,,,Seeded broken date defect
+98,deal,pipedrive_legacy,deal_date_003,Smart Warehouse IoT Deployment,71000.00,USD,Negotiation,asap,a1b2c3d4-e5f6-7a8b-9c0d-000000000098,,,Seeded broken date defect
+99,quote,salesforce_quotes,quote_orphan_001,,12000.00,USD,,2026-10-23,,Q-2026-9991,00000000-0000-0000-0000-000000000000,Quote with missing parent deal link
+100,quote,salesforce_quotes,quote_orphan_002,,24000.00,USD,,2026-10-23,,Q-2026-9992,00000000-0000-0000-0000-999999999999,Quote with missing parent deal link

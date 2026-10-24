@@ -472,3 +472,41 @@ All error payloads rendered in user-facing components (`ErrorAlert`, `DataTableC
 - **File System Paths**: Strips absolute or relative paths matching `(/[\w.-]+)+:\d+:\d+`.
 - **Database / Internal Diagnostics**: Masks SQL queries, syntax errors, and database connection strings into human-readable messages (`"An unexpected error occurred while communicating with the server."`).
 - **Sanitized Fallback**: Null, undefined, empty, or whitespace-only messages fall back to `"An unexpected error occurred. Please try again."`.
+
+---
+
+## 18. Exact Duplicate Key Policy & Human Review Audit Trail ([CRM1-12] — Issue #105 / KIT-10)
+
+Governs deterministic exact duplicate matching, candidate detection, and authorized human merge resolution across contacts, companies, and leads.
+
+### 18.1 Deterministic Key Normalization Rules
+
+| Key Type | Target Entity | Normalization Formula | Duplicate Grouping Invariant |
+| :--- | :--- | :--- | :--- |
+| `email` | `crm1_contacts` | `normalizeEmail(email)` (trimmed, lowercase) | Identical email yields exact match candidate |
+| `phone_name` | `crm1_contacts` | `${normalizePhone(phone)}#${normalizeName(first + " " + last)}` | Normalized phone + name composite key |
+| `tax_number` / `tax_id` | `crm1_companies` | `normalizeTaxNumber(taxNumber)` (uppercase, stripped punctuation/spaces) | Company tax identifier exact match |
+| `phone` | `crm1_contacts` | `normalizePhone(phone)` (stripped non-digits, preserved `+`) | Deterministic telephone key |
+| `sku` | Shared reference | `normalizeSku(sku)` (uppercase, single-spaced) | Exact SKU matching |
+
+### 18.2 Invariants & Human Review Policy
+
+1. **Deterministic Grouping**: Identical normalized keys partition records into unique entries versus held duplicate candidates.
+2. **Strict Prohibition of Fuzzy Auto-Merge**: Automatic fuzzy or unreviewed merging is strictly forbidden in ClearShift V1. If `autoMerge: true` is requested, the system throws `AutoMergeForbiddenError` (HTTP 422).
+3. **Review Queue**: All duplicate candidates are held in `held_for_review` state pending authorized human review.
+4. **Merge Decision Invariants**:
+   - For `MERGE` decisions, `keptId !== mergedId` is strictly asserted (rejects self-merge with HTTP 400).
+   - `keptId` and `mergedId` must be valid member record IDs of the candidate group.
+   - `actorId` and `reason` are mandatory.
+5. **Immutable Audit Trail**: Every human review decision durably captures actor ID, timestamp, kept ID, merged ID, reason code, and normalized key.
+
+### 18.3 API Endpoints & Role Access Matrix
+
+| Endpoint | Method | Allowed Roles | Description |
+| :--- | :---: | :--- | :--- |
+| `/api/v1/crm-contacts/duplicates/detect` | `POST` | `analyst`, `migration_runner`, `admin` | Detects candidates; returns unique records and held groups. Throws 422 on auto-merge. |
+| `/api/v1/crm-contacts/duplicates/held` | `GET` | `viewer`, `analyst`, `editor`, `admin` | Lists candidate groups held for human review. |
+| `/api/v1/crm-contacts/duplicates/resolve` | `POST` | `editor`, `analyst`, `admin` | Records human merge decision and emits immutable audit log entry. |
+| `/api/v1/crm-contacts/duplicates/audit` | `GET` | `viewer`, `analyst`, `admin` | Queries paginated audit trail of human merge decisions. |
+| `/api/v1/crm-contacts/duplicates/evaluate/contact` | `POST` | `analyst`, `migration_runner`, `admin` | Evaluates contact candidate against existing database contacts. |
+| `/api/v1/crm-contacts/duplicates/evaluate/company` | `POST` | `analyst`, `migration_runner`, `admin` | Evaluates company candidate against existing database companies. |

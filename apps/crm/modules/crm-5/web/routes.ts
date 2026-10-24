@@ -77,13 +77,77 @@ export const CRM5_ROUTES: Record<string, Crm5RouteDefinition> = {
   },
 };
 
+export const CRM5_DETAIL_ROUTES: Record<string, Crm5RouteDefinition> = {
+  runDetail: {
+    id: 'crm5-run-detail',
+    path: 'runs/:id',
+    fullPath: `${CRM5_BASE_PATH}/runs/:id`,
+    title: 'Migration Run Detail',
+    navLabel: 'Run Detail',
+    requiredCapability: Capabilities.CONTROL_READ,
+    breadcrumbs: [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Migration Control', href: CRM5_BASE_PATH },
+      { label: 'Runs', href: `${CRM5_BASE_PATH}/runs` },
+      { label: 'Run Detail' },
+    ],
+  },
+  runNew: {
+    id: 'crm5-run-new',
+    path: 'runs/new',
+    fullPath: `${CRM5_BASE_PATH}/runs/new`,
+    title: 'Record Migration Run Projection',
+    navLabel: 'New Run',
+    requiredCapability: Capabilities.CONTROL_READ,
+    breadcrumbs: [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Migration Control', href: CRM5_BASE_PATH },
+      { label: 'Runs', href: `${CRM5_BASE_PATH}/runs` },
+      { label: 'New Run' },
+    ],
+  },
+  runEdit: {
+    id: 'crm5-run-edit',
+    path: 'runs/:id/edit',
+    fullPath: `${CRM5_BASE_PATH}/runs/:id/edit`,
+    title: 'Edit Run Telemetry',
+    navLabel: 'Edit Run',
+    requiredCapability: Capabilities.CONTROL_READ,
+    breadcrumbs: [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Migration Control', href: CRM5_BASE_PATH },
+      { label: 'Runs', href: `${CRM5_BASE_PATH}/runs` },
+      { label: 'Edit Run' },
+    ],
+  },
+  reconciliationDetail: {
+    id: 'crm5-reconciliation-detail',
+    path: 'reconciliation/:batch',
+    fullPath: `${CRM5_BASE_PATH}/reconciliation/:batch`,
+    title: 'Conservation Balance Sheet Detail',
+    navLabel: 'Reconciliation Detail',
+    requiredCapability: Capabilities.CONTROL_READ,
+    breadcrumbs: [
+      { label: 'ClearShift', href: '/' },
+      { label: 'CRM Modules', href: '/crm' },
+      { label: 'Migration Control', href: CRM5_BASE_PATH },
+      { label: 'Reconciliation', href: `${CRM5_BASE_PATH}/reconciliation` },
+      { label: 'Batch Detail' },
+    ],
+  },
+};
+
 export function getAllCrm5Routes(): Crm5RouteDefinition[] {
   return Object.values(CRM5_ROUTES);
 }
 
 export function findRouteByPath(path: string): Crm5RouteDefinition | undefined {
   const normalized = path.replace(/\/+$/, '');
-  return getAllCrm5Routes().find(
+  const allRoutes = [...getAllCrm5Routes(), ...Object.values(CRM5_DETAIL_ROUTES)];
+  return allRoutes.find(
     (r) => r.fullPath === normalized || `${CRM5_BASE_PATH}/${r.path}` === normalized
   );
 }
@@ -96,7 +160,7 @@ export function formatBrowserTitle(subTitle?: string | undefined): string {
 }
 
 export function getRouteBreadcrumbs(subRouteKey: string): BreadcrumbItem[] {
-  const route = CRM5_ROUTES[subRouteKey];
+  const route = CRM5_ROUTES[subRouteKey] || CRM5_DETAIL_ROUTES[subRouteKey];
   if (route) {
     return route.breadcrumbs;
   }
