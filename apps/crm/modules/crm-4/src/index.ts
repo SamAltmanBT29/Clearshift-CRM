@@ -19,6 +19,7 @@ export * from './kit/profiler.js';
 export * from './kit/cleaner.js';
 export * from './kit/mapping.js';
 export * from './services/crm4-mapping.service.js';
+export * from './services/reconciliation.service.js';
 export * from './migration/target-adapter.js';
 export * from '../db/schema.js';
 
