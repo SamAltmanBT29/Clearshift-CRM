@@ -553,3 +553,25 @@ Governs high-throughput batch ingestion, chunked processing, bounded exponential
 | `/api/v1/crm-contacts/batches/execute-load` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Executes chunked batch ingestion with bounded retries and 10% stop policy. |
 | `/api/v1/crm-contacts/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | `KIT_READ` | Retrieves durable execution report, receipts, and failed rows. |
 | `/api/v1/crm-contacts/import/batch` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Compatibility alias for batch load execution. |
+
+---
+
+## 20. Human-Operated Create, Edit & Detail Workflows ([CRM1-05] — Issue #10 / SDS §4.2)
+
+Governs frontend forms, validation contracts, read-only field invariants, and navigation workflows for Contacts, Companies, Leads, and Import/Reject views.
+
+### 20.1 Screen Inventory & Navigation Hierarchy
+
+| Entity | List Screen | Create / Edit Form | Detail Screen | Key Invariants |
+| :--- | :--- | :--- | :--- | :--- |
+| **Contacts** | `ContactsListPage` | `ContactFormPage` / `ContactForm` | `ContactDetailPage` | First/Last name required; optional valid email, phone, address; company link must be valid UUID; Golden ID & consent/unsubscribe are read-only. |
+| **Companies** | `CompaniesListPage` | `CompanyFormPage` / `CompanyForm` | `CompanyDetailPage` | Name required; tax number normalized; corporate email format; flat company structure in V1 (no hierarchy/parent company selector). |
+| **Leads** | `LeadsPipelinePage` | `LeadFormPage` / `LeadForm` | `LeadDetailPage` | Contact UUID required; status transitions strictly follow `New -> Working -> Qualified -> Closed` allowlist. |
+| **Imports** | `ImportsOverviewPage` | Migration Kit Ingestion | `ImportDetailPage` | Read-only audit review of committed receipts and filterable rejected rows with reason codes. |
+
+### 20.2 Field Contracts & Authoritative Validation Rules
+
+- **`CRM1_FIELD_CONTRACT`**: Guarantees synchronized labels, helper texts, and error messages between OpenAPI and React forms.
+- **Client Validation & Server Authority**: Client validation gives immediate feedback on blur/submit; server validation remains authoritative and field-level error summaries are presented without losing form input state.
+- **Read-Only Invariants**: System-computed fields (Golden ID, `source_system`/`source_id`, creation/modification timestamps, loaded/rejected counts) cannot be modified or bypassed via browser manipulation.
+- **Safe Operator Confirmations**: Discarding unsaved changes triggers an accessible `ConfirmModal` (`role="alertdialog"`) preventing accidental data loss.
