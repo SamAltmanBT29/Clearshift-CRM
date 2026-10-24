@@ -6,11 +6,14 @@ import { crm2AuthPlugin } from './plugins/auth.js';
 import { crm2Routes, type Crm2RoutesOptions } from './routes/crm2.routes.js';
 import { Crm2Service, crm2Service } from './services/crm2.service.js';
 import type { Crm2TargetAdapter } from './migration/target-adapter.js';
+import { Crm2AuditService, crm2Audit } from './services/audit.js';
 
 export interface AppOptions extends Crm2RoutesOptions {
   service?: Crm2Service;
   adapter?: Crm2TargetAdapter;
   enforceAuth?: boolean;
+  authEnabled?: boolean;
+  auditService?: Crm2AuditService;
 }
 
 /**
@@ -22,7 +25,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     logger: false,
   });
 
-  const enforceAuth = opts.enforceAuth ?? false;
+  const enforceAuth = opts.enforceAuth ?? opts.authEnabled ?? false;
 
   if (enforceAuth) {
     app.register(jwtPlugin);
@@ -64,12 +67,15 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   });
 
   const service = opts.service ?? crm2Service;
+  const auditService = opts.auditService ?? crm2Audit;
 
   app.register(crm2Routes, {
     prefix: CRM2_API_PREFIX,
     service,
     ...(opts.adapter ? { adapter: opts.adapter } : {}),
     enforceAuth,
+    authEnabled: enforceAuth,
+    auditService,
   });
 
   return app;
