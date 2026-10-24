@@ -16,6 +16,7 @@ export * from './kit/cleaner.js';
 export * from './services/crm1-cleaning.service.js';
 export * from './kit/mapping-defaults.js';
 export * from './kit/mapping.js';
+export * from './migration/rules.js';
 export * from './services/crm1-mapping.service.js';
 export * from './policies/index.js';
 export * from './plugins/auth.js';
