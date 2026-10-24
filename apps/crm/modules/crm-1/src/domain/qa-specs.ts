@@ -1047,6 +1047,17 @@ export const CRM1_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'CRM-1 Profiling Configuration & Manifest Assertions (#119 / [CRM1-26])',
     verificationEvidence: 'profileCrm1Batch accurately computes total rows, null counts, distinct counts, invalid format rates, and 100% matches manifest defect numbers.',
   },
+  {
+    reqId: 'FR-CRM1-29',
+    requirement: 'Module contract, regression and browser test suite: OpenAPI 3.1.0 conformance, multi-browser simulated journeys, and zero flaky tests.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.1, §4.2, §7.1 & Issue #122 [CRM1-29]',
+    category: 'API',
+    testType: 'regression',
+    testFile: 'apps/crm/modules/crm-1/tests/api/module-contract-regression.test.ts',
+    testSuite: 'CRM-1 Module Contract, Regression and Browser Test Suite (Issue #122 / [CRM1-29])',
+    verificationEvidence: 'OpenAPI 3.1.0 specification validated against contracts; multi-browser simulated user journeys execute deterministically in CI with zero flaky tests.',
+  },
 ];
 
 // =============================================================================
