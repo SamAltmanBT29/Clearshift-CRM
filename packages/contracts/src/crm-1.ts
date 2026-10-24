@@ -233,6 +233,7 @@ export type CRM1ContactRead = z.infer<typeof CRM1ContactReadSchema>;
 export type CRM1ContactCreate = z.infer<typeof CRM1ContactCreateSchema>;
 export type CRM1ContactPatch = z.infer<typeof CRM1ContactPatchSchema>;
 export type CRM1Company = z.infer<typeof CRM1CompanySchema>;
+export type CRM1CompanyRead = CRM1Company;
 export type CRM1CompanyCreate = z.infer<typeof CRM1CompanyCreateSchema>;
 export type CRM1CompanyPatch = z.infer<typeof CRM1CompanyPatchSchema>;
 export type CRM1Lead = z.infer<typeof CRM1LeadSchema>;
@@ -706,12 +707,12 @@ export const Crm1BatchExecutionReportSchema = z.object({
 export type Crm1BatchExecutionReport = z.infer<typeof Crm1BatchExecutionReportSchema>;
 
 // ---------------------------------------------------------------------------
-// 8. CRM-1 UX Field Contract & Client Validation Metadata (CRM1-05)
+// 8. CRM-1 UX Field Contract & Client Validation Metadata (CRM1-04 / CRM1-05)
 // ---------------------------------------------------------------------------
 
 /**
- * Authoritative field labels, helper texts, and validation error messages for CRM-1 forms.
- * Guarantees field-level UX alignment between frontend forms and OpenAPI contract.
+ * Authoritative field labels, helper texts, and validation error messages for CRM-1.
+ * Guarantees field-level UX alignment between frontend components and OpenAPI contract.
  */
 export const CRM1_FIELD_CONTRACT = {
   contact: {
