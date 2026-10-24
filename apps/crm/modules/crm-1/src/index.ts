@@ -20,6 +20,7 @@ export * from './kit/mapping.js';
 export * from './migration/rules.js';
 export * from './kit/profiler.js';
 export * from './services/crm1-mapping.service.js';
+export * from './services/reconciliation.service.js';
 export * from './policies/index.js';
 export * from './plugins/auth.js';
 export * from './interface/authz.js';
