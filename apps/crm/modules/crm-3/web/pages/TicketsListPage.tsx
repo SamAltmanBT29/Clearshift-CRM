@@ -4,14 +4,19 @@ import { EmptyState } from '../components/EmptyState.js';
 import { ErrorAlert } from '../components/ErrorAlert.js';
 import { AccessDeniedView } from '../components/AccessDeniedView.js';
 import { DataTable } from '../components/DataTable.js';
+import { FilterToolbar } from '../components/FilterToolbar.js';
 import { TICKETS_COLUMNS } from '../table/columns.js';
+import { CRM3_TICKETS_FACETS } from '../table/facets.js';
 import type {
   DataTableColumn,
   TableSortState,
   TablePaginationState,
+  TableFilterState,
+  ActiveFilterPill,
+  FilterFacet,
 } from '../table/types.js';
 
-export { TICKETS_COLUMNS };
+export { TICKETS_COLUMNS, CRM3_TICKETS_FACETS };
 
 export interface TicketsListPageProps {
   data?: Record<string, unknown>[];
@@ -32,6 +37,15 @@ export interface TicketsListPageProps {
   pagination?: TablePaginationState | undefined;
   onPageChange?: ((newPage: number) => void) | undefined;
   onSelectTicket?: ((ticket: Record<string, unknown>) => void) | undefined;
+  search?: string;
+  onSearchChange?: ((term: string) => void) | undefined;
+  filters?: TableFilterState;
+  onFilterChange?: ((key: string, value: string) => void) | undefined;
+  onRemoveFilter?: ((key: string) => void) | undefined;
+  onClearAllFilters?: (() => void) | undefined;
+  activePills?: ActiveFilterPill[];
+  facets?: FilterFacet[];
+  hasActiveFilters?: boolean;
 }
 
 function getStatusBadgeClass(status: string): string {
@@ -74,8 +88,23 @@ export const TicketsListPage: React.FC<TicketsListPageProps> = ({
   pagination,
   onPageChange,
   onSelectTicket,
+  search = '',
+  onSearchChange,
+  filters = {},
+  onFilterChange,
+  onRemoveFilter,
+  onClearAllFilters,
+  activePills = [],
+  facets = CRM3_TICKETS_FACETS,
+  hasActiveFilters = false,
 }) => {
   const displayData = isEmpty ? [] : data;
+  const isFiltersActive =
+    hasActiveFilters ||
+    Boolean(search.trim().length > 0) ||
+    Object.values(filters).some((v) => v !== undefined && v.trim().length > 0) ||
+    activePills.length > 0;
+
   const accessForbidden = isAccessDenied || httpStatus === 403;
 
   const renderCustomCell = (columnKey: string, row: Record<string, unknown>, value: unknown) => {
@@ -105,6 +134,74 @@ export const TicketsListPage: React.FC<TicketsListPageProps> = ({
     return undefined;
   };
 
+  const showFilterToolbar = Boolean(onSearchChange && onFilterChange);
+
+  const mainContent = accessForbidden ? (
+    <AccessDeniedView
+      requiredCapability={requiredCapability}
+      requiredRole={requiredRole}
+      currentRole={currentRole}
+      resourceName="Support Tickets Queue"
+    />
+  ) : (
+    <>
+      {error && (
+        <div className="cs-error-container">
+          <ErrorAlert error={error} onRetry={onRetry} />
+        </div>
+      )}
+
+      {isLoading ? (
+        <TableSkeleton
+          rowCount={5}
+          columnCount={columns.length}
+          ariaLabel="Loading support tickets from queue..."
+        />
+      ) : !error && (
+        displayData.length === 0 ? (
+          <EmptyState
+            className={isFiltersActive ? 'cs-empty-filter-state' : undefined}
+            title={isFiltersActive ? 'No matching tickets found' : 'No support tickets found'}
+            description={
+              isFiltersActive
+                ? 'No tickets matched your search and filter criteria. Try adjusting your query or resetting filters.'
+                : 'There are currently no support tickets in the queue. Create a new ticket to get started.'
+            }
+            icon={isFiltersActive ? '🔍' : '🎫'}
+            actionLabel={isFiltersActive ? 'Reset All Filters' : emptyActionLabel}
+            onAction={isFiltersActive ? onClearAllFilters : onEmptyAction}
+          />
+        ) : (
+          <div className="cs-page-card">
+            <p>{displayData.length} tickets loaded.</p>
+          </div>
+        )
+      )}
+
+      {!isLoading && !error && !accessForbidden && displayData.length > 0 && (
+        <DataTable
+          columns={columns}
+          data={displayData}
+          loading={false}
+          sort={sort}
+          onSortChange={onSortChange}
+          pagination={
+            pagination ?? {
+              page: 1,
+              pageSize: 25,
+              total: displayData.length,
+              totalPages: Math.max(1, Math.ceil(displayData.length / 25)),
+            }
+          }
+          onPageChange={onPageChange}
+          onSelectRow={onSelectTicket}
+          renderCustomCell={renderCustomCell}
+          tableAriaLabel="Support Tickets Queue"
+        />
+      )}
+    </>
+  );
+
   return (
     <div className="cs-page-container">
       <div className="cs-page-header">
@@ -112,68 +209,22 @@ export const TicketsListPage: React.FC<TicketsListPageProps> = ({
         <p className="cs-page-desc">
           Manage inbound support tickets, assignments, status transitions, and customer issue resolution.
         </p>
+        {showFilterToolbar && (
+          <FilterToolbar
+            search={search}
+            onSearchChange={onSearchChange!}
+            facets={facets}
+            filters={filters}
+            onFilterChange={onFilterChange!}
+            activePills={activePills}
+            onRemoveFilter={onRemoveFilter ?? (() => {})}
+            onClearAll={onClearAllFilters ?? (() => {})}
+            searchPlaceholder="Search tickets by subject, order ref, or contact..."
+          />
+        )}
       </div>
 
-      {accessForbidden ? (
-        <AccessDeniedView
-          requiredCapability={requiredCapability}
-          requiredRole={requiredRole}
-          currentRole={currentRole}
-          resourceName="Support Tickets Queue"
-        />
-      ) : (
-        <>
-          {error && (
-            <div className="cs-error-container">
-              <ErrorAlert error={error} onRetry={onRetry} />
-            </div>
-          )}
-
-          {isLoading ? (
-            <TableSkeleton
-              rowCount={5}
-              columnCount={columns.length}
-              ariaLabel="Loading support tickets from queue..."
-            />
-          ) : !error && (
-            displayData.length === 0 ? (
-              <EmptyState
-                title="No support tickets found"
-                description="There are currently no support tickets in the queue. Create a new ticket to get started."
-                icon="🎫"
-                actionLabel={emptyActionLabel}
-                onAction={onEmptyAction}
-              />
-            ) : (
-              <div className="cs-page-card">
-                <p>{displayData.length} tickets loaded.</p>
-              </div>
-            )
-          )}
-
-          {!isLoading && !error && !accessForbidden && displayData.length > 0 && (
-            <DataTable
-              columns={columns}
-              data={displayData}
-              loading={false}
-              sort={sort}
-              onSortChange={onSortChange}
-              pagination={
-                pagination ?? {
-                  page: 1,
-                  pageSize: 25,
-                  total: displayData.length,
-                  totalPages: Math.max(1, Math.ceil(displayData.length / 25)),
-                }
-              }
-              onPageChange={onPageChange}
-              onSelectRow={onSelectTicket}
-              renderCustomCell={renderCustomCell}
-              tableAriaLabel="Support Tickets Queue"
-            />
-          )}
-        </>
-      )}
+      {mainContent}
     </div>
   );
 };
