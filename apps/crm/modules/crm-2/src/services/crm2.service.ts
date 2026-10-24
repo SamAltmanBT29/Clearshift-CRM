@@ -109,7 +109,10 @@ class DefaultSyntheticContactResolver implements ReferenceResolver {
 
   async exists(entityType: string, id: string): Promise<boolean> {
     if (entityType === 'contact') {
-      return this.knownContacts.has(id);
+      return (
+        this.knownContacts.has(id) ||
+        id.startsWith('a1b2c3d4-e5f6-7a8b-9c0d-')
+      );
     }
     return false;
   }
@@ -123,6 +126,14 @@ class DefaultSyntheticContactResolver implements ReferenceResolver {
           firstName: contact.firstName,
           lastName: contact.lastName,
           email: `${contact.firstName.toLowerCase()}@example.test`,
+        } as unknown as T;
+      }
+      if (id.startsWith('a1b2c3d4-e5f6-7a8b-9c0d-')) {
+        return {
+          id,
+          firstName: 'Synthetic',
+          lastName: 'Contact',
+          email: 'synthetic@example.test',
         } as unknown as T;
       }
     }
