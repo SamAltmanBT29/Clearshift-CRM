@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "rulesetVersion": 1,
+  "fixture": {
+    "file": "dirty-data-v1.csv",
+    "rows": 100
+  },
+  "knownProblems": {
+    "emptySubjectCount": 3,
+    "invalidStatusCount": 4,
+    "invalidPriorityCount": 3,
+    "invalidEmailCount": 4,
+    "unresolvedCustomerCount": 3,
+    "duplicateSourceKeyCount": 8,
+    "totalProblemCount": 25
+  },
+  "reconciliation": {
+    "source": 100,
+    "loaded": 75,
+    "rejected": 17,
+    "merged": 8,
+    "skipped": 0,
+    "unaccounted": 0
+  }
+}

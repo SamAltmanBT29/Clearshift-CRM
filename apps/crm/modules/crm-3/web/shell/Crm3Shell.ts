@@ -5,6 +5,7 @@ import {
   MODULE_TITLE,
 } from '../routes.js';
 import type { Crm3RouteDefinition } from '../types.js';
+export { Crm3Shell, type Crm3ShellProps } from './Crm3ShellView.js';
 
 export interface Crm3ShellOptions {
   activeTabKey: string;

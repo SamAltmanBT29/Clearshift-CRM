@@ -113,6 +113,23 @@ describe('CRM-3 Frontend Navigation & Routes (Issue #149 / [CRM3-16])', () => {
       );
     });
 
+    it('redirects disabled users to Hub login with disabled flag', () => {
+      const futureTime = Math.floor(Date.now() / 1000) + 3600;
+      const disabledSession: UserSession = {
+        userId: 'usr-disabled',
+        roles: [Roles.VIEWER],
+        expiresAt: futureTime,
+        disabled: true,
+      };
+
+      const result = checkRouteAuth(disabledSession, '/crm-3/tickets');
+      expect(result.isAllowed).toBe(false);
+      expect(result.reason).toBe('UNAUTHENTICATED');
+      expect(result.redirectTo).toBe(
+        `${HUB_LOGIN_PATH}?returnUrl=${encodeURIComponent('/crm-3/tickets')}&reason=disabled`
+      );
+    });
+
     it('redirects unauthorized users to access-denied when capability is missing', () => {
       const futureTime = Math.floor(Date.now() / 1000) + 3600;
       const sessionWithoutPerms: UserSession = {
