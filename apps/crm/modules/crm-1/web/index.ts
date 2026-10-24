@@ -24,3 +24,26 @@ export * from './pages/ImportsOverviewPage.js';
 export * from './pages/CleaningAuditPage.js';
 export * from './pages/MappingTemplatesPage.js';
 export * from './pages/BatchLoaderPage.js';
+
+// CRM1-04 list screen API integration
+export * from './src/api/crm-1.js';
+export * from './src/components/ContactsTable.js';
+export * from './src/components/CompaniesTable.js';
+export * from './src/components/LeadsTable.js';
+export { ContactsListPage as ConnectedContactsListPage } from './src/pages/ContactsListPage.js';
+export { CompaniesListPage as ConnectedCompaniesListPage } from './src/pages/CompaniesListPage.js';
+export { LeadsListPage, LeadsListPage as ConnectedLeadsListPage } from './src/pages/LeadsListPage.js';
+
+// CRM1-05 create/edit/detail workflows
+export * from './src/components/forms/ConfirmModal.js';
+export * from './src/components/forms/FormValidationSummary.js';
+export * from './src/components/forms/ContactForm.js';
+export * from './src/components/forms/CompanyForm.js';
+export * from './src/components/forms/LeadForm.js';
+export * from './src/pages/ContactFormPage.js';
+export * from './src/pages/ContactDetailPage.js';
+export * from './src/pages/CompanyFormPage.js';
+export * from './src/pages/CompanyDetailPage.js';
+export * from './src/pages/LeadFormPage.js';
+export * from './src/pages/LeadDetailPage.js';
+export * from './src/pages/ImportDetailPage.js';

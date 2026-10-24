@@ -246,6 +246,25 @@ $$\text{source} (1000) = \text{loaded} (780) + \text{rejected} (140) + \text{mer
 * **Expected Profile Assertions:** [`sample-data/crm-1/expected-profile.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/expected-profile.json) (SHA-256: `23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0`)
 * **Canonical Mapping Template:** [`sample-data/crm-1/mapping-template.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/mapping-template.json) (Checksum: `d6e91b238861236b25fa135146765bcecac26ea9aadd1d5378909858c4e735d5`)
 
+### 4.2 V1 Profiling Configuration & Manifest Assertions (`[CRM1-26]`)
+
+* **Profiling Engine:** [`apps/crm/modules/crm-1/src/kit/profiler.ts`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/src/kit/profiler.ts)
+* **Automated Regression Suite:** [`apps/crm/modules/crm-1/tests/kit/profiler.test.ts`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/tests/kit/profiler.test.ts) (21 tests, 97%+ coverage)
+* **Profiled Target Table:** `crm1_contacts` (`['crm1_contacts', 'crm1_companies', 'crm1_leads']`)
+* **Profiled Columns (15):** `id`, `first_name`, `last_name`, `email`, `phone`, `address`, `company_id`, `company_name`, `lead_status`, `source_system`, `source_id`, `consent_status`, `unsubscribed`, `annual_revenue`, `created_at`
+* **Defect Categories (7):**
+  1. `EXACT_DUPLICATE`: 8 rows (rows 75–82) — 2 email duplicate pairs + 2 compound phone+name duplicate pairs
+  2. `NULL_REQUIRED`: 4 rows (rows 83–86) — missing/whitespace mandatory names
+  3. `MALFORMED`: 8 rows (rows 87–94) — invalid RFC-5322 emails (4), non-E.164 phone numbers (2), non-allowlist lead statuses (2)
+  4. `FOREIGN_KEY_MISSING`: 2 rows (rows 95–96) — orphan parent company_id UUIDs
+  5. `FORMULA_INJECTION_RISK`: 2 rows (rows 97–98) — leading formula tokens (`=`, `+`)
+  6. `BOUNDARY_NUMBERS`: 1 row (row 99) — negative revenue violating domain invariant
+  7. `FIELD_TOO_LONG`: 1 row (row 100) — string length > 255 chars
+* **Row Conservation Balance Sheet:**
+  $$\text{source} (100) = \text{loaded} (74) + \text{merged} (8) + \text{rejected} (18) + \text{skipped} (0) \quad [\text{unaccounted} = 0]$$
+* **Non-Destructive Operation:** Profiler operates strictly on immutable/frozen input arrays without modifying row objects or cell values.
+* **Platform Integration:** Implements `toPlatformProfileReport` mapping module reports directly to `@clearshift/contracts` `ProfileReportSchema`.
+
 ---
 
 ## 5. Public API Endpoints (`/api/v1/crm-contacts`) & Authorization Matrix
@@ -553,3 +572,68 @@ Governs high-throughput batch ingestion, chunked processing, bounded exponential
 | `/api/v1/crm-contacts/batches/execute-load` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Executes chunked batch ingestion with bounded retries and 10% stop policy. |
 | `/api/v1/crm-contacts/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | `KIT_READ` | Retrieves durable execution report, receipts, and failed rows. |
 | `/api/v1/crm-contacts/import/batch` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Compatibility alias for batch load execution. |
+
+---
+
+## 20. Primary Module List Screens, Search/Filter, and Stable UI States ([CRM1-04] — Issue #9)
+
+Governs the production-ready frontend vertical slices connecting real public CRM-1 APIs (`/api/v1/crm-contacts/*`) with accessible table projections, server-side pagination, facet filtering, debounced query search, and resilient UI states.
+
+### 20.1 Core Domain Invariants & View Rules
+
+| Invariant | Specification | Enforcement Mechanism |
+| :--- | :--- | :--- |
+| **Server-Paging & Default Page Size** | Default page size is 25 records (`pageSize: 25`, max 100). The browser never downloads all records in a single payload. | Server pagination parameters validated via Zod schemas and query builders. |
+| **Search by Name/Email** | Contact search filters across `firstName`, `lastName`, or `email`. Company search filters across `name` or `taxNumber`. | Normalized case-insensitive SQL ILIKE search with 300ms client debouncing. |
+| **Filter-Triggered Page Reset** | Any modification to search text or faceted filter parameters resets pagination back to page 1 (`page: 1`). | Reactive state controller resets page offset upon query parameter change. |
+| **Flat Company Architecture** | ClearShift V1 exclusively models flat companies (`crm1_companies`). No hierarchy, corporate tree, or nested account structures exist. | Explicit `Flat Company` architecture badge in `CompaniesTable`. |
+| **Verified Lead Stages** | Leads strictly transition across four lifecycle stages: `New`, `Working`, `Qualified`, and `Closed`. | Enum validation in schema, contract, API, and `LeadsTable` status badges. |
+| **Consent & Golden ID Immutability** | Contact Golden Identity (`goldenId`), source metadata, and explicit GDPR consent status (`consentStatus`, `unsubscribed`) are read-only and preserved against overwrite by older imports. | Protected table cells and domain mutation rules reject unprivileged updates. |
+
+### 20.2 Mandatory Stable UI States
+
+Every primary list screen implements 4 distinct, mutually exclusive states complying with WCAG 2.1 AA:
+
+1. **Loading State (`TableSkeleton`)**:
+   - Renders animated shimmer rows with `aria-busy="true"`, `role="status"`, and accessible announcement text.
+   - Preserves table column geometry preventing layout shift (CLS).
+2. **Empty State (`EmptyState`)**:
+   - Differentiates zero-data state (e.g. database has no records yet) from zero-match filter state (e.g. query returned 0 rows).
+   - In zero-match state, offers a clear primary action to "Clear search & filters".
+3. **Recoverable Error State (`ErrorAlert`)**:
+   - Sanitizes raw stack traces into user-friendly error messages while exposing a primary "Retry" action.
+4. **Access-Denied State (`AccessDeniedView`)**:
+   - Triggered upon HTTP 403 or missing RBAC capability (`crm1.contacts.read`, `crm1.companies.read`, `crm1.leads.read`).
+   - Displays clear required capability and current user role.
+
+### 20.3 Screen & API Route Matrix
+
+| Entity | Primary List Page | Primary Table | GET API Endpoint | Default Page Size | Allowed Roles |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Contacts** | `ContactsListPage` | `ContactsTable` | `GET /api/v1/crm-contacts/contacts` | 25 | `viewer`, `editor`, `analyst`, `admin` |
+| **Companies** | `CompaniesListPage` | `CompaniesTable` | `GET /api/v1/crm-contacts/companies` | 25 | `viewer`, `editor`, `analyst`, `admin` |
+| **Leads** | `LeadsListPage` | `LeadsTable` | `GET /api/v1/crm-contacts/leads` | 25 | `viewer`, `editor`, `analyst`, `admin` |
+| **Imports** | `ImportsOverviewPage` | `DataTable` | `GET /api/v1/crm-contacts/imports/{batch}` | 25 | `migration_runner`, `analyst`, `admin` |
+| **Rejects** | `CleaningAuditPage` | `DataTable` | `GET /api/v1/crm-contacts/imports/{batch}/rejects` | 50 | `migration_runner`, `analyst`, `admin` |
+
+---
+
+## 21. Human-Operated Create, Edit & Detail Workflows ([CRM1-05] — Issue #10 / SDS §4.2)
+
+Governs frontend forms, validation contracts, read-only field invariants, and navigation workflows for Contacts, Companies, Leads, and Import/Reject views.
+
+### 21.1 Screen Inventory & Navigation Hierarchy
+
+| Entity | List Screen | Create / Edit Form | Detail Screen | Key Invariants |
+| :--- | :--- | :--- | :--- | :--- |
+| **Contacts** | `ContactsListPage` | `ContactFormPage` / `ContactForm` | `ContactDetailPage` | First/Last name required; optional valid email, phone, address; company link must be valid UUID; Golden ID & consent/unsubscribe are read-only. |
+| **Companies** | `CompaniesListPage` | `CompanyFormPage` / `CompanyForm` | `CompanyDetailPage` | Name required; tax number normalized; corporate email format; flat company structure in V1 (no hierarchy/parent company selector). |
+| **Leads** | `LeadsPipelinePage` | `LeadFormPage` / `LeadForm` | `LeadDetailPage` | Contact UUID required; status transitions strictly follow `New -> Working -> Qualified -> Closed` allowlist. |
+| **Imports** | `ImportsOverviewPage` | Migration Kit Ingestion | `ImportDetailPage` | Read-only audit review of committed receipts and filterable rejected rows with reason codes. |
+
+### 21.2 Field Contracts & Authoritative Validation Rules
+
+- **`CRM1_FIELD_CONTRACT`**: Guarantees synchronized labels, helper texts, and error messages between OpenAPI and React forms.
+- **Client Validation & Server Authority**: Client validation gives immediate feedback on blur/submit; server validation remains authoritative and field-level error summaries are presented without losing form input state.
+- **Read-Only Invariants**: System-computed fields (Golden ID, `source_system`/`source_id`, creation/modification timestamps, loaded/rejected counts) cannot be modified or bypassed via browser manipulation.
+- **Safe Operator Confirmations**: Discarding unsaved changes triggers an accessible `ConfirmModal` (`role="alertdialog"`) preventing accidental data loss.

@@ -18,7 +18,9 @@ import {
 import { AppError } from '@cs/kernel';
 import type { RoleType } from '@cs/identity';
 import { crm2Service, Crm2Service } from '../services/crm2.service.js';
+import { crm2Audit, type Crm2AuditService } from '../services/audit.js';
 import { CRM2_ENDPOINT_ROLES } from '../policies/roles.js';
+import { redactSensitiveObject } from '../policies/masking.js';
 import { requireRoles } from '../plugins/auth.js';
 import {
   DomainValidationError,
@@ -34,6 +36,7 @@ import { Crm2TargetAdapter } from '../migration/target-adapter.js';
 export interface Crm2RoutesOptions {
   service?: Crm2Service | undefined;
   adapter?: Crm2TargetAdapter | undefined;
+  auditService?: Crm2AuditService | undefined;
   authEnabled?: boolean | undefined;
   enforceAuth?: boolean | undefined;
 }
@@ -71,6 +74,7 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 ) => {
   const service = opts.service ?? crm2Service;
   const adapter = opts.adapter ?? new Crm2TargetAdapter(service);
+  const auditService = opts.auditService ?? crm2Audit;
   const authEnabled = opts.enforceAuth ?? opts.authEnabled ?? true;
 
   // Safe global error handler for CRM-2: never leak SQL, secrets, or stack traces
@@ -147,7 +151,7 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
     }
 
     const result = await service.getDeals(parseResult.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   // ---------------------------------------------------------------------------
@@ -176,7 +180,7 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
       });
     }
 
-    return reply.status(200).send(deal);
+    return reply.status(200).send(redactSensitiveObject(deal));
   });
 
   // ---------------------------------------------------------------------------
@@ -197,7 +201,23 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const created = await service.createDeal(parse.data);
-      return reply.status(201).send(created);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'crm2.deal.created',
+        entity: 'deal',
+        entityId: created.id,
+        diff: {
+          name: created.name,
+          value: created.value,
+          currency: created.currency,
+          stage_id: created.stage_id,
+          stage_name: created.stage_name,
+          contact_id: created.contact_id,
+          close_date: created.close_date,
+        },
+        result: 'success',
+      });
+      return reply.status(201).send(redactSensitiveObject(created));
     } catch (err: any) {
       if (err instanceof AppError) {
         return reply.status(err.statusCode).send({
@@ -239,7 +259,15 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const updated = await service.updateDeal(id, parse.data);
-      return reply.status(200).send(updated);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'crm2.deal.updated',
+        entity: 'deal',
+        entityId: id,
+        diff: parse.data,
+        result: 'success',
+      });
+      return reply.status(200).send(redactSensitiveObject(updated));
     } catch (err: any) {
       if (err instanceof AppError) {
         return reply.status(err.statusCode).send({
@@ -270,7 +298,7 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
     }
 
     const result = await service.getQuotes(parse.data);
-    return reply.status(200).send(result);
+    return reply.status(200).send(redactSensitiveObject(result));
   });
 
   // ---------------------------------------------------------------------------
@@ -299,7 +327,7 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
       });
     }
 
-    return reply.status(200).send(quote);
+    return reply.status(200).send(redactSensitiveObject(quote));
   });
 
   // ---------------------------------------------------------------------------
@@ -320,7 +348,21 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const created = await service.createQuote(parse.data);
-      return reply.status(201).send(created);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'crm2.quote.created',
+        entity: 'quote',
+        entityId: created.id,
+        diff: {
+          quote_number: created.quote_number,
+          deal_id: created.deal_id,
+          amount: created.amount,
+          currency: created.currency,
+          date: created.date,
+        },
+        result: 'success',
+      });
+      return reply.status(201).send(redactSensitiveObject(created));
     } catch (err: any) {
       if (err instanceof AppError) {
         return reply.status(err.statusCode).send({
@@ -362,7 +404,15 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const updated = await service.updateQuote(id, parse.data);
-      return reply.status(200).send(updated);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'crm2.quote.updated',
+        entity: 'quote',
+        entityId: id,
+        diff: parse.data,
+        result: 'success',
+      });
+      return reply.status(200).send(redactSensitiveObject(updated));
     } catch (err: any) {
       if (err instanceof AppError) {
         return reply.status(err.statusCode).send({
@@ -436,6 +486,21 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     if (result.ok) {
       const statusCode = alreadyExists ? 200 : 201;
+
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'crm2.import.row_loaded',
+        entity: 'crm2_import',
+        entityId: result.value.targetId,
+        batchId: parsed.data.batchId,
+        result: 'success',
+        metadata: {
+          idempotencyKey,
+          sourceRow: parsed.data.sourceRow,
+          sourceSystem: parsed.data.sourceSystem,
+          outcome: result.value.receipt.kind,
+        },
+      });
 
       return reply.status(statusCode).send({
         targetId: result.value.targetId,
@@ -518,6 +583,19 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const report = await service.executeBatchLoad(parsed.data);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'crm2.batch.execute_load',
+        entity: 'crm2_batch',
+        batchId: report.batchId,
+        result: report.status === 'COMPLETED' ? 'success' : (report.status === 'STOPPED_EXCESSIVE_FAILURES' ? 'halted' : 'failure'),
+        metadata: {
+          status: report.status,
+          totalRecords: report.totalRecords,
+          committedRecords: report.committedRecords,
+          failedRecords: report.failedRecords,
+        },
+      });
       return reply.status(200).send({
         ...report,
         correlation_id,
@@ -578,6 +656,18 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
         },
       });
     }
+
+    await auditService.logEvent({
+      actor: (request as any).user?.sub ?? 'system',
+      action: 'crm2.import.batch_loaded',
+      entity: 'crm2_import',
+      batchId,
+      result: 'success',
+      metadata: {
+        loadedCount: result.value.loaded.length,
+        rejectedCount: result.value.errors.length,
+      },
+    });
 
     return reply.status(200).send({
       batchId,
@@ -699,6 +789,18 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const result = service.detectDuplicates(parsed.data);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub ?? 'system',
+        action: 'DUPLICATES_DETECTED',
+        entity: 'crm2_duplicates',
+        metadata: {
+          batchId: parsed.data.batchId,
+          keyType: parsed.data.keyType,
+          duplicateGroupCount: result.summary.duplicateGroupCount,
+          duplicateRecordCount: result.summary.duplicateRecordCount,
+        },
+        result: 'success',
+      });
       return reply.status(200).send({
         ...result,
         correlation_id: getCorrelationId(request),
@@ -746,6 +848,22 @@ export const crm2Routes: FastifyPluginAsync<Crm2RoutesOptions> = async (
 
     try {
       const audit = service.resolveDuplicate(parsed.data);
+      await auditService.logEvent({
+        actor: parsed.data.actorId,
+        action: `DUPLICATE_${parsed.data.decision}`,
+        entity: `crm2_${audit.entity || 'deal'}`,
+        entityId: parsed.data.keptId,
+        metadata: {
+          candidateId: parsed.data.candidateId,
+          decision: parsed.data.decision,
+          keptId: parsed.data.keptId,
+          mergedId: parsed.data.mergedId,
+          reason: parsed.data.reason,
+          keyType: audit.keyType,
+          normalizedKey: audit.normalizedKey,
+        },
+        result: 'success',
+      });
       return reply.status(200).send({
         status: 'resolved',
         audit,

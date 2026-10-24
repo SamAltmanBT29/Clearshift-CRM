@@ -7,9 +7,13 @@ servers:
   - url: /api/v1/crm-deals
     description: V1 Base Endpoint
 
+security:
+  - bearerAuth: []
+
 paths:
   /health:
     get:
+      security: []
       summary: Service health check
       operationId: getHealth
       description: Returns health status, module identifier, and service metadata
@@ -1576,3 +1580,63 @@ components:
           type: string
         currency:
           type: string
+
+    CRM2AuditEvent:
+      type: object
+      required:
+        - id
+        - actor
+        - action
+        - entity
+        - result
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor:
+          type: string
+        action:
+          type: string
+        entity:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+          nullable: true
+        batchId:
+          type: string
+          nullable: true
+        result:
+          type: string
+          enum: [success, failure, rejected, halted]
+        diffRedacted:
+          type: object
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or invalid/expired/disabled token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Authenticated identity does not possess the required role for this operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+

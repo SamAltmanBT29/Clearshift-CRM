@@ -1,4 +1,5 @@
 import { Roles, type RoleType } from '@cs/identity';
+import { Capabilities, type CapabilityType, hasCapability } from '@cs/rbac';
 
 /**
  * Exact Role Capability Matrix for CRM-2 Endpoints according to SDS ClearShift CRM v2.0 §4 / §7.2:
@@ -42,6 +43,33 @@ export const CRM2_ENDPOINT_ROLES = {
 export type Crm2EndpointKey = keyof typeof CRM2_ENDPOINT_ROLES;
 
 /**
+ * Corresponding RBAC Capabilities for CRM-2 Endpoints per SDS Section 4.3.
+ */
+export const CRM2_ENDPOINT_CAPABILITIES: Record<Crm2EndpointKey, CapabilityType[]> = {
+  DEALS_LIST: [Capabilities.MODULE_READ],
+  DEALS_READ: [Capabilities.MODULE_READ],
+  DEALS_CREATE: [Capabilities.MODULE_WRITE, Capabilities.KIT_RUN],
+  DEALS_UPDATE: [Capabilities.MODULE_WRITE, Capabilities.KIT_RUN],
+
+  STAGES_LIST: [Capabilities.MODULE_READ],
+
+  QUOTES_LIST: [Capabilities.MODULE_READ],
+  QUOTES_READ: [Capabilities.MODULE_READ],
+  QUOTES_CREATE: [Capabilities.MODULE_WRITE, Capabilities.KIT_RUN],
+  QUOTES_UPDATE: [Capabilities.MODULE_WRITE, Capabilities.KIT_RUN],
+
+  IMPORT_WRITE: [Capabilities.KIT_RUN, Capabilities.KIT_ADMIN],
+  IMPORT_RECEIPTS: [Capabilities.MODULE_READ, Capabilities.CONTROL_READ],
+
+  DUPLICATES_DETECT: [Capabilities.CONTROL_READ, Capabilities.KIT_RUN, Capabilities.KIT_ADMIN],
+  DUPLICATES_HELD: [Capabilities.MODULE_READ, Capabilities.CONTROL_READ],
+  DUPLICATES_RESOLVE: [Capabilities.KIT_REVIEW, Capabilities.KIT_ADMIN],
+  DUPLICATES_AUDIT: [Capabilities.MODULE_READ, Capabilities.CONTROL_READ],
+  DEALS_EVALUATE: [Capabilities.MODULE_READ],
+  QUOTES_EVALUATE: [Capabilities.MODULE_READ],
+};
+
+/**
  * Checks if the user roles contain at least one of the allowed roles.
  * Admin role is universally permitted across all administrative actions.
  */
@@ -54,3 +82,21 @@ export function isRoleAllowed(userRoles: RoleType[] | undefined, allowedRoles: r
   }
   return userRoles.some((role) => allowedRoles.includes(role));
 }
+
+/**
+ * Checks if user roles satisfy the RBAC capability requirement for the given endpoint.
+ */
+export function isCapabilityAllowed(userRoles: RoleType[] | undefined, endpoint: Crm2EndpointKey): boolean {
+  if (!userRoles || userRoles.length === 0) {
+    return false;
+  }
+  if (userRoles.includes(Roles.ADMIN)) {
+    return true;
+  }
+  const requiredCaps = CRM2_ENDPOINT_CAPABILITIES[endpoint];
+  if (!requiredCaps || requiredCaps.length === 0) {
+    return false;
+  }
+  return requiredCaps.some((cap) => hasCapability(userRoles, cap));
+}
+

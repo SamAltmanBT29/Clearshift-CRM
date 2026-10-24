@@ -533,12 +533,66 @@ The entity creation workflow enforces strict client-side validation using Zod:
   - Accessible notification banner (`role="status"`, `aria-live="polite"`).
   - Renders success confirmation message with 5000ms auto-dismissal and manual close button.
 
-### 16.5 Automated Verification Suites (CRM2-20)
+### 14.5 Automated Verification Suites (CRM2-20)
 - `apps/crm/modules/crm-2/tests/web/create-form.test.ts`: 40 comprehensive tests verifying Zod schema rules, client-side validation helpers, server 400 error mapping, FormValidationSummary accessibility, ConfirmationToast lifecycle, CreateDealModal behavior, DataTableController cache methods, double-submit button disabling, and DealsListPage integration.
 
 ---
 
-## 17. Defect Traceability & Resolutions (DEF-CRM2-01..03)
+## 15. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix (CRM2-15 / #128, CRM2-09 / #24)
+
+In compliance with SDS ClearShift CRM v2.0 §7.2, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
+
+| Endpoint | HTTP Method | Allowed Roles | Description |
+|---|---|---|---|
+| `/health` | `GET` | (public) | Health check and version verification. |
+| `/stages` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve 6 canonical pipeline stages in seed order. |
+| `/deals` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Search and filter deals by stage with bounded pagination (default 10, max 100). |
+| `/deals/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve single deal by UUID. |
+| `/deals` | `POST` | `editor`, `migration_runner`, `admin` | Create a deal record. Validates stage, decimal value, and optional contact link. Generates audit event. |
+| `/deals/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update deal fields. Validates allowable stage transition. Generates audit event. |
+| `/quotes` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Search and filter quotes with bounded pagination. |
+| `/quotes/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve single quote by UUID. |
+| `/quotes` | `POST` | `editor`, `migration_runner`, `admin` | Create a quote record. Enforces unique quote number and decimal amount. Generates audit event. |
+| `/quotes/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update quote record. Generates audit event. |
+| `/import` | `POST` | `migration_runner`, `admin` | Target adapter row ingest with durable idempotency receipt. Generates audit event. |
+| `/import/row` | `POST` | `migration_runner`, `admin` | Single row ingest alias. Generates audit event. |
+| `/import/batch` | `POST` | `migration_runner`, `admin` | Batch rows ingest. Generates audit event. |
+| `/batches/execute-load` | `POST` | `migration_runner`, `admin` | Chunked batch load execution with fault-tolerance and retry limits. Generates audit event. |
+| `/import/receipts` | `GET` | `viewer`, `analyst`, `admin` | Query committed import receipts. |
+| `/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | Query batch execution report. |
+| `/duplicates/detect` | `POST` | `analyst`, `migration_runner`, `admin` | Detect duplicate candidates by exact key. Generates audit event. |
+| `/duplicates/held` | `GET` | `viewer`, `analyst`, `editor`, `admin` | Query duplicate review queue held for human review. |
+| `/duplicates/resolve` | `POST` | `editor`, `analyst`, `admin` | Record human merge/reject decision with audit trail. Generates audit event. |
+| `/duplicates/audit` | `GET` | `viewer`, `analyst`, `admin` | Query duplicate resolution audit logs. |
+
+---
+
+## 16. Sensitive Fields & Masking Policy
+
+Field-level restrictions are enforced on the server before JSON serialization and export:
+1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
+2. **Salary Information**: Numeric compensation values masked as `XX,XXX` or converted to `"salary hidden"`.
+3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
+5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
+
+---
+
+## 17. Audit Trail Specification
+
+All domain mutations, migration executions, and privileged actions produce append-only audit records containing:
+* `actor`: Authenticated User UUID (`sub`) and role set.
+* `action`: Action verb (`crm2.deal.created`, `crm2.deal.updated`, `crm2.quote.created`, `crm2.quote.updated`, `crm2.import.row_loaded`, `crm2.batch.execute_load`, `DUPLICATE_MERGE`, etc.).
+* `timestamp`: ISO-8601 UTC timestamp.
+* `entity`: Affected entity name (`deal`, `quote`, `crm2_import`, `crm2_batch`, `crm2_duplicates`).
+* `entity_id`: Primary record UUID.
+* `batch_id`: Migration Batch UUID when correlated.
+* `result`: Outcome status (`success`, `failure`, `rejected`, `halted`).
+* `diff_redacted`: Contextual payload with sensitive fields pre-redacted (no raw rows, tokens, or plaintext credentials).
+
+---
+
+## 18. Defect Traceability & Resolutions (DEF-CRM2-01..03)
 
 | Defect ID | Severity | Root Cause | Resolution | Verification |
 |---|---|---|---|---|
@@ -546,3 +600,69 @@ The entity creation workflow enforces strict client-side validation using Zod:
 | `DEF-CRM2-02` | High (P1) | `DecimalStringSchema` used unconstrained integer digits (`^\d+`), permitting values > 12 integer digits (e.g. `1000000000000.00`) to pass Zod validation and trigger PostgreSQL `NUMERIC(14,2)` overflow (SQLSTATE 22003) -> 500 error. | Constrained `DecimalStringSchema` to max 12 integer digits (`^\d{1,12}(\.\d{1,4})?$`), rejecting oversized numbers at API validation boundary with HTTP 400 `VALIDATION_ERROR`. | `BD-01`, `BD-02` in `boundary-and-idempotency.test.ts` and test 5 in `api-postgres-integration.test.ts`. |
 | `DEF-CRM2-03` | High (P1) | Whitespace-only deal names (e.g. `'   '`) passed `z.string().min(1)` and hit the DB constraint `check (btrim(name) <> '')` (SQLSTATE 23514) -> 500 error. | Added `.trim()` before `.min(1)` in `CreateDealInputSchema`, `QuoteSchema`, and `CreateQuoteInputSchema`, rejecting blank and whitespace-only text with HTTP 400 `VALIDATION_ERROR`. | `dirty-data-pack.test.ts` (conservation 75/17/8/0/0) and test 4 in `api-postgres-integration.test.ts`. |
 
+
+---
+
+## 19. Public Contracts, Domain Events, and Deterministic Mock Package (Gate G1 / CRM2-14 / Issue #2127)
+
+### 19.1 Overview & Architecture Alignment
+Under Gate G1 milestone requirements (SDS ClearShift CRM v2.0 §8, Project Plan v3.0 §8, V1 Standardization Plan), CRM-2 publishes its official public contract bundle in `@clearshift/contracts`:
+1. **OpenAPI 3.1 Specification**: `packages/contracts/openapi/crm-2.yaml` defining deals, stages, quotes, batch ingestion, and duplicate resolution APIs.
+2. **Domain Event Taxonomy & Schemas**: `packages/contracts/src/crm-2-events.ts` standardizing transactional outbox envelopes (`EventEnvelope<T>`), Zod validation schemas, and typed constructor factories.
+3. **Deterministic Mock Store & Fastify Server Plugin**: `packages/contracts/src/crm-2-mock.ts` exposing `CRM2MockStore` and `crm2MockPlugin` for cross-module integration tests (ERP-1, ERP-3, CRM-1, CRM-5) with 100% synthetic test fixtures.
+
+### 19.2 Domain Event Taxonomy (`CRM2EventTypes`)
+All domain events conform to standard ClearShift outbox envelope (`EventEnvelope<T>`) mandated by PLT-04 and PLT-09:
+
+| Event Type | Aggregate Type | Trigger / Business Rule | Payload Schema |
+|---|---|---|---|
+| `crm2.deal.created` | `deal` | New deal initialized in pipeline | `DealCreatedPayloadSchema` |
+| `crm2.deal.updated` | `deal` | Core deal metadata changed (name, value, close date) | `DealUpdatedPayloadSchema` |
+| `crm2.deal.stage_changed` | `deal` | Forward-only pipeline stage transition validated | `DealStageChangedPayloadSchema` |
+| `deal.won` | `deal` | Deal marked 'Won'; triggers ERP-3 Sales Order creation | `DealWonPayloadSchema` |
+| `crm2.deal.lost` | `deal` | Deal marked 'Lost' with reason | `DealLostPayloadSchema` |
+| `crm2.quote.created` | `quote` | Quote generated against active deal | `QuoteCreatedPayloadSchema` |
+| `crm2.quote.updated` | `quote` | Quote values or notes adjusted | `QuoteUpdatedPayloadSchema` |
+| `crm2.quote.accepted` | `quote` | Quote approved by customer | `QuoteAcceptedPayloadSchema` |
+| `crm2.duplicate.detected` | `duplicate` | Exact duplicate match flagged across import batches | `CRM2DuplicateDetectedPayloadSchema` |
+| `crm2.duplicate.resolved` | `duplicate` | Human reviewer resolves duplicate (MERGE / REJECT / KEEP) | `CRM2DuplicateResolvedPayloadSchema` |
+| `crm2.import.batch_loaded` | `batch` | Batch load completed with receipts and failure tallies | `CRM2ImportBatchLoadedPayloadSchema` |
+
+#### Key Cross-Module Invariant: `deal.won` Emission for ERP-3
+When a deal transitions from any prior non-terminal stage to `Won`, the store emits the canonical `deal.won` event via transactional outbox. The event payload carries `dealId`, `dealName`, `customerId` (`contact_id`), `amount`, `currency`, `stageName: 'Won'`, and `timestamp`, satisfying ERP-3's downstream order creation contract.
+
+### 19.3 Deterministic In-Memory Mock Store (`CRM2MockStore`)
+- **State Enforcements**:
+  - Deals follow 6 fixed stages (`New` -> `Qualified` -> `Proposal` -> `Negotiation` -> `Won` / `Lost`).
+  - Terminal stages (`Won`, `Lost`) reject further transitions with HTTP 422 (`INVALID_DEAL_STAGE_TRANSITION`).
+  - Orphan deals detected and tagged (`is_orphan: true` if `contact_id` is null).
+  - Quote numbers are normalized uppercase and enforced globally unique across deals (HTTP 409 conflict).
+  - Referential integrity prevents deal deletion when active linked quotes exist (HTTP 409).
+  - Decimal arithmetic and string validation (`/^\d+(\.\d{1,4})?$/`) prevent floating-point inaccuracies.
+- **Fastify Mock Server Plugin (`crm2MockPlugin`)**:
+  - Mounts routes under `CRM2_API_PREFIX` (`/api/v1/crm-deals`).
+  - Implements all V1 routes: stages catalog, deals CRUD, quotes CRUD, batch ingestion, duplicate evaluation, and audit logs.
+  - Standard error envelope: `{ code, message, details }` with HTTP 400 (validation), 404 (not found), 409 (conflict), 422 (unprocessable entity).
+- **Synthetic Fixtures**:
+  - `createDeterministicMockStages()`: 6 fixed stages with stable UUIDs and orders 1..6.
+  - `createDeterministicMockDeals()`: 6 synthetic enterprise deals covering all stages, currencies (USD, EUR), and orphan edge case.
+  - `createDeterministicMockQuotes()`: 3 deterministic quotes with sequential numbering (`Q-2026-001`..`003`).
+  - `createDeterministicMockCrm2Duplicates()`: Synthetic candidate flagged for review with normalized key.
+  - `createDeterministicMockReceipts()`: Idempotent import receipts for Migration Kit verification.
+  - Zero PII, employee, customer, or real-world proprietary data used.
+
+### 19.4 Versioned Change Record & Sign-off
+```yaml
+ChangeRecord:
+  id: CR-CRM2-G1-001
+  module: CRM-2 (Deals, Pipeline and Quotes)
+  sprint: Sprint 1 — Gate G1
+  date: 2026-10-24
+  prerequisite: PLT-04 (Shared Contracts & Error Envelope)
+  type: Contract Baseline & Mock Infrastructure
+  signOff:
+    author: Group 2 — Role 2 (Integration / Backend Engineer)
+    lead: Integration Lead
+    status: APPROVED
+    gate: Gate G1
+```

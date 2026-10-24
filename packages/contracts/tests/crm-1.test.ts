@@ -317,5 +317,34 @@ describe("CRM-1 public contracts", () => {
       expect(crm1OpenApi).toContain("BatchExecutionReport:");
       expect(crm1OpenApi).toContain("STOPPED_EXCESSIVE_FAILURES");
     });
+
+    it("exports authoritative CRM1_FIELD_CONTRACT for forms and tables", async () => {
+      const { CRM1_FIELD_CONTRACT } = await import("../src/crm-1.js");
+      expect(CRM1_FIELD_CONTRACT.contact.firstName.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.contact.lastName.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.contact.email.errorInvalid).toBe("Email must be a valid email address");
+      expect(CRM1_FIELD_CONTRACT.contact.goldenId.readOnly).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.company.name.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.lead.contactId.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.lead.status.required).toBe(true);
+    });
+  });
+
+  describe("CRM1-05 UX Field Contract & Client Validation (Issue #10)", () => {
+    it("exports authoritative labels, helper texts, and validation rules in CRM1_FIELD_CONTRACT", async () => {
+      const { CRM1_FIELD_CONTRACT } = await import("../src/crm-1.js");
+      expect(CRM1_FIELD_CONTRACT.contact.firstName.label).toBe("First Name");
+      expect(CRM1_FIELD_CONTRACT.contact.lastName.label).toBe("Last Name");
+      expect(CRM1_FIELD_CONTRACT.contact.email.label).toBe("Email Address");
+      expect(CRM1_FIELD_CONTRACT.contact.companyId.label).toBe("Associated Company");
+      expect(CRM1_FIELD_CONTRACT.contact.leadStatus.label).toBe("Lead Status");
+      expect(CRM1_FIELD_CONTRACT.contact.goldenId.readOnly).toBe(true);
+
+      expect(CRM1_FIELD_CONTRACT.company.name.label).toBe("Company Name");
+      expect(CRM1_FIELD_CONTRACT.company.taxNumber.label).toBe("Tax Identification Number");
+
+      expect(CRM1_FIELD_CONTRACT.lead.contactId.label).toBe("Associated Contact");
+      expect(CRM1_FIELD_CONTRACT.lead.status.label).toBe("Pipeline Status");
+    });
   });
 });
