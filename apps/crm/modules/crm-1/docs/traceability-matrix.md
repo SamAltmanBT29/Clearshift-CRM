@@ -70,16 +70,22 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-25-02`** | Deterministic outcome manifest documents expected outcome per row (`valid`, `malformed`, `null_required`, `exact_duplicate`, `foreign_key_missing`) satisfying conservation balance sheet (`100 = 74 + 18 + 8 + 0`). | **Must** | Issue #118 [CRM1-25] | QA / Data | Fixture | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
 | **`FR-CRM1-25-03`** | Edge case scenarios cover multi-byte UTF-8, whitespace padding, date format variants, boundary numbers, formula injection risks, and field length capacity. | **Must** | Issue #118 [CRM1-25] | QA / Data | Fixture | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
 | **`FR-CRM1-25-04`** | Test suite verifies fixture counts and SHA-256 hashes reproduce identically across multiple runs and synchronize with `sample-data/crm-1/`. | **Must** | Issue #118 [CRM1-25] | QA / Data | Unit | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
+| **`FR-CRM1-13-01`** | Load operations process records in chunks of 500 rows (`CRM1_DEFAULT_CHUNK_SIZE = 500`). | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Migration | Unit | `apps/crm/modules/crm-1/tests/domain/batch-loader.test.ts`<br>`executeCrm1ChunkedBatchLoad` | **VERIFIED (Green)** |
+| **`FR-CRM1-13-02`** | Transient failures trigger bounded exponential backoff retries without corrupting idempotency keys (`maxRetries = 3`, backoff `min(1000, 50 * 2^(n-1))`). | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Migration | Unit | `apps/crm/modules/crm-1/tests/domain/batch-loader.test.ts`<br>`calculateBackoffDelay & retry` | **VERIFIED (Green)** |
+| **`FR-CRM1-13-03`** | Batch execution stops immediately if row failures exceed 10% of attempted rows after minimum 50 attempted rows. | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Migration | Unit | `apps/crm/modules/crm-1/tests/domain/batch-loader.test.ts`<br>`shouldHaltBatch & BatchLoadHaltedError` | **VERIFIED (Green)** |
+| **`FR-CRM1-13-04`** | Committed rows and receipts remain durable; batch state transitions to `STOPPED_EXCESSIVE_FAILURES` without rollback saga or destructive uncommitted data loss. | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Service | Integration | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`Crm1Service.executeBatchLoad` | **VERIFIED (Green)** |
+| **`FR-CRM1-13-05`** | Batch execution endpoints `POST /batches/execute-load` and `GET /batches/:batchId/report` enforced by RBAC (`KIT_RUN`, `KIT_READ`) and BatchLoaderPage operator UI. | **Must** | Issue #106 [CRM1-13] / KIT-12 | API / Web | Contract / Web | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`apps/crm/modules/crm-1/tests/web/batch-loader-page.test.ts` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 23 executing test files:
+The CRM-1 automated test suite comprises 26 test files:
 
 ```
 apps/crm/modules/crm-1/tests/
 ├── api/
+│   ├── batch-loader.test.ts                 ( 9 tests) — POST /batches/execute-load, 10% stop policy, idempotent retry, GET report (Issue #106 / [CRM1-13])
 │   ├── duplicates.test.ts                   (18 tests) — POST /duplicates/detect (422 autoMerge), GET /held, POST /resolve, GET /audit (Issue #105 / [CRM1-12])
 │   ├── list.test.ts                         (46 tests) — Server-side paged list/read contracts & search
 │   ├── mapping-routes.test.ts               (10 tests) — Mapping templates, dry-run validation & batch map
@@ -88,6 +94,7 @@ apps/crm/modules/crm-1/tests/
 ├── db/
 │   └── schema.test.ts                       ( 4 tests) — PostgreSQL 18 schema check constraints & FKs
 ├── domain/
+│   ├── batch-loader.test.ts                 (10 tests) — Chunking 500 rows, bounded backoff, 10% halt policy, durable partial commits (Issue #106 / [CRM1-13])
 │   ├── duplicate-policy.test.ts             (27 tests) — Exact key registry, candidate detector, review queue, no fuzzy auto-merge (Issue #105 / [CRM1-12])
 │   ├── qa-g1-design.test.ts                 (15 tests) — Data dictionary, ERD, traceability, dirty pack
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
@@ -106,6 +113,7 @@ apps/crm/modules/crm-1/tests/
 │   ├── crm1-mapping.service.test.ts         ( 5 tests) — Mapping service, batch transformation & validation
 │   └── crm1-mutation.service.test.ts        ( 2 tests) — Atomic target + receipt commit in 1 transaction
 └── web/
+    ├── batch-loader-page.test.ts            ( 3 tests) — BatchLoaderPage component, status badge, route definition (Issue #106 / [CRM1-13])
     ├── cleaning-audit-page.test.ts          ( 3 tests) — Cleaning audit page frontend component and columns
     ├── data-table.test.ts                   (21 tests) — Paginated data table and column layout
     ├── mapping-templates-page.test.ts       ( 4 tests) — Mapping templates page component & route
@@ -113,7 +121,7 @@ apps/crm/modules/crm-1/tests/
     ├── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
     └── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 421 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 443 tests (100% Green, 0 Failures)
 ```
 
 ---
@@ -136,4 +144,8 @@ Total Automated Test Cases: 421 tests (100% Green, 0 Failures)
 * [x] **Enum Translation:** Synonyms mapped to strict allowlists (`lead_status`, `consent_status`, `boolean`).
 * [x] **Dry-Run Guard:** Missing required fields raise structured validation errors and halt execution before DB mutation.
 * [x] **Row Outcome Conservation:** Balance sheet `source = loaded + rejected + merged + skipped` strictly upheld.
+* [x] **Chunked Ingestion (500 rows):** Records processed in isolated chunks of 500 rows.
+* [x] **Bounded Exponential Backoff:** Transient errors retry up to 3 times without corrupting idempotency keys.
+* [x] **10% Failure Rate Stop Policy:** Batch execution stops immediately when failure rate exceeds 10% after 50 attempted rows.
+* [x] **Durable Partial Commits:** Transition to `STOPPED_EXCESSIVE_FAILURES` preserves all committed rows and receipts without rollback sagas.
 * [x] **Zero Duplicate Platform Infra:** Reuses shared normalizers and registry from `@cs/core`.

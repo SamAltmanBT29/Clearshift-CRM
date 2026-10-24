@@ -9,6 +9,7 @@ export * from './domain/errors.js';
 export * from './domain/qa-specs.js';
 export * from './domain/dirty-data-pack.js';
 export * from './domain/duplicate-policy.js';
+export * from './domain/batch-loader.js';
 export * from './services/crm1.service.js';
 export * from './services/crm1-mutation.service.js';
 export * from './services/audit.js';

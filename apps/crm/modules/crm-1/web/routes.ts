@@ -77,6 +77,21 @@ export const CRM1_ROUTES: Record<string, Crm1RouteDefinition> = {
   },
 };
 
+export const CRM1_BATCH_LOADER_ROUTE: Crm1RouteDefinition = {
+  id: 'crm1-batch-loader',
+  path: 'batch-loader',
+  fullPath: `${CRM1_BASE_PATH}/batch-loader`,
+  title: 'Batch Ingestion & Partial-Load Stop Management',
+  navLabel: 'Batch Loader',
+  requiredCapability: Capabilities.MODULE_READ,
+  breadcrumbs: [
+    { label: 'ClearShift', href: '/' },
+    { label: 'CRM Modules', href: '/crm' },
+    { label: 'Contacts & Accounts', href: CRM1_BASE_PATH },
+    { label: 'Batch Loader' },
+  ],
+};
+
 export const CRM1_MAPPING_ROUTE: Crm1RouteDefinition = {
   id: 'crm1-mappings',
   path: 'mappings',
@@ -113,7 +128,7 @@ export function getAllCrm1Routes(): Crm1RouteDefinition[] {
 
 export function findRouteByPath(path: string): Crm1RouteDefinition | undefined {
   const normalized = path.replace(/\/+$/, '');
-  const all = [...getAllCrm1Routes(), CRM1_CLEANING_ROUTE, CRM1_MAPPING_ROUTE];
+  const all = [...getAllCrm1Routes(), CRM1_CLEANING_ROUTE, CRM1_MAPPING_ROUTE, CRM1_BATCH_LOADER_ROUTE];
   return all.find(
     (r) => r.fullPath === normalized || `${CRM1_BASE_PATH}/${r.path}` === normalized
   );
@@ -127,6 +142,9 @@ export function formatBrowserTitle(subTitle?: string | undefined): string {
 }
 
 export function getRouteBreadcrumbs(subRouteKey: string): BreadcrumbItem[] {
+  if (subRouteKey === 'batchLoader' || subRouteKey === 'batch-loader') {
+    return CRM1_BATCH_LOADER_ROUTE.breadcrumbs;
+  }
   const route = CRM1_ROUTES[subRouteKey];
   if (route) {
     return route.breadcrumbs;
