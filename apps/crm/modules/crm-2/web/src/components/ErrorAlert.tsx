@@ -57,7 +57,7 @@ export function sanitizeErrorMessage(rawError: unknown): string {
 
 /**
  * Accessible Error Alert Banner with Retry Action
- * Conforms to ClearShift V1 Issue #130 (CRM2-17).
+ * Conforms to ClearShift V1 Issue #132 (CRM2-19).
  * Hides raw stack traces and provides keyboard-accessible retry mechanism.
  */
 export const ErrorAlert: React.FC<ErrorAlertProps> = ({
