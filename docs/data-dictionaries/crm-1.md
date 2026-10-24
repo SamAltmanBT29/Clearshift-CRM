@@ -553,3 +553,46 @@ Governs high-throughput batch ingestion, chunked processing, bounded exponential
 | `/api/v1/crm-contacts/batches/execute-load` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Executes chunked batch ingestion with bounded retries and 10% stop policy. |
 | `/api/v1/crm-contacts/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | `KIT_READ` | Retrieves durable execution report, receipts, and failed rows. |
 | `/api/v1/crm-contacts/import/batch` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Compatibility alias for batch load execution. |
+
+---
+
+## 20. Primary Module List Screens, Search/Filter, and Stable UI States ([CRM1-04] — Issue #9)
+
+Governs the production-ready frontend vertical slices connecting real public CRM-1 APIs (`/api/v1/crm-contacts/*`) with accessible table projections, server-side pagination, facet filtering, debounced query search, and resilient UI states.
+
+### 20.1 Core Domain Invariants & View Rules
+
+| Invariant | Specification | Enforcement Mechanism |
+| :--- | :--- | :--- |
+| **Server-Paging & Default Page Size** | Default page size is 25 records (`pageSize: 25`, max 100). The browser never downloads all records in a single payload. | Server pagination parameters validated via Zod schemas and query builders. |
+| **Search by Name/Email** | Contact search filters across `firstName`, `lastName`, or `email`. Company search filters across `name` or `taxNumber`. | Normalized case-insensitive SQL ILIKE search with 300ms client debouncing. |
+| **Filter-Triggered Page Reset** | Any modification to search text or faceted filter parameters resets pagination back to page 1 (`page: 1`). | Reactive state controller resets page offset upon query parameter change. |
+| **Flat Company Architecture** | ClearShift V1 exclusively models flat companies (`crm1_companies`). No hierarchy, corporate tree, or nested account structures exist. | Explicit `Flat Company` architecture badge in `CompaniesTable`. |
+| **Verified Lead Stages** | Leads strictly transition across four lifecycle stages: `New`, `Working`, `Qualified`, and `Closed`. | Enum validation in schema, contract, API, and `LeadsTable` status badges. |
+| **Consent & Golden ID Immutability** | Contact Golden Identity (`goldenId`), source metadata, and explicit GDPR consent status (`consentStatus`, `unsubscribed`) are read-only and preserved against overwrite by older imports. | Protected table cells and domain mutation rules reject unprivileged updates. |
+
+### 20.2 Mandatory Stable UI States
+
+Every primary list screen implements 4 distinct, mutually exclusive states complying with WCAG 2.1 AA:
+
+1. **Loading State (`TableSkeleton`)**:
+   - Renders animated shimmer rows with `aria-busy="true"`, `role="status"`, and accessible announcement text.
+   - Preserves table column geometry preventing layout shift (CLS).
+2. **Empty State (`EmptyState`)**:
+   - Differentiates zero-data state (e.g. database has no records yet) from zero-match filter state (e.g. query returned 0 rows).
+   - In zero-match state, offers a clear primary action to "Clear search & filters".
+3. **Recoverable Error State (`ErrorAlert`)**:
+   - Sanitizes raw stack traces into user-friendly error messages while exposing a primary "Retry" action.
+4. **Access-Denied State (`AccessDeniedView`)**:
+   - Triggered upon HTTP 403 or missing RBAC capability (`crm1.contacts.read`, `crm1.companies.read`, `crm1.leads.read`).
+   - Displays clear required capability and current user role.
+
+### 20.3 Screen & API Route Matrix
+
+| Entity | Primary List Page | Primary Table | GET API Endpoint | Default Page Size | Allowed Roles |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Contacts** | `ContactsListPage` | `ContactsTable` | `GET /api/v1/crm-contacts/contacts` | 25 | `viewer`, `editor`, `analyst`, `admin` |
+| **Companies** | `CompaniesListPage` | `CompaniesTable` | `GET /api/v1/crm-contacts/companies` | 25 | `viewer`, `editor`, `analyst`, `admin` |
+| **Leads** | `LeadsListPage` | `LeadsTable` | `GET /api/v1/crm-contacts/leads` | 25 | `viewer`, `editor`, `analyst`, `admin` |
+| **Imports** | `ImportsOverviewPage` | `DataTable` | `GET /api/v1/crm-contacts/imports/{batch}` | 25 | `migration_runner`, `analyst`, `admin` |
+| **Rejects** | `CleaningAuditPage` | `DataTable` | `GET /api/v1/crm-contacts/imports/{batch}/rejects` | 50 | `migration_runner`, `analyst`, `admin` |

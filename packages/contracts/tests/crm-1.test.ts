@@ -317,5 +317,16 @@ describe("CRM-1 public contracts", () => {
       expect(crm1OpenApi).toContain("BatchExecutionReport:");
       expect(crm1OpenApi).toContain("STOPPED_EXCESSIVE_FAILURES");
     });
+
+    it("exports authoritative CRM1_FIELD_CONTRACT for forms and tables", async () => {
+      const { CRM1_FIELD_CONTRACT } = await import("../src/crm-1.js");
+      expect(CRM1_FIELD_CONTRACT.contact.firstName.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.contact.lastName.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.contact.email.errorInvalid).toBe("Email must be a valid email address");
+      expect(CRM1_FIELD_CONTRACT.contact.goldenId.readOnly).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.company.name.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.lead.contactId.required).toBe(true);
+      expect(CRM1_FIELD_CONTRACT.lead.status.required).toBe(true);
+    });
   });
 });

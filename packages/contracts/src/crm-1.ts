@@ -233,6 +233,7 @@ export type CRM1ContactRead = z.infer<typeof CRM1ContactReadSchema>;
 export type CRM1ContactCreate = z.infer<typeof CRM1ContactCreateSchema>;
 export type CRM1ContactPatch = z.infer<typeof CRM1ContactPatchSchema>;
 export type CRM1Company = z.infer<typeof CRM1CompanySchema>;
+export type CRM1CompanyRead = CRM1Company;
 export type CRM1CompanyCreate = z.infer<typeof CRM1CompanyCreateSchema>;
 export type CRM1CompanyPatch = z.infer<typeof CRM1CompanyPatchSchema>;
 export type CRM1Lead = z.infer<typeof CRM1LeadSchema>;
@@ -704,5 +705,122 @@ export const Crm1BatchExecutionReportSchema = z.object({
   executedAt: z.coerce.date(),
 });
 export type Crm1BatchExecutionReport = z.infer<typeof Crm1BatchExecutionReportSchema>;
+
+// ---------------------------------------------------------------------------
+// 8. CRM-1 UX Field Contract & Client Validation Metadata (CRM1-04 / CRM1-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * Authoritative field labels, helper texts, and validation error messages for CRM-1.
+ * Guarantees field-level UX alignment between frontend components and OpenAPI contract.
+ */
+export const CRM1_FIELD_CONTRACT = {
+  contact: {
+    firstName: {
+      label: 'First Name',
+      helperText: 'Enter contact first name.',
+      required: true,
+      errorRequired: 'First name is required',
+    },
+    lastName: {
+      label: 'Last Name',
+      helperText: 'Enter contact last name or family name.',
+      required: true,
+      errorRequired: 'Last name is required',
+    },
+    email: {
+      label: 'Email Address',
+      helperText: 'Primary business email address.',
+      required: false,
+      errorInvalid: 'Email must be a valid email address',
+    },
+    phone: {
+      label: 'Phone Number',
+      helperText: 'Primary telephone number with country code.',
+      required: false,
+    },
+    address: {
+      label: 'Street Address',
+      helperText: 'Physical or mailing address.',
+      required: false,
+    },
+    companyId: {
+      label: 'Associated Company',
+      helperText: 'Optional link to existing flat company UUID.',
+      required: false,
+      errorInvalid: 'Company ID must be a valid UUID',
+    },
+    leadStatus: {
+      label: 'Lead Status',
+      helperText: 'Lifecycle lead status: New, Working, Qualified, or Closed.',
+      required: false,
+      errorInvalid: 'Lead status must be one of: New, Working, Qualified, Closed',
+    },
+    goldenId: {
+      label: 'Golden Identity ID',
+      helperText: 'System-generated unique Golden ID for contact resolution.',
+      readOnly: true,
+    },
+  },
+  company: {
+    name: {
+      label: 'Company Name',
+      helperText: 'Official organization or legal entity name.',
+      required: true,
+      errorRequired: 'Company name is required',
+    },
+    taxNumber: {
+      label: 'Tax Identification Number',
+      helperText: 'Registered tax or VAT number (uppercase, stripped spaces).',
+      required: false,
+    },
+    email: {
+      label: 'Corporate Email',
+      helperText: 'Primary organization email address.',
+      required: false,
+      errorInvalid: 'Email must be a valid email address',
+    },
+    phone: {
+      label: 'Main Office Phone',
+      helperText: 'Primary corporate switchboard telephone.',
+      required: false,
+    },
+    address: {
+      label: 'Headquarters Address',
+      helperText: 'Registered business or corporate headquarters address.',
+      required: false,
+    },
+  },
+  lead: {
+    contactId: {
+      label: 'Associated Contact',
+      helperText: 'Link to target contact UUID.',
+      required: true,
+      errorRequired: 'Contact ID is required',
+      errorInvalid: 'Contact ID must be a valid UUID',
+    },
+    status: {
+      label: 'Pipeline Status',
+      helperText: 'Current lead stage in the SDS CRM allowlist.',
+      required: true,
+      errorRequired: 'Lead status is required',
+      errorInvalid: 'Lead status must be one of: New, Working, Qualified, Closed',
+    },
+  },
+  importBatch: {
+    batchId: {
+      label: 'Batch ID',
+      helperText: 'Unique UUID identifier for this migration batch.',
+      readOnly: true,
+    },
+    sourceSystem: {
+      label: 'Source System',
+      helperText: 'External legacy system origin (e.g., Salesforce, HubSpot).',
+      readOnly: true,
+    },
+  },
+} as const;
+
+export type CRM1FieldContract = typeof CRM1_FIELD_CONTRACT;
 
 export * from './import-target.js';
