@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "checksum": "d6e91b238861236b25fa135146765bcecac26ea9aadd1d5378909858c4e735d5",
+  "template": {
+    "id": "crm1-contacts-canonical",
+    "name": "CRM-1 Contacts Canonical",
+    "version": 1,
+    "entity": "crm1_contacts",
+    "fields": [
+      {
+        "source": "id",
+        "target": "id",
+        "type": "uuid"
+      },
+      {
+        "source": "first_name",
+        "target": "firstName",
+        "type": "string",
+        "required": true
+      },
+      {
+        "source": "last_name",
+        "target": "lastName",
+        "type": "string",
+        "required": true
+      },
+      {
+        "source": "email",
+        "target": "email",
+        "type": "email"
+      },
+      {
+        "source": "phone",
+        "target": "phone",
+        "type": "phone"
+      },
+      {
+        "source": "address",
+        "target": "address",
+        "type": "string"
+      },
+      {
+        "source": "company_id",
+        "target": "companyId",
+        "type": "uuid"
+      },
+      {
+        "source": "lead_status",
+        "target": "leadStatus",
+        "type": "string",
+        "enumName": "lead_status"
+      },
+      {
+        "source": "golden_id",
+        "target": "goldenId",
+        "type": "string"
+      },
+      {
+        "source": "source_system",
+        "target": "sourceSystem",
+        "type": "string"
+      },
+      {
+        "source": "source_id",
+        "target": "sourceId",
+        "type": "string"
+      },
+      {
+        "source": "consent_status",
+        "target": "consentStatus",
+        "type": "string",
+        "enumName": "consent_status",
+        "defaultValue": "unknown"
+      },
+      {
+        "source": "consent_updated_at",
+        "target": "consentUpdatedAt",
+        "type": "date"
+      },
+      {
+        "source": "unsubscribed",
+        "target": "unsubscribed",
+        "type": "boolean",
+        "defaultValue": false
+      },
+      {
+        "source": "unsubscribed_updated_at",
+        "target": "unsubscribedUpdatedAt",
+        "type": "date"
+      },
+      {
+        "source": "created_at",
+        "target": "createdAt",
+        "type": "date",
+        "omitWhenBlank": true
+      },
+      {
+        "source": "updated_at",
+        "target": "updatedAt",
+        "type": "date"
+      }
+    ]
+  }
+}
