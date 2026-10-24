@@ -246,6 +246,25 @@ $$\text{source} (1000) = \text{loaded} (780) + \text{rejected} (140) + \text{mer
 * **Expected Profile Assertions:** [`sample-data/crm-1/expected-profile.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/expected-profile.json) (SHA-256: `23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0`)
 * **Canonical Mapping Template:** [`sample-data/crm-1/mapping-template.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/mapping-template.json) (Checksum: `d6e91b238861236b25fa135146765bcecac26ea9aadd1d5378909858c4e735d5`)
 
+### 4.2 V1 Profiling Configuration & Manifest Assertions (`[CRM1-26]`)
+
+* **Profiling Engine:** [`apps/crm/modules/crm-1/src/kit/profiler.ts`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/src/kit/profiler.ts)
+* **Automated Regression Suite:** [`apps/crm/modules/crm-1/tests/kit/profiler.test.ts`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/tests/kit/profiler.test.ts) (21 tests, 97%+ coverage)
+* **Profiled Target Table:** `crm1_contacts` (`['crm1_contacts', 'crm1_companies', 'crm1_leads']`)
+* **Profiled Columns (15):** `id`, `first_name`, `last_name`, `email`, `phone`, `address`, `company_id`, `company_name`, `lead_status`, `source_system`, `source_id`, `consent_status`, `unsubscribed`, `annual_revenue`, `created_at`
+* **Defect Categories (7):**
+  1. `EXACT_DUPLICATE`: 8 rows (rows 75–82) — 2 email duplicate pairs + 2 compound phone+name duplicate pairs
+  2. `NULL_REQUIRED`: 4 rows (rows 83–86) — missing/whitespace mandatory names
+  3. `MALFORMED`: 8 rows (rows 87–94) — invalid RFC-5322 emails (4), non-E.164 phone numbers (2), non-allowlist lead statuses (2)
+  4. `FOREIGN_KEY_MISSING`: 2 rows (rows 95–96) — orphan parent company_id UUIDs
+  5. `FORMULA_INJECTION_RISK`: 2 rows (rows 97–98) — leading formula tokens (`=`, `+`)
+  6. `BOUNDARY_NUMBERS`: 1 row (row 99) — negative revenue violating domain invariant
+  7. `FIELD_TOO_LONG`: 1 row (row 100) — string length > 255 chars
+* **Row Conservation Balance Sheet:**
+  $$\text{source} (100) = \text{loaded} (74) + \text{merged} (8) + \text{rejected} (18) + \text{skipped} (0) \quad [\text{unaccounted} = 0]$$
+* **Non-Destructive Operation:** Profiler operates strictly on immutable/frozen input arrays without modifying row objects or cell values.
+* **Platform Integration:** Implements `toPlatformProfileReport` mapping module reports directly to `@clearshift/contracts` `ProfileReportSchema`.
+
 ---
 
 ## 5. Public API Endpoints (`/api/v1/crm-contacts`) & Authorization Matrix

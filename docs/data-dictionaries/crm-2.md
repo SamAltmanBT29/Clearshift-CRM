@@ -538,7 +538,7 @@ The entity creation workflow enforces strict client-side validation using Zod:
 
 ---
 
-## 15. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix
+## 15. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix (CRM2-15 / #128, CRM2-09 / #24)
 
 In compliance with SDS ClearShift CRM v2.0 §7.2, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
 
@@ -599,4 +599,3 @@ All domain mutations, migration executions, and privileged actions produce appen
 | `DEF-CRM2-01` | Medium | Non-UUID parameter on `GET /deals/{id}` and `GET /quotes/{id}` returned HTTP 400 `BAD_REQUEST`, but OpenAPI spec and data dictionary previously listed 404 only. | OpenAPI contract (`crm-2.yaml`) and Data Dictionary updated to document HTTP 400 for malformed UUID format. Implementation and contract now aligned. | `BD-08`, `BD-09` in `boundary-and-idempotency.test.ts` assert 400 `BAD_REQUEST`. |
 | `DEF-CRM2-02` | High (P1) | `DecimalStringSchema` used unconstrained integer digits (`^\d+`), permitting values > 12 integer digits (e.g. `1000000000000.00`) to pass Zod validation and trigger PostgreSQL `NUMERIC(14,2)` overflow (SQLSTATE 22003) -> 500 error. | Constrained `DecimalStringSchema` to max 12 integer digits (`^\d{1,12}(\.\d{1,4})?$`), rejecting oversized numbers at API validation boundary with HTTP 400 `VALIDATION_ERROR`. | `BD-01`, `BD-02` in `boundary-and-idempotency.test.ts` and test 5 in `api-postgres-integration.test.ts`. |
 | `DEF-CRM2-03` | High (P1) | Whitespace-only deal names (e.g. `'   '`) passed `z.string().min(1)` and hit the DB constraint `check (btrim(name) <> '')` (SQLSTATE 23514) -> 500 error. | Added `.trim()` before `.min(1)` in `CreateDealInputSchema`, `QuoteSchema`, and `CreateQuoteInputSchema`, rejecting blank and whitespace-only text with HTTP 400 `VALIDATION_ERROR`. | `dirty-data-pack.test.ts` (conservation 75/17/8/0/0) and test 4 in `api-postgres-integration.test.ts`. |
-
