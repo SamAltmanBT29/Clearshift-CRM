@@ -49,7 +49,7 @@ describe('CRM-4 OpenAPI Contract Conformance Suite (Issue #45 / [CRM4-10])', () 
       expect(openapiYaml).toContain('bearerFormat: JWT');
     });
 
-    it('documents all 10 baseline SDS endpoints in paths', () => {
+    it('documents all baseline SDS endpoints and mapping endpoints in paths', () => {
       expect(openapiYaml).toContain('/api/v1/crm-marketing/lists:');
       expect(openapiYaml).toContain('/api/v1/crm-marketing/lists/{id}:');
       expect(openapiYaml).toContain('/api/v1/crm-marketing/campaigns:');
@@ -57,6 +57,10 @@ describe('CRM-4 OpenAPI Contract Conformance Suite (Issue #45 / [CRM4-10])', () 
       expect(openapiYaml).toContain('/api/v1/crm-marketing/campaigns/{id}/members:');
       expect(openapiYaml).toContain('/api/v1/crm-marketing/consents:');
       expect(openapiYaml).toContain('/api/v1/crm-marketing/consents/{contact}:');
+      expect(openapiYaml).toContain('/api/v1/crm-marketing/mappings/templates:');
+      expect(openapiYaml).toContain('/api/v1/crm-marketing/mappings/templates/{id}:');
+      expect(openapiYaml).toContain('/api/v1/crm-marketing/mappings/validate:');
+      expect(openapiYaml).toContain('/api/v1/crm-marketing/mappings/map:');
     });
 
     it('documents standard ClearShift error responses (400, 401, 403, 404, 409)', () => {
@@ -117,6 +121,22 @@ describe('CRM-4 OpenAPI Contract Conformance Suite (Issue #45 / [CRM4-10])', () 
       expect(res.statusCode).toBe(200);
       const parsed = CRM4ConsentSchema.safeParse(res.json());
       expect(parsed.success).toBe(true);
+    });
+
+    it('matches GET /mappings/templates response structure with template array and enums', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-marketing/mappings/templates',
+        headers: { authorization: `Bearer ${viewerToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(Array.isArray(body.templates)).toBe(true);
+      expect(body.templates.length).toBe(8);
+      expect(body.enums).toBeDefined();
+      expect(body.enums.member_status).toBeDefined();
+      expect(body.enums.consent_status).toBeDefined();
     });
   });
 });
