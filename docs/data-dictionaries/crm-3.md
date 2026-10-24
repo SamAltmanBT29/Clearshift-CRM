@@ -266,3 +266,17 @@ Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/r
 | Version | Date | Author / Role | Description / Justification |
 |---|---|---|---|
 | `1.0.0` | 2026-10-24 | Integration Lead / CRM-3 Group | Gate G1 baseline release for CRM-3 contracts, OpenAPI 3.1, domain events taxonomy, and deterministic mock server (Issue #147, [CRM3-14]). |
+
+## 10. Repository Layer & Mutation Invariants (CRM3-02 / CRM3-05, #28)
+
+`Crm3Service` reads and writes only through the `Crm3Store` port (`apps/crm/modules/crm-3/src/store/crm3.store.ts`). The default `InMemoryCrm3Store` mirrors `crm3_v1.sql`, so a Drizzle/PostgreSQL store can replace it without changing domain rules.
+
+| Concern | Rule |
+|---|---|
+| Bounded reads | `listTickets` / `listNotes` require `page >= 1` and `1 <= pageSize <= 100`; no unbounded scans. Tickets and notes are ordered `createdAt DESC, id DESC`. Search is case-insensitive on `subject` and `orderRef` only. |
+| Constraints (second line of defence) | Non-empty subject; `sourceSystem`/`sourceId` both set or both empty (400 `check_violation`); unique `(sourceSystem, sourceId)` (409 `CONFLICT`, detail `duplicate_source_record`); unique ids; a note needs an existing ticket (404) and non-empty text/author; a receipt needs an existing batch and a unique key and batch row (409). |
+| Atomicity | `transaction(fn)` is all-or-nothing. Used for ticket + initial note on create, and ticket + note + batch + receipts on import. |
+| Service-level validation | `createTicket`, `updateTicket`, `getTickets` and `getTicketNotes` parse their input with the shared contract schemas, so direct in-process calls get the same 400 field-level errors as the HTTP routes (never a raw `Error`). |
+| Create | `201` with `Location: /api/v1/crm-tickets/tickets/{id}`. |
+| Update | Only `subject, status, priority, contactId, orderRef` can change; `updatedAt` is refreshed; protected fields (`id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId`) are rejected with 400. |
+| Test data | Deterministic factories in `tests/factories/crm3.factories.ts` (`makeTicket`, `makeNote`, `makeTicketCreateInput`, `makeInvalidTicket(kind)`). |
