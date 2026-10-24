@@ -21,5 +21,8 @@ export * from './roles.js';
 export * from './crm-2.js';
 export * from './crm-2-duplicates.js';
 export * from './crm-4.js';
+export * from './crm-4-duplicates.js';
+export * from './crm-4-events.js';
+export * from './crm-4-mock.js';
 export * from './validation.js';
 

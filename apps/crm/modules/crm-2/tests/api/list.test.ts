@@ -333,6 +333,37 @@ describe('CRM-2 Deals, Pipeline and Quotes: List/Read API & Contracts (Issue #17
       expect(body.pagination.totalCount).toBe(0);
       expect(body.pagination.hasNextPage).toBe(false);
     });
+
+    it('sorts deals by name in ascending order when sort=name&order=asc', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `${CRM2_API_PREFIX}/deals?pageSize=10&sort=name&order=asc`,
+        headers: viewerHeaders,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.items.length).toBe(10);
+      const names = body.items.map((d: { name: string }) => d.name);
+      const sorted = [...names].sort((a, b) => a.localeCompare(b));
+      expect(names).toEqual(sorted);
+    });
+
+    it('sorts deals by value in descending order when sort=value&order=desc', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `${CRM2_API_PREFIX}/deals?pageSize=10&sort=value&order=desc`,
+        headers: viewerHeaders,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.items.length).toBe(10);
+      const values = body.items.map((d: { value: string }) => Number.parseFloat(d.value));
+      for (let i = 0; i < values.length - 1; i++) {
+        expect(values[i]).toBeGreaterThanOrEqual(values[i + 1]!);
+      }
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -398,6 +429,22 @@ describe('CRM-2 Deals, Pipeline and Quotes: List/Read API & Contracts (Issue #17
       expect(parsed.success).toBe(true);
       expect(body.items.length).toBeGreaterThanOrEqual(1);
       expect(body.pagination.page).toBe(1);
+    });
+
+    it('sorts quotes by amount in descending order when sort=amount&order=desc', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `${CRM2_API_PREFIX}/quotes?page=1&pageSize=10&sort=amount&order=desc`,
+        headers: viewerHeaders,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.items.length).toBeGreaterThanOrEqual(1);
+      const amounts = body.items.map((q: { amount: string }) => Number.parseFloat(q.amount));
+      for (let i = 0; i < amounts.length - 1; i++) {
+        expect(amounts[i]).toBeGreaterThanOrEqual(amounts[i + 1]!);
+      }
     });
 
     it('filters quotes by deal_id', async () => {

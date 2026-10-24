@@ -12,15 +12,24 @@ import {
   UpdateLeadInputSchema,
   CreateCrm1ImportInputSchema,
   Crm1RejectsQuerySchema,
+  Crm1DetectDuplicatesInputSchema,
+  Crm1ResolveDuplicateInputSchema,
+  Crm1EvaluateContactDuplicateInputSchema,
+  Crm1EvaluateCompanyDuplicateInputSchema,
 } from '@clearshift/contracts';
-import type { RoleType } from '@cs/identity';
+import { Roles, type RoleType } from '@cs/identity';
 import { requireRoles } from '../plugins/auth.js';
 import { CRM1_ENDPOINT_ROLES } from '../policies/roles.js';
 import { redactSensitiveObject } from '../policies/masking.js';
 import { Crm1Service } from '../services/crm1.service.js';
 import { Crm1AuditService, crm1Audit } from '../services/audit.js';
 import { crm1CleaningService } from '../services/crm1-cleaning.service.js';
-import { DomainValidationError } from '../domain/errors.js';
+import { crm1MappingService } from '../services/crm1-mapping.service.js';
+import {
+  DomainValidationError,
+  AutoMergeForbiddenError,
+  DuplicateCandidateNotFoundError,
+} from '../domain/errors.js';
 import {
   createEndpointAuthPreHandlers,
   assertObjectMutationAllowed,
@@ -795,5 +804,386 @@ export const crm1Routes: FastifyPluginAsync<Crm1RouteOptions> = async (
     const { rows, options, batchId } = parsed.data;
     const result = crm1CleaningService.processBatchCleaning(rows, batchId, options);
     return reply.status(200).send(result);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 6. Mapping Templates & Dry-Run Validation Endpoints (#121, [CRM1-28])
+  // ---------------------------------------------------------------------------
+
+  fastify.get('/mappings/templates', {
+    preHandler: endpointPreHandlers(fastify, [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.MIGRATION_RUNNER, Roles.ADMIN]),
+  }, async (request, reply) => {
+    const QuerySchema = z.object({
+      entity: z.enum(['crm1_contacts', 'crm1_companies', 'crm1_leads']).optional(),
+    });
+    const parsed = QuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid entity filter for templates',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    const templates = crm1MappingService.listTemplates(parsed.data.entity);
+    const enums = crm1MappingService.getEnumDictionaries();
+    return reply.status(200).send({
+      templates: templates.map((t) => ({
+        ...t,
+        checksum: crm1MappingService.getTemplate(t.id, t.version).checksum,
+      })),
+      enums,
+    });
+  });
+
+  fastify.get('/mappings/templates/:id', {
+    preHandler: endpointPreHandlers(fastify, [Roles.VIEWER, Roles.EDITOR, Roles.ANALYST, Roles.MIGRATION_RUNNER, Roles.ADMIN]),
+  }, async (request, reply) => {
+    const ParamsSchema = z.object({ id: z.string().min(1) });
+    const QuerySchema = z.object({ version: z.coerce.number().optional() });
+
+    const pParsed = ParamsSchema.safeParse(request.params);
+    const qParsed = QuerySchema.safeParse(request.query);
+    if (!pParsed.success || !qParsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid template lookup parameters',
+          details: [
+            ...(!pParsed.success ? pParsed.error.issues : []),
+            ...(!qParsed.success ? qParsed.error.issues : []),
+          ],
+        },
+      });
+    }
+
+    try {
+      const result = crm1MappingService.getTemplate(pParsed.data.id, qParsed.data.version);
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      if (err.code === 'TEMPLATE_NOT_FOUND') {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.post('/mappings/validate', {
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
+  }, async (request, reply) => {
+    const ValidateRequestSchema = z.object({
+      templateId: z.string().min(1),
+      sourceColumns: z.array(z.string().min(1)),
+      version: z.number().optional(),
+    });
+
+    const parsed = ValidateRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid mapping validation payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const result = crm1MappingService.validateDryRun(
+        parsed.data.templateId,
+        parsed.data.sourceColumns,
+        parsed.data.version
+      );
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      if (err.code === 'TEMPLATE_NOT_FOUND') {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      if (err.code === 'MAPPING_INCOMPLETE') {
+        return reply.status(400).send({
+          error: {
+            code: 'MAPPING_INCOMPLETE',
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.post('/mappings/map', {
+    preHandler: endpointPreHandlers(fastify, 'IMPORTS_START'),
+  }, async (request, reply) => {
+    const MapRequestSchema = z.object({
+      templateId: z.string().min(1),
+      rows: z.array(z.record(z.unknown())),
+      version: z.number().optional(),
+      sourceColumns: z.array(z.string()).optional(),
+    });
+
+    const parsed = MapRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid row mapping payload',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const result = crm1MappingService.processBatchMapping(
+        parsed.data.templateId,
+        parsed.data.rows,
+        {
+          version: parsed.data.version,
+          sourceColumns: parsed.data.sourceColumns,
+        }
+      );
+      return reply.status(200).send(result);
+    } catch (err: any) {
+      if (err.code === 'TEMPLATE_NOT_FOUND') {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      if (err.code === 'MAPPING_INCOMPLETE') {
+        return reply.status(400).send({
+          error: {
+            code: 'MAPPING_INCOMPLETE',
+            message: err.message,
+            details: err.details,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // 6. Exact Duplicates & Human Review Endpoints (CRM1-12)
+  // ---------------------------------------------------------------------------
+
+  fastify.post('/duplicates/detect', {
+    preHandler: endpointPreHandlers(fastify, 'DUPLICATES_DETECT'),
+  }, async (request, reply) => {
+    const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
+    const parsed = Crm1DetectDuplicatesInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'BAD_REQUEST',
+        message: 'Invalid duplicate detection request',
+        details: parsed.error.issues,
+        correlation_id: correlationId,
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid duplicate detection request',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const result = service.detectDuplicates(parsed.data);
+      await auditService.logEvent({
+        actor: (request as any).user?.sub || 'system',
+        action: 'DUPLICATES_DETECTED',
+        entity: 'crm1_duplicates',
+        metadata: {
+          batchId: parsed.data.batchId,
+          keyType: parsed.data.keyType,
+          duplicateGroupCount: result.summary.duplicateGroupCount,
+          duplicateRecordCount: result.summary.duplicateRecordCount,
+        },
+      });
+      return reply.status(200).send({
+        ...result,
+        correlation_id: correlationId,
+      });
+    } catch (err: any) {
+      if (err instanceof AutoMergeForbiddenError || err.code === 'AUTO_MERGE_FORBIDDEN') {
+        return reply.status(422).send({
+          code: 'AUTO_MERGE_FORBIDDEN',
+          message: err.message,
+          correlation_id: correlationId,
+          error: {
+            code: 'AUTO_MERGE_FORBIDDEN',
+            message: err.message,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.get('/duplicates/held', {
+    preHandler: endpointPreHandlers(fastify, 'DUPLICATES_HELD'),
+  }, async (request, reply) => {
+    const query = request.query as {
+      batchId?: string;
+      keyType?: string;
+      entity?: string;
+    };
+    const items = service.getHeldDuplicates(query);
+    return reply.status(200).send({
+      items,
+      total: items.length,
+    });
+  });
+
+  fastify.post('/duplicates/resolve', {
+    preHandler: endpointPreHandlers(fastify, 'DUPLICATES_RESOLVE'),
+  }, async (request, reply) => {
+    const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
+    const parsed = Crm1ResolveDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'BAD_REQUEST',
+        message: 'Invalid duplicate resolution input',
+        details: parsed.error.issues,
+        correlation_id: correlationId,
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid duplicate resolution input',
+          details: parsed.error.issues,
+        },
+      });
+    }
+
+    try {
+      const auditEntry = service.resolveDuplicate(parsed.data);
+      await auditService.logEvent({
+        actor: parsed.data.actorId,
+        action: `DUPLICATE_${parsed.data.decision}`,
+        entity: `crm1_${auditEntry.entity || 'contact'}`,
+        entityId: parsed.data.keptId,
+        metadata: {
+          candidateId: parsed.data.candidateId,
+          decision: parsed.data.decision,
+          keptId: parsed.data.keptId,
+          mergedId: parsed.data.mergedId,
+          reason: parsed.data.reason,
+          keyType: auditEntry.keyType,
+          normalizedKey: auditEntry.normalizedKey,
+        },
+      });
+      return reply.status(200).send({
+        ...auditEntry,
+        correlation_id: correlationId,
+      });
+    } catch (err: any) {
+      if (err instanceof DuplicateCandidateNotFoundError || err.code === 'NOT_FOUND') {
+        return reply.status(404).send({
+          code: 'NOT_FOUND',
+          message: err.message,
+          correlation_id: correlationId,
+          error: {
+            code: 'NOT_FOUND',
+            message: err.message,
+          },
+        });
+      }
+      if (err instanceof DomainValidationError || err.code === 'BAD_REQUEST') {
+        return reply.status(400).send({
+          code: 'BAD_REQUEST',
+          message: err.message,
+          correlation_id: correlationId,
+          error: {
+            code: 'BAD_REQUEST',
+            message: err.message,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  fastify.get('/duplicates/audit', {
+    preHandler: endpointPreHandlers(fastify, 'DUPLICATES_AUDIT'),
+  }, async (request, reply) => {
+    const query = request.query as {
+      candidateId?: string;
+      actorId?: string;
+      entity?: string;
+      page?: string | number;
+      pageSize?: string | number;
+    };
+    const page = query.page ? Number(query.page) : 1;
+    const pageSize = query.pageSize ? Number(query.pageSize) : 20;
+    const result = service.getDuplicateAuditLogs({
+      candidateId: query.candidateId,
+      actorId: query.actorId,
+      entity: query.entity,
+      page,
+      pageSize,
+    });
+    return reply.status(200).send(result);
+  });
+
+  fastify.post('/duplicates/evaluate/contact', {
+    preHandler: endpointPreHandlers(fastify, 'DUPLICATES_DETECT'),
+  }, async (request, reply) => {
+    const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
+    const parsed = Crm1EvaluateContactDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'BAD_REQUEST',
+        message: 'Invalid contact duplicate evaluation request',
+        details: parsed.error.issues,
+        correlation_id: correlationId,
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid contact duplicate evaluation request',
+          details: parsed.error.issues,
+        },
+      });
+    }
+    const result = await service.evaluateContactDuplicate(parsed.data);
+    return reply.status(200).send({
+      ...result,
+      correlation_id: correlationId,
+    });
+  });
+
+  fastify.post('/duplicates/evaluate/company', {
+    preHandler: endpointPreHandlers(fastify, 'DUPLICATES_DETECT'),
+  }, async (request, reply) => {
+    const correlationId = (request.headers['x-correlation-id'] as string) || 'corr-' + Date.now();
+    const parsed = Crm1EvaluateCompanyDuplicateInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        code: 'BAD_REQUEST',
+        message: 'Invalid company duplicate evaluation request',
+        details: parsed.error.issues,
+        correlation_id: correlationId,
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid company duplicate evaluation request',
+          details: parsed.error.issues,
+        },
+      });
+    }
+    const result = await service.evaluateCompanyDuplicate(parsed.data);
+    return reply.status(200).send({
+      ...result,
+      correlation_id: correlationId,
+    });
   });
 };

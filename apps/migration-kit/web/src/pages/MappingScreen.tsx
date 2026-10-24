@@ -7,18 +7,88 @@ import type {
 } from '@clearshift/contracts';
 
 export interface MappingScreenProps {
-  batchId?: string;
-  module?: string;
-  sourceColumns?: string[];
-  sampleData?: Record<string, string>[];
-  targetFields?: TargetFieldDefinition[];
-  templates?: MappingTemplate[];
-  activeTemplate?: MappingTemplate | null;
-  isLoading?: boolean;
-  isEmpty?: boolean;
-  error?: string | null;
-  onSaveTemplate?: (template: MappingTemplate) => Promise<void> | void;
-  onApplyMapping?: (template: MappingTemplate) => Promise<void> | void;
+  batchId?: string | undefined;
+  module?: string | undefined;
+  sourceColumns?: string[] | undefined;
+  sourceColumnTypes?: Record<string, string> | undefined;
+  sampleData?: Record<string, string>[] | undefined;
+  targetFields?: TargetFieldDefinition[] | undefined;
+  templates?: MappingTemplate[] | undefined;
+  activeTemplate?: MappingTemplate | null | undefined;
+  isLoading?: boolean | undefined;
+  isEmpty?: boolean | undefined;
+  error?: string | null | undefined;
+  onSaveTemplate?: ((template: MappingTemplate) => Promise<void> | void) | undefined;
+  onApplyMapping?: ((template: MappingTemplate) => Promise<void> | void) | undefined;
+}
+
+function checkTypeCompatibility(sourceType?: string, targetDataType?: string): { compatible: boolean; warning?: string } {
+  if (!sourceType || !targetDataType) return { compatible: true };
+  const s = sourceType.toLowerCase().trim();
+  const t = targetDataType.toLowerCase().trim();
+  if (!s || s === 'unknown' || t === 'string') return { compatible: true };
+
+  if (t === 'number' || t === 'integer' || t === 'numeric') {
+    if (['number', 'integer', 'float', 'numeric'].includes(s)) return { compatible: true };
+    return {
+      compatible: false,
+      warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+    };
+  }
+
+  if (t === 'date') {
+    if (['date', 'datetime', 'timestamp'].includes(s)) return { compatible: true };
+    return {
+      compatible: false,
+      warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+    };
+  }
+
+  if (t === 'uuid') {
+    if (s === 'uuid') return { compatible: true };
+    if (['number', 'integer', 'float', 'numeric', 'boolean', 'date', 'datetime', 'timestamp'].includes(s)) {
+      return {
+        compatible: false,
+        warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+      };
+    }
+  }
+
+  if (t === 'boolean') {
+    if (s === 'boolean') return { compatible: true };
+    if (['date', 'datetime', 'timestamp', 'uuid', 'json', 'float'].includes(s)) {
+      return {
+        compatible: false,
+        warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+      };
+    }
+  }
+
+  if (t === 'email') {
+    if (['email', 'string'].includes(s)) return { compatible: true };
+    return {
+      compatible: false,
+      warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+    };
+  }
+
+  if (t === 'phone') {
+    if (['phone', 'string', 'integer'].includes(s)) return { compatible: true };
+    return {
+      compatible: false,
+      warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+    };
+  }
+
+  if (t === 'enum') {
+    if (['enum', 'string'].includes(s)) return { compatible: true };
+    return {
+      compatible: false,
+      warning: `Incompatible Type: source (${s}) ➔ target (${t})`,
+    };
+  }
+
+  return { compatible: true };
 }
 
 const DEFAULT_TARGET_FIELDS: TargetFieldDefinition[] = [
@@ -60,6 +130,7 @@ export const MappingScreen: React.FC<MappingScreenProps> = ({
   batchId = 'batch-preview',
   module = 'crm',
   sourceColumns = DEFAULT_SOURCE_COLUMNS,
+  sourceColumnTypes,
   sampleData = [],
   targetFields = DEFAULT_TARGET_FIELDS,
   templates = [],
@@ -130,6 +201,28 @@ export const MappingScreen: React.FC<MappingScreenProps> = ({
     .map((tf) => tf.name);
 
   const canProceed = missingRequiredFields.length === 0;
+
+  // Evaluate type incompatibilities for mapped fields
+  const incompatibleMappings = targetFields
+    .map((tf) => {
+      const sourceCol = fieldMappings[tf.name];
+      if (!sourceCol || !sourceColumnTypes) return null;
+      const sourceType = sourceColumnTypes[sourceCol];
+      if (!sourceType) return null;
+      const result = checkTypeCompatibility(sourceType, tf.dataType);
+      if (!result.compatible) {
+        return {
+          targetField: tf.name,
+          targetLabel: tf.label,
+          targetType: tf.dataType,
+          sourceColumn: sourceCol,
+          sourceType,
+          warning: result.warning ?? `Incompatible: ${sourceType} ➔ ${tf.dataType}`,
+        };
+      }
+      return null;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const handleSourceChange = (targetFieldName: string, sourceCol: string) => {
     setFieldMappings((prev) => ({
@@ -273,6 +366,37 @@ export const MappingScreen: React.FC<MappingScreenProps> = ({
             )}
           </div>
 
+          {/* Type Incompatibility Warning Banner */}
+          {incompatibleMappings.length > 0 && (
+            <div
+              className="cs-type-warning-banner"
+              role="alert"
+              style={{
+                padding: '16px',
+                borderRadius: '8px',
+                marginBottom: '24px',
+                backgroundColor: '#fffbeb',
+                border: '1px solid #f59e0b',
+                color: '#92400e',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span aria-hidden="true" style={{ fontSize: '18px' }}>⚠️</span>
+                <span style={{ fontWeight: 600 }}>Type Incompatibility Warning:</span>
+              </div>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px' }}>
+                Attempting to map incompatible source types. The following {incompatibleMappings.length} mapping(s) may fail validation or cause data loss:
+              </p>
+              <ul style={{ margin: '0 0 0 20px', padding: 0, fontSize: '13px' }}>
+                {incompatibleMappings.map((inc) => (
+                  <li key={inc.targetField} style={{ marginBottom: '4px' }}>
+                    Target field <strong>{inc.targetLabel} ({inc.targetField})</strong> expects <code>{inc.targetType}</code>, but source column <code>{inc.sourceColumn}</code> is profiled as <code>{inc.sourceType}</code>.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Template Bar */}
           <div
             className="cs-template-bar"
@@ -410,11 +534,15 @@ export const MappingScreen: React.FC<MappingScreenProps> = ({
                       }}
                     >
                       <td style={{ padding: '12px 16px', fontWeight: 500, color: '#111827' }}>
-                        {tf.label} <code style={{ fontSize: '12px', color: '#6b7280' }}>({tf.name})</code>
+                        <div>{tf.label} <code style={{ fontSize: '12px', color: '#6b7280' }}>({tf.name})</code></div>
+                        {tf.description && (
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{tf.description}</div>
+                        )}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         {tf.required ? (
                           <span
+                            className="cs-required-badge"
                             style={{
                               display: 'inline-block',
                               padding: '2px 8px',
@@ -428,34 +556,74 @@ export const MappingScreen: React.FC<MappingScreenProps> = ({
                             Required
                           </span>
                         ) : (
-                          <span style={{ color: '#9ca3af', fontSize: '12px' }}>Optional</span>
+                          <span className="cs-optional-badge" style={{ color: '#9ca3af', fontSize: '12px' }}>Optional</span>
                         )}
                       </td>
                       <td style={{ padding: '12px 16px', color: '#4b5563' }}>
-                        <code style={{ fontSize: '12px' }}>{tf.dataType}</code>
+                        <code style={{ fontSize: '12px', padding: '2px 6px', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
+                          {tf.dataType}
+                        </code>
+                        {tf.allowedValues && tf.allowedValues.length > 0 && (
+                          <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                            Allowed: {tf.allowedValues.join(', ')}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
-                        <select
-                          aria-label={`Source column for ${tf.label}`}
-                          value={selectedSource}
-                          onChange={(e) => handleSourceChange(tf.name, e.target.value)}
-                          style={{
-                            width: '100%',
-                            maxWidth: '240px',
-                            padding: '6px 10px',
-                            borderRadius: '6px',
-                            border: isMissing ? '1px solid #f59e0b' : '1px solid #d1d5db',
-                            backgroundColor: '#ffffff',
-                            fontSize: '14px',
-                          }}
-                        >
-                          <option value="">-- Unmapped --</option>
-                          {sourceColumns.map((col) => (
-                            <option key={col} value={col}>
-                              {col}
-                            </option>
-                          ))}
-                        </select>
+                        {(() => {
+                          const selectedSourceType = selectedSource && sourceColumnTypes ? sourceColumnTypes[selectedSource] : undefined;
+                          const typeCompat = selectedSourceType ? checkTypeCompatibility(selectedSourceType, tf.dataType) : { compatible: true };
+
+                          return (
+                            <div>
+                              <select
+                                aria-label={`Source column for ${tf.label}`}
+                                value={selectedSource}
+                                onChange={(e) => handleSourceChange(tf.name, e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: '240px',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  border: isMissing
+                                    ? '1px solid #f59e0b'
+                                    : !typeCompat.compatible
+                                    ? '1px solid #f59e0b'
+                                    : '1px solid #d1d5db',
+                                  backgroundColor: '#ffffff',
+                                  fontSize: '14px',
+                                }}
+                              >
+                                <option value="">-- Unmapped --</option>
+                                {sourceColumns.map((col) => (
+                                  <option key={col} value={col}>
+                                    {col}
+                                  </option>
+                                ))}
+                              </select>
+                              {!typeCompat.compatible && (
+                                <div
+                                  className="cs-incompatible-warning-pill"
+                                  role="status"
+                                  style={{
+                                    marginTop: '6px',
+                                    fontSize: '11px',
+                                    color: '#b45309',
+                                    backgroundColor: '#fef3c7',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <span aria-hidden="true">⚠️</span> Incompatible Type ({selectedSourceType} ➔ {tf.dataType})
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding: '12px 16px', color: '#6b7280', fontFamily: 'monospace' }}>
                         {sampleVal}

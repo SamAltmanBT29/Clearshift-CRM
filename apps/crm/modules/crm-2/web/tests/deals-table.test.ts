@@ -87,6 +87,8 @@ describe('CRM-2 Deals, Pipeline and Quotes: List Screen & Table (Issue #19 / [CR
       private pageSize = 10;
       private search = '';
       private stage: Crm2StageName | '' = '';
+      private sort?: string;
+      private order?: 'asc' | 'desc';
       private total = 0;
       private onQueryChange?: (query: Record<string, string>) => void;
 
@@ -103,6 +105,17 @@ describe('CRM-2 Deals, Pipeline and Quotes: List Screen & Table (Issue #19 / [CR
       public setStage(stage: Crm2StageName | '') {
         this.stage = stage;
         this.page = 1; // Acceptance criterion: resets pagination to page 1
+        this.notify();
+      }
+
+      public toggleSort(columnKey: string) {
+        if (this.sort === columnKey) {
+          this.order = this.order === 'asc' ? 'desc' : 'asc';
+        } else {
+          this.sort = columnKey;
+          this.order = 'asc';
+        }
+        this.page = 1; // Acceptance criterion: sorting resets pagination to page 1
         this.notify();
       }
 
@@ -123,6 +136,8 @@ describe('CRM-2 Deals, Pipeline and Quotes: List Screen & Table (Issue #19 / [CR
         };
         if (this.search.trim()) params['search'] = this.search.trim();
         if (this.stage) params['stage'] = this.stage;
+        if (this.sort) params['sort'] = this.sort;
+        if (this.order) params['order'] = this.order;
         return params;
       }
 
@@ -174,6 +189,33 @@ describe('CRM-2 Deals, Pipeline and Quotes: List Screen & Table (Issue #19 / [CR
 
       controller.setPage(-1); // Clamped to 1
       expect(controller.getQueryParams()['page']).toBe('1');
+    });
+
+    it('resets pagination to first page and predictably toggles sort order upon column header clicks', () => {
+      const onQueryChange = vi.fn();
+      const controller = new DealsQueryController(onQueryChange);
+      controller.setTotal(40); // 4 pages
+
+      controller.setPage(3);
+      expect(controller.getQueryParams()['page']).toBe('3');
+
+      // Click column 'name': defaults to 'asc' and resets page to 1
+      controller.toggleSort('name');
+      expect(controller.getQueryParams()['page']).toBe('1');
+      expect(controller.getQueryParams()['sort']).toBe('name');
+      expect(controller.getQueryParams()['order']).toBe('asc');
+
+      // Click column 'name' again: inverts to 'desc'
+      controller.setPage(2);
+      controller.toggleSort('name');
+      expect(controller.getQueryParams()['page']).toBe('1');
+      expect(controller.getQueryParams()['sort']).toBe('name');
+      expect(controller.getQueryParams()['order']).toBe('desc');
+
+      // Click new column 'value': switches to 'value' in 'asc' order
+      controller.toggleSort('value');
+      expect(controller.getQueryParams()['sort']).toBe('value');
+      expect(controller.getQueryParams()['order']).toBe('asc');
     });
   });
 

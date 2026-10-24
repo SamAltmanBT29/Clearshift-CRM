@@ -132,7 +132,13 @@ paths:
       operationId: patchCRM3Ticket
       tags: [CRM-3]
       summary: Update ticket status, priority, or fields
-      description: Modify mutable ticket fields. Allowed roles - editor, admin.
+      description: >-
+        Modify mutable ticket fields. Allowed roles - editor, admin.
+        Status changes follow the CRM-3 transition map (New -> Open; Open -> Waiting, Solved;
+        Waiting -> Open, Solved; Solved -> Closed, Open; Closed is terminal). Setting the same
+        status is an idempotent no-op. An illegal transition returns 422
+        INVALID_TICKET_STATUS_TRANSITION and the ticket is left unchanged. An unknown contactId
+        returns 422 with detail code invalid_contact_reference.
       parameters:
         - name: id
           in: path
@@ -162,7 +168,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFoundError"
         "422":
-          $ref: "#/components/responses/ValidationError"
+          $ref: "#/components/responses/TransitionError"
 
   /api/v1/crm-tickets/tickets/{id}/notes:
     get:
@@ -213,7 +219,10 @@ paths:
       operationId: addCRM3Note
       tags: [CRM-3]
       summary: Append a note to a ticket
-      description: Append a new note to a support ticket. Author and timestamp are preserved. Allowed roles - editor, admin.
+      description: >-
+        Append a new note to a support ticket. Author and timestamp are preserved. Allowed roles - editor, admin.
+        The author is the authenticated user (token sub). An authorId that names a different user
+        returns 403 AUTHOR_MISMATCH and no note is written.
       requestBody:
         required: true
         content:
@@ -383,6 +392,9 @@ components:
           minLength: 1
         authorId:
           type: string
+          description: >-
+            Optional. When authenticated, must equal the token subject or be omitted; the server
+            always records the authenticated user as author.
 
     TicketListResponse:
       type: object
@@ -441,6 +453,10 @@ components:
                 type: string
               message:
                 type: string
+              code:
+                type: string
+        correlation_id:
+          type: string
 
   responses:
     ValidationError:
@@ -463,6 +479,15 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     NotFoundError:
       description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    TransitionError:
+      description: >-
+        Domain rule violated. code is INVALID_TICKET_STATUS_TRANSITION for an illegal status change
+        (details[0].code invalid_transition) or VALIDATION_ERROR for an unknown contact reference
+        (details[0].code invalid_contact_reference).
       content:
         application/json:
           schema:

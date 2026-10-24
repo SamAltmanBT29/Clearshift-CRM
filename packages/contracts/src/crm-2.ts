@@ -179,6 +179,9 @@ export const DealSchema = z.object({
   name: z.string().min(1, 'Deal name is required').max(255),
   contact_id: z.string().uuid().nullable(),
   contact_name: z.string().nullable().optional(),
+  contact_email: z.string().nullable().optional(),
+  contact_phone: z.string().nullable().optional(),
+  probability: z.number().min(0).max(1).nullable().optional(),
   value: DecimalStringSchema,
   currency: CurrencyCodeSchema,
   stage_id: z.string().uuid(),
@@ -187,6 +190,8 @@ export const DealSchema = z.object({
     message: 'Close date must be in YYYY-MM-DD format',
   }),
   is_orphan: z.boolean(),
+  source_system: z.string().nullable().optional(),
+  source_id: z.string().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
@@ -196,12 +201,17 @@ export type Deal = z.infer<typeof DealSchema>;
 export const CreateDealInputSchema = z.object({
   name: z.string().min(1, 'Deal name is required').max(255),
   contact_id: z.string().uuid('Invalid Contact UUID').nullable().optional(),
+  contact_email: z.string().nullable().optional(),
+  contact_phone: z.string().nullable().optional(),
+  probability: z.number().min(0).max(1).nullable().optional(),
   value: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),
   stage_name: Crm2StageNameSchema.default('New'),
   close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'Close date must be in YYYY-MM-DD format',
   }),
+  source_system: z.string().max(64).nullable().optional(),
+  source_id: z.string().max(128).nullable().optional(),
 });
 export type CreateDealInput = z.infer<typeof CreateDealInputSchema>;
 
@@ -221,6 +231,8 @@ export const QuoteSchema = z.object({
   amount: DecimalStringSchema,
   currency: CurrencyCodeSchema,
   note: z.string().nullable().optional(),
+  source_system: z.string().nullable().optional(),
+  source_id: z.string().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
@@ -236,12 +248,42 @@ export const CreateQuoteInputSchema = z.object({
   amount: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),
   note: z.string().nullable().optional(),
+  source_system: z.string().max(64).nullable().optional(),
+  source_id: z.string().max(128).nullable().optional(),
 });
 export type CreateQuoteInput = z.infer<typeof CreateQuoteInputSchema>;
 
 // Update Quote Input Schema
 export const UpdateQuoteInputSchema = CreateQuoteInputSchema.partial();
 export type UpdateQuoteInput = z.infer<typeof UpdateQuoteInputSchema>;
+
+// Quote Line Schema
+export const QuoteLineSchema = z.object({
+  id: z.string().uuid(),
+  quote_id: z.string().uuid(),
+  line_number: z.number().int().positive(),
+  product_id: z.string().uuid().nullable().optional(),
+  description: z.string().min(1, 'Description is required'),
+  quantity: z.string().default('1.0000'),
+  unit_price: DecimalStringSchema,
+  line_total: DecimalStringSchema,
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+export type QuoteLine = z.infer<typeof QuoteLineSchema>;
+
+// Create Quote Line Input Schema
+export const CreateQuoteLineInputSchema = z.object({
+  quote_id: z.string().uuid('Invalid Quote UUID'),
+  line_number: z.number().int().positive('line_number must be > 0'),
+  product_id: z.string().uuid().nullable().optional(),
+  description: z.string().min(1, 'Description is required'),
+  quantity: z.string().regex(/^\d+(\.\d{1,4})?$/).default('1.0000'),
+  unit_price: DecimalStringSchema,
+  line_total: DecimalStringSchema.optional(),
+});
+export type CreateQuoteLineInput = z.infer<typeof CreateQuoteLineInputSchema>;
+
 
 /**
  * Standard Contract Labels, Helper Text and Error Messages for CRM-2
@@ -357,6 +399,18 @@ export const DealsQuerySchema = z
       .optional(),
     search: z.string().optional(),
     stage: Crm2StageNameSchema.optional(),
+    is_orphan: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .transform((val) => {
+        if (typeof val === 'string') {
+          return val.toLowerCase() === 'true';
+        }
+        return val;
+      }),
+    source_system: z.string().optional(),
+    sort: z.string().optional(),
+    order: z.enum(['asc', 'desc']).optional(),
   })
   .transform((data) => {
     const size = data.pageSize ?? data.limit ?? 10;
@@ -366,6 +420,10 @@ export const DealsQuerySchema = z
       limit: size,
       ...(data.search !== undefined ? { search: data.search } : {}),
       ...(data.stage !== undefined ? { stage: data.stage } : {}),
+      ...(data.is_orphan !== undefined ? { is_orphan: data.is_orphan } : {}),
+      ...(data.source_system !== undefined ? { source_system: data.source_system } : {}),
+      ...(data.sort !== undefined ? { sort: data.sort } : {}),
+      ...(data.order !== undefined ? { order: data.order } : {}),
     };
   });
 export type DealsQuery = z.infer<typeof DealsQuerySchema>;
@@ -417,6 +475,8 @@ export const QuotesQuerySchema = z
       .min(1, { message: 'limit must be >= 1' })
       .max(100, { message: 'limit cannot exceed 100' })
       .optional(),
+    sort: z.string().optional(),
+    order: z.enum(['asc', 'desc']).optional(),
   })
   .transform((data) => {
     const size = data.pageSize ?? data.limit ?? 10;
@@ -425,6 +485,8 @@ export const QuotesQuerySchema = z
       pageSize: size,
       limit: size,
       ...(data.deal_id !== undefined ? { deal_id: data.deal_id } : {}),
+      ...(data.sort !== undefined ? { sort: data.sort } : {}),
+      ...(data.order !== undefined ? { order: data.order } : {}),
     };
   });
 export type QuotesQuery = z.infer<typeof QuotesQuerySchema>;
@@ -439,32 +501,34 @@ export type QuotesListResponse = z.infer<typeof QuotesListResponseSchema>;
 
 // CRM-2 Import Ingestion Schemas (KIT Integration & Mutation API)
 export const Crm2ImportRowSchema = z.object({
-  batchId: z.string().uuid(),
+  batchId: z.string().min(1, 'batchId is required').max(128),
   sourceRow: z.number().int().positive(),
-  sourceSystem: z.string().min(1),
-  entity: z.enum(['deal', 'quote']),
+  sourceSystem: z.string().min(1).default('kit_import'),
+  entity: z.enum(['deal', 'quote', 'stage', 'quote_line', 'deals', 'quotes', 'stages', 'quote_lines']),
   idempotencyKey: z.string().min(1),
   data: z.record(z.unknown()),
 });
 export type Crm2ImportRow = z.infer<typeof Crm2ImportRowSchema>;
 
 export const Crm2ImportBatchSchema = z.object({
-  batchId: z.string().uuid(),
-  sourceSystem: z.string().min(1),
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  sourceSystem: z.string().min(1).default('kit_import'),
   rows: z.array(Crm2ImportRowSchema),
 });
 export type Crm2ImportBatch = z.infer<typeof Crm2ImportBatchSchema>;
 
 export const Crm2ImportReceiptSchema = z.object({
   id: z.string().uuid(),
-  batchId: z.string().uuid(),
+  batchId: z.string().min(1).max(128),
   sourceRow: z.number().int().positive(),
-  entity: z.enum(['deal', 'quote']),
+  entity: z.enum(['deal', 'quote', 'stage', 'quote_line', 'deals', 'quotes', 'stages', 'quote_lines']),
   sourceSystem: z.string().min(1),
   sourceId: z.string().min(1),
   targetId: z.string().uuid(),
   idempotencyKey: z.string().min(1),
   payloadHash: z.string(),
+  kind: z.enum(['created', 'linked']).optional(),
+  outcome: z.enum(['created', 'linked']).optional(),
   createdAt: z.string(),
 });
 export type Crm2ImportReceipt = z.infer<typeof Crm2ImportReceiptSchema>;
@@ -484,6 +548,8 @@ export const Crm2ErrorEnvelopeSchema = z.object({
   correlation_id: z.string().optional(),
 });
 export type Crm2ErrorEnvelope = z.infer<typeof Crm2ErrorEnvelopeSchema>;
+
+export { Crm2TargetEntitySchema, type Crm2TargetEntity } from './import-target.js';
 
 // ---------------------------------------------------------------------------
 // CRM-2 Chunked Batch Ingestion & Idempotent Retry Contracts (CRM2-13)
