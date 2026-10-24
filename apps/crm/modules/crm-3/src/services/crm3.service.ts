@@ -22,6 +22,7 @@ import {
   TicketNotFoundError,
   NoteNotFoundError,
   DomainValidationError,
+  ConflictError,
 } from '../domain/errors.js';
 import {
   assertTicketStatusTransition,
@@ -302,6 +303,26 @@ export class Crm3Service {
     assertValidTicketPriority(input.priority);
 
     await assertValidContactReference(input.contactId, this.contactResolver);
+
+    if (input.sourceSystem && input.sourceId) {
+      const trimmedSystem = input.sourceSystem.trim();
+      const trimmedId = input.sourceId.trim();
+      const conflict = this.tickets.some(
+        (t) => t.sourceSystem === trimmedSystem && t.sourceId === trimmedId
+      );
+      if (conflict) {
+        throw new ConflictError(
+          `Ticket with source system '${trimmedSystem}' and source ID '${trimmedId}' already exists`,
+          [
+            {
+              field: 'sourceId',
+              message: `Duplicate record for source system '${trimmedSystem}' and source ID '${trimmedId}'`,
+              code: 'duplicate_source_record',
+            },
+          ]
+        );
+      }
+    }
 
     const now = new Date().toISOString();
     const id = randomUUID();
