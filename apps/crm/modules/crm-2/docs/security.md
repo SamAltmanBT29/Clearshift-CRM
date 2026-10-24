@@ -4,7 +4,7 @@
 
 This specification defines the security architecture, authorization policies, sensitive data protection, and audit logging controls implemented in the **CRM-2 Deals, Pipeline and Quotes** module for ClearShift CRM V1.
 
-All mechanisms strictly satisfy the **ClearShift CRM System Design Specification (SDS) v2.0 §7.2**, **Project Plan v3.0**, and the non-negotiable requirements of Sprint 3 Gate G4 ([CRM2-09] / Issue #24).
+All mechanisms strictly satisfy the **ClearShift CRM System Design Specification (SDS) v2.0 §7.2**, **Project Plan v3.0**, and the non-negotiable requirements of Sprint 2 Gate G2 ([CRM2-15] / Issue #128) and Sprint 3 Gate G4 ([CRM2-09] / Issue #24).
 
 ---
 

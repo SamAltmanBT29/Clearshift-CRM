@@ -538,7 +538,7 @@ The entity creation workflow enforces strict client-side validation using Zod:
 
 ---
 
-## 15. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix
+## 15. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix (CRM2-15 / #128, CRM2-09 / #24)
 
 In compliance with SDS ClearShift CRM v2.0 §7.2, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
 
