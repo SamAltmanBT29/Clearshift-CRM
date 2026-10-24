@@ -510,3 +510,37 @@ Governs deterministic exact duplicate matching, candidate detection, and authori
 | `/api/v1/crm-contacts/duplicates/audit` | `GET` | `viewer`, `analyst`, `admin` | Queries paginated audit trail of human merge decisions. |
 | `/api/v1/crm-contacts/duplicates/evaluate/contact` | `POST` | `analyst`, `migration_runner`, `admin` | Evaluates contact candidate against existing database contacts. |
 | `/api/v1/crm-contacts/duplicates/evaluate/company` | `POST` | `analyst`, `migration_runner`, `admin` | Evaluates company candidate against existing database companies. |
+
+---
+
+## 19. Chunked Batch Ingestion & 10% Partial-Load Stop Policy ([CRM1-13] — Issue #106 / KIT-12)
+
+Governs high-throughput batch ingestion, chunked processing, bounded exponential backoff retries, idempotent receipt preservation, and immediate batch halting when row failure rate exceeds the 10% threshold.
+
+### 19.1 Batch Ingestion Execution Invariants
+
+| Invariant | Specification | Enforcement Mechanism |
+| :--- | :--- | :--- |
+| **Chunk Size** | Process records in chunks of 500 rows (`CRM1_DEFAULT_CHUNK_SIZE = 500`, bounded [1, 1000]). | `chunkArray(records, chunkSize)` slices inputs into isolated chunks. |
+| **Bounded Retry** | Transient row errors retry up to 3 times (`CRM1_DEFAULT_MAX_RETRIES = 3`, bounded [0, 5]) with bounded exponential backoff: `min(1000, 50 * 2^(attempt - 1))`. | `executeCrm1ChunkedBatchLoad` retries transient failures and preserves unchanged idempotency key. |
+| **Failure Rate Threshold** | Batch halts immediately when failure rate exceeds 10% (`CRM1_DEFAULT_FAILURE_THRESHOLD = 0.10`) after minimum 50 attempted rows (`CRM1_DEFAULT_MIN_ATTEMPTED_ROWS = 50`). | `shouldHaltBatch(failed, attempted, threshold, minRows)` triggers `BatchLoadHaltedError`. |
+| **Durable Partial Commits** | Committed rows and receipts prior to halt remain durable in the ledger; no rollback saga or destructive uncommitted data loss occurs. | Terminal batch state is `STOPPED_EXCESSIVE_FAILURES` with complete audit receipts. |
+| **Zero Fuzzy Auto-Merge** | Exact normalized key matching only; ambiguous records are rejected or held for human review. | Strict deterministic validation via domain processor. |
+
+### 19.2 Batch Execution Status Transitions
+
+```
+[ PENDING ] ──> [ IN_PROGRESS ] ──> ( All chunks completed ) ────────────> [ COMPLETED ]
+                       │
+                       └──> ( Failures > 10% after >= 50 attempted rows ) ──> [ STOPPED_EXCESSIVE_FAILURES ]
+                       │
+                       └──> ( Fatal unhandled exception ) ─────────────────> [ FAILED ]
+```
+
+### 19.3 API Endpoints & Role Access Matrix
+
+| Endpoint | Method | Allowed Roles | Required Capability | Description |
+| :--- | :---: | :--- | :--- | :--- |
+| `/api/v1/crm-contacts/batches/execute-load` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Executes chunked batch ingestion with bounded retries and 10% stop policy. |
+| `/api/v1/crm-contacts/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | `KIT_READ` | Retrieves durable execution report, receipts, and failed rows. |
+| `/api/v1/crm-contacts/import/batch` | `POST` | `migration_runner`, `admin` | `KIT_RUN` | Compatibility alias for batch load execution. |
