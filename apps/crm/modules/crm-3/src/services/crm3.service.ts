@@ -13,35 +13,36 @@ import {
   type CRM3TicketStatus,
   type CRM3TicketPriority,
   type CRM3ImportBatch,
-  type CRM3ImportReceipt,
   type CRM3EntityType,
-  assertValidTicketStatus,
-  assertValidTicketPriority,
+  CRM3TicketCreateSchema,
+  CRM3TicketPatchSchema,
+  CRM3TicketListQuerySchema,
+  CRM3NoteListQuerySchema,
 } from '@clearshift/contracts';
-import {
-  TicketNotFoundError,
-  NoteNotFoundError,
-  DomainValidationError,
-  ConflictError,
-} from '../domain/errors.js';
+import type { z } from 'zod';
+import { TicketNotFoundError, DomainValidationError } from '../domain/errors.js';
 import {
   assertTicketStatusTransition,
   assertValidContactReference,
   assertTicketExists,
 } from '../domain/relationships.js';
+import {
+  InMemoryCrm3Store,
+  type Crm3Store,
+  type Crm3StoredImportReceipt,
+} from '../store/crm3.store.js';
+
+export type { Crm3Store, Crm3StoredImportReceipt };
 
 export interface Crm3ServiceOptions {
   contactResolver?: ReferenceResolver;
+  /** Data-access implementation; defaults to InMemoryCrm3Store. */
+  store?: Crm3Store;
   /**
    * Test hook called inside the atomic import commit after the ticket and note are staged and
    * before receipts are recorded. Throwing from it simulates a failed receipt write.
    */
   onBeforeImportReceiptCommit?: () => void;
-}
-
-/** Import receipt as stored by CRM-3, plus the canonical payload hash used for replay checks. */
-export interface Crm3StoredImportReceipt extends CRM3ImportReceipt {
-  payloadHash: string;
 }
 
 export interface Crm3TicketImportCommand {
@@ -129,20 +130,37 @@ export class DefaultSyntheticContactResolver implements ReferenceResolver {
 }
 
 /**
+ * Parses service input with the shared contract schema, so every invariant holds even when the
+ * service is called directly (import adapter, other in-process callers) and not through a route.
+ */
+function parseOrThrow<S extends z.ZodTypeAny>(schema: S, input: unknown, message: string): z.infer<S> {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    throw new DomainValidationError(
+      message,
+      result.error.issues.map((issue) => ({
+        field: issue.path.join('.') || 'input',
+        message: issue.message,
+        code: issue.code,
+      }))
+    );
+  }
+  return result.data;
+}
+
+/**
  * CRM-3 Support Tickets & Activities Business Service
  * Encapsulates ticket domain rules, note append-only semantics, deterministic pagination,
- * and newest-first note ordering.
+ * and newest-first note ordering. All data access goes through the Crm3Store port.
  */
 export class Crm3Service {
-  private tickets: CRM3Ticket[] = [];
-  private notes: CRM3Note[] = [];
-  private importBatches: CRM3ImportBatch[] = [];
-  private importReceipts: Crm3StoredImportReceipt[] = [];
+  private readonly store: Crm3Store;
   private contactResolver: ReferenceResolver;
   private ticketLocks = new Map<string, Promise<void>>();
   private onBeforeImportReceiptCommit: (() => void) | undefined;
 
   constructor(options: Crm3ServiceOptions = {}) {
+    this.store = options.store ?? new InMemoryCrm3Store();
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
     this.onBeforeImportReceiptCommit = options.onBeforeImportReceiptCommit;
     this.seedSyntheticData();
@@ -156,21 +174,20 @@ export class Crm3Service {
     return this.contactResolver;
   }
 
+  public getStore(): Crm3Store {
+    return this.store;
+  }
+
   public resetStore(): void {
-    this.tickets = [];
-    this.notes = [];
-    this.importBatches = [];
-    this.importReceipts = [];
     this.seedSyntheticData();
   }
 
   /**
-   * Seed 32 deterministic synthetic tickets and corresponding notes for testing
+   * Replace all data with 32 deterministic synthetic tickets and their notes for testing
    * deterministic pagination (page=1, pageSize=25 yields 25; page=2 yields 7).
    */
   public seedSyntheticData(): void {
-    this.tickets = [];
-    this.notes = [];
+    this.store.clear();
 
     const statuses: CRM3TicketStatus[] = ['New', 'Open', 'Waiting', 'Solved', 'Closed'];
     const priorities: CRM3TicketPriority[] = ['Low', 'Normal', 'High', 'Urgent'];
@@ -192,7 +209,7 @@ export class Crm3Service {
         contactIds[(i - 1) % contactIds.length] ??
         '90000000-0000-4000-8000-000000000001';
 
-      this.tickets.push({
+      this.store.insertTicket({
         id: ticketId,
         subject: `Customer support request #${i}`,
         status,
@@ -209,7 +226,7 @@ export class Crm3Service {
       const note1Id = `40000000-0000-4000-8000-${(i * 2 - 1).toString(16).padStart(12, '0')}`;
       const note2Id = `40000000-0000-4000-8000-${(i * 2).toString(16).padStart(12, '0')}`;
 
-      this.notes.push({
+      this.store.insertNote({
         id: note1Id,
         ticketId,
         authorId: 'agent-alice',
@@ -217,7 +234,7 @@ export class Crm3Service {
         createdAt: new Date(baseTimestamp + i * 3600000 + 60000).toISOString(),
       });
 
-      this.notes.push({
+      this.store.insertNote({
         id: note2Id,
         ticketId,
         authorId: 'agent-bob',
@@ -232,53 +249,22 @@ export class Crm3Service {
    * deterministic sorting (createdAt DESC, id DESC), and bounded pagination.
    */
   public async getTickets(query: CRM3TicketListQuery): Promise<CRM3TicketListResponse> {
-    const { status, priority, contactId, search, page = 1, pageSize = 25 } = query;
+    const { status, priority, contactId, search, page, pageSize } = parseOrThrow(
+      CRM3TicketListQuerySchema,
+      query,
+      'Invalid query parameters'
+    );
 
-    let filtered = [...this.tickets];
-
-    if (status) {
-      assertValidTicketStatus(status);
-      filtered = filtered.filter((t) => t.status === status);
-    }
-
-    if (priority) {
-      assertValidTicketPriority(priority);
-      filtered = filtered.filter((t) => t.priority === priority);
-    }
-
-    if (contactId) {
-      filtered = filtered.filter((t) => t.contactId === contactId);
-    }
-
-    if (search && search.trim().length > 0) {
-      const q = search.trim().toLowerCase();
-      filtered = filtered.filter((t) => {
-        const matchSubject = t.subject.toLowerCase().includes(q);
-        const matchOrderRef = t.orderRef ? t.orderRef.toLowerCase().includes(q) : false;
-        return matchSubject || matchOrderRef;
-      });
-    }
-
-    // Deterministic sort: newest first, tie-break by id DESC
-    filtered.sort((a, b) => {
-      const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      if (timeDiff !== 0) return timeDiff;
-      return b.id.localeCompare(a.id);
-    });
-
-    const total = filtered.length;
-    const offset = (page - 1) * pageSize;
-    const paged = filtered.slice(offset, offset + pageSize);
-
+    const result = this.store.listTickets({ status, priority, contactId, search }, { page, pageSize });
     const items: CRM3TicketRead[] = await Promise.all(
-      paged.map((t) => this.enrichTicketWithContact(t))
+      result.items.map((t) => this.enrichTicketWithContact(t))
     );
 
     return {
       items,
       page,
       pageSize,
-      total,
+      total: result.total,
     };
   }
 
@@ -286,72 +272,49 @@ export class Crm3Service {
    * Get ticket by ID, enriched with contact information from reference resolver.
    */
   public async getTicketById(id: string): Promise<CRM3TicketRead | null> {
-    const ticket = this.tickets.find((t) => t.id === id);
+    const ticket = this.store.getTicket(id);
     if (!ticket) return null;
     return this.enrichTicketWithContact(ticket);
   }
 
   /**
-   * Create a new support ticket.
-   * Enforces status/priority enumerations and validates that contact exists.
+   * Create a new support ticket and its optional initial note as one atomic unit.
+   * Enforces the create contract, the contact reference and the unique source key.
    */
   public async createTicket(
     input: CRM3TicketCreate,
     authorId = 'system'
   ): Promise<CRM3TicketRead> {
-    assertValidTicketStatus(input.status);
-    assertValidTicketPriority(input.priority);
+    const data = parseOrThrow(CRM3TicketCreateSchema, input, 'Invalid ticket input');
 
-    await assertValidContactReference(input.contactId, this.contactResolver);
-
-    if (input.sourceSystem && input.sourceId) {
-      const trimmedSystem = input.sourceSystem.trim();
-      const trimmedId = input.sourceId.trim();
-      const conflict = this.tickets.some(
-        (t) => t.sourceSystem === trimmedSystem && t.sourceId === trimmedId
-      );
-      if (conflict) {
-        throw new ConflictError(
-          `Ticket with source system '${trimmedSystem}' and source ID '${trimmedId}' already exists`,
-          [
-            {
-              field: 'sourceId',
-              message: `Duplicate record for source system '${trimmedSystem}' and source ID '${trimmedId}'`,
-              code: 'duplicate_source_record',
-            },
-          ]
-        );
-      }
-    }
+    await assertValidContactReference(data.contactId, this.contactResolver);
 
     const now = new Date().toISOString();
-    const id = randomUUID();
-
     const newTicket: CRM3Ticket = {
-      id,
-      subject: input.subject.trim(),
-      status: input.status,
-      priority: input.priority,
-      contactId: input.contactId,
-      orderRef: input.orderRef ? input.orderRef.trim() : null,
-      sourceSystem: input.sourceSystem ? input.sourceSystem.trim() : null,
-      sourceId: input.sourceId ? input.sourceId.trim() : null,
+      id: randomUUID(),
+      subject: data.subject,
+      status: data.status,
+      priority: data.priority,
+      contactId: data.contactId,
+      orderRef: data.orderRef ?? null,
+      sourceSystem: data.sourceSystem ?? null,
+      sourceId: data.sourceId ?? null,
       createdAt: now,
       updatedAt: now,
     };
 
-    this.tickets.push(newTicket);
-
-    // Optional initial note creation
-    if (input.note && input.note.trim().length > 0) {
-      this.notes.push({
-        id: randomUUID(),
-        ticketId: id,
-        authorId,
-        noteText: input.note.trim(),
-        createdAt: now,
-      });
-    }
+    this.store.transaction(() => {
+      this.store.insertTicket(newTicket);
+      if (data.note) {
+        this.store.insertNote({
+          id: randomUUID(),
+          ticketId: newTicket.id,
+          authorId: authorId.trim() || 'system',
+          noteText: data.note,
+          createdAt: now,
+        });
+      }
+    });
 
     return this.enrichTicketWithContact(newTicket);
   }
@@ -362,26 +325,18 @@ export class Crm3Service {
    * contact reference) is checked against the latest stored state before anything is written.
    */
   public async updateTicket(id: string, patch: CRM3TicketPatch): Promise<CRM3TicketRead> {
-    return this.withTicketLock(id, () => this.applyTicketPatch(id, patch));
+    const data = parseOrThrow(CRM3TicketPatchSchema, patch, 'Invalid ticket update input');
+    return this.withTicketLock(id, () => this.applyTicketPatch(id, data));
   }
 
   private async applyTicketPatch(id: string, patch: CRM3TicketPatch): Promise<CRM3TicketRead> {
-    const index = this.tickets.findIndex((t) => t.id === id);
-    if (index === -1) {
-      throw new TicketNotFoundError(id);
-    }
-    const current = this.tickets[index];
+    const current = this.store.getTicket(id);
     if (!current) {
       throw new TicketNotFoundError(id);
     }
 
     if (patch.status !== undefined) {
-      assertValidTicketStatus(patch.status);
       assertTicketStatusTransition(current.status, patch.status);
-    }
-
-    if (patch.priority !== undefined) {
-      assertValidTicketPriority(patch.priority);
     }
 
     if (patch.contactId !== undefined) {
@@ -390,23 +345,18 @@ export class Crm3Service {
 
     const updated: CRM3Ticket = {
       id: current.id,
-      subject: patch.subject !== undefined ? patch.subject.trim() : current.subject,
+      subject: patch.subject !== undefined ? patch.subject : current.subject,
       status: patch.status !== undefined ? patch.status : current.status,
       priority: patch.priority !== undefined ? patch.priority : current.priority,
       contactId: patch.contactId !== undefined ? patch.contactId : current.contactId,
-      orderRef:
-        patch.orderRef !== undefined
-          ? patch.orderRef === null
-            ? null
-            : patch.orderRef.trim()
-          : current.orderRef,
+      orderRef: patch.orderRef !== undefined ? patch.orderRef : current.orderRef,
       sourceSystem: current.sourceSystem,
       sourceId: current.sourceId,
       createdAt: current.createdAt,
       updatedAt: new Date().toISOString(),
     };
 
-    this.tickets[index] = updated;
+    this.store.updateTicket(updated);
     return this.enrichTicketWithContact(updated);
   }
 
@@ -417,31 +367,18 @@ export class Crm3Service {
     ticketId: string,
     query: CRM3NoteListQuery
   ): Promise<CRM3NoteListResponse> {
-    const ticket = this.tickets.find((t) => t.id === ticketId);
-    if (!ticket) {
+    if (!this.store.getTicket(ticketId)) {
       throw new TicketNotFoundError(ticketId);
     }
 
-    const { page = 1, pageSize = 25 } = query;
-
-    const ticketNotes = this.notes.filter((n) => n.ticketId === ticketId);
-
-    // Newest first with deterministic timestamp and id tie-breaker
-    ticketNotes.sort((a, b) => {
-      const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      if (timeDiff !== 0) return timeDiff;
-      return b.id.localeCompare(a.id);
-    });
-
-    const total = ticketNotes.length;
-    const offset = (page - 1) * pageSize;
-    const items = ticketNotes.slice(offset, offset + pageSize);
+    const { page, pageSize } = parseOrThrow(CRM3NoteListQuerySchema, query, 'Invalid query parameters');
+    const result = this.store.listNotes(ticketId, { page, pageSize });
 
     return {
-      items,
+      items: result.items,
       page,
       pageSize,
-      total,
+      total: result.total,
     };
   }
 
@@ -469,7 +406,7 @@ export class Crm3Service {
       createdAt: new Date().toISOString(),
     };
 
-    this.notes.push(note);
+    this.store.insertNote(note);
     return note;
   }
 
@@ -478,13 +415,11 @@ export class Crm3Service {
   // ---------------------------------------------------------------------------
 
   public findBySourceKey(sourceSystem: string, sourceId: string): CRM3Ticket | null {
-    return (
-      this.tickets.find((t) => t.sourceSystem === sourceSystem && t.sourceId === sourceId) ?? null
-    );
+    return this.store.findTicketBySourceKey(sourceSystem, sourceId);
   }
 
   public getImportReceiptByKey(idempotencyKey: string): Crm3StoredImportReceipt | null {
-    return this.importReceipts.find((r) => r.idempotencyKey === idempotencyKey) ?? null;
+    return this.store.getImportReceiptByKey(idempotencyKey);
   }
 
   public getImportReceiptByRow(
@@ -492,28 +427,22 @@ export class Crm3Service {
     sourceRow: number,
     entity: CRM3EntityType
   ): Crm3StoredImportReceipt | null {
-    return (
-      this.importReceipts.find(
-        (r) => r.batchId === batchId && r.sourceRow === sourceRow && r.entity === entity
-      ) ?? null
-    );
+    return this.store.getImportReceiptByRow(batchId, sourceRow, entity);
   }
 
   public listImportReceipts(batchId: string): Crm3StoredImportReceipt[] {
-    return this.importReceipts
-      .filter((r) => r.batchId === batchId)
-      .sort((a, b) => a.sourceRow - b.sourceRow || a.entity.localeCompare(b.entity));
+    return this.store.listImportReceipts(batchId);
   }
 
   public getImportBatch(batchId: string): CRM3ImportBatch | null {
-    return this.importBatches.find((b) => b.id === batchId) ?? null;
+    return this.store.getImportBatch(batchId);
   }
 
   /**
    * Writes an imported ticket, its optional first note and their import receipts as one atomic
    * unit (create-only, decision C8). The method is synchronous, so no other operation can
-   * interleave between the duplicate checks and the writes; on any failure every staged change
-   * is rolled back and nothing is kept.
+   * interleave between the duplicate checks and the writes; on any failure the store
+   * transaction undoes every staged change and nothing is kept.
    */
   public commitTicketImport(command: Crm3TicketImportCommand): Crm3TicketImportCommit {
     const existingReceipt =
@@ -528,14 +457,7 @@ export class Crm3Service {
       return { kind: 'duplicate_source_key', existingTicketId: duplicate.id };
     }
 
-    const snapshot = {
-      tickets: [...this.tickets],
-      notes: [...this.notes],
-      importBatches: [...this.importBatches],
-      importReceipts: [...this.importReceipts],
-    };
-
-    try {
+    return this.store.transaction(() => {
       const now = new Date().toISOString();
       this.ensureImportBatch(command.batchId, command.sourceSystem, now);
 
@@ -551,7 +473,7 @@ export class Crm3Service {
         createdAt: now,
         updatedAt: now,
       };
-      this.tickets.push(ticket);
+      this.store.insertTicket(ticket);
 
       const receipts: Crm3StoredImportReceipt[] = [
         {
@@ -576,7 +498,7 @@ export class Crm3Service {
           noteText: command.noteText,
           createdAt: now,
         };
-        this.notes.push(note);
+        this.store.insertNote(note);
         receipts.push({
           id: randomUUID(),
           batchId: command.batchId,
@@ -592,16 +514,12 @@ export class Crm3Service {
       }
 
       this.onBeforeImportReceiptCommit?.();
-      this.importReceipts.push(...receipts);
+      for (const receipt of receipts) {
+        this.store.insertImportReceipt(receipt);
+      }
 
-      return { kind: 'created', ticket, receipts };
-    } catch (error) {
-      this.tickets = snapshot.tickets;
-      this.notes = snapshot.notes;
-      this.importBatches = snapshot.importBatches;
-      this.importReceipts = snapshot.importReceipts;
-      throw error;
-    }
+      return { kind: 'created' as const, ticket, receipts };
+    });
   }
 
   /**
@@ -612,8 +530,8 @@ export class Crm3Service {
     sourceSystem: string,
     now: string = new Date().toISOString()
   ): void {
-    if (this.getImportBatch(batchId)) return;
-    this.importBatches.push({
+    if (this.store.getImportBatch(batchId)) return;
+    this.store.insertImportBatch({
       id: batchId,
       sourceSystem,
       status: 'processing',
@@ -634,24 +552,23 @@ export class Crm3Service {
     batchId: string,
     patch: Partial<Pick<CRM3ImportBatch, 'status' | 'loadedCount' | 'rejectedCount' | 'completedAt'>>
   ): CRM3ImportBatch {
-    const index = this.importBatches.findIndex((b) => b.id === batchId);
-    const current = this.importBatches[index];
-    if (index === -1 || !current) {
+    const current = this.store.getImportBatch(batchId);
+    if (!current) {
       throw new DomainValidationError(`Import batch '${batchId}' not found`, [
         { field: 'batchId', message: `Import batch '${batchId}' not found`, code: 'batch_not_found' },
       ], 404);
     }
     const updated: CRM3ImportBatch = { ...current, ...patch, updatedAt: new Date().toISOString() };
-    this.importBatches[index] = updated;
+    this.store.updateImportBatch(updated);
     return updated;
   }
 
   public ticketExists(id: string): boolean {
-    return this.tickets.some((t) => t.id === id);
+    return this.store.getTicket(id) !== null;
   }
 
   public noteExists(id: string): boolean {
-    return this.notes.some((n) => n.id === id);
+    return this.store.getNote(id) !== null;
   }
 
   /**
@@ -661,7 +578,7 @@ export class Crm3Service {
   public getTicketSummary(
     id: string
   ): Pick<CRM3Ticket, 'id' | 'subject' | 'status' | 'priority' | 'contactId'> | null {
-    const ticket = this.tickets.find((t) => t.id === id);
+    const ticket = this.store.getTicket(id);
     if (!ticket) return null;
     return {
       id: ticket.id,

@@ -75,7 +75,11 @@ paths:
       operationId: createCRM3Ticket
       tags: [CRM-3]
       summary: Create a support ticket
-      description: Create a support ticket record with optional initial note and order reference. Allowed roles - editor, migration_runner, admin.
+      description: >-
+        Create a support ticket record with optional initial note and order reference. Allowed roles - editor, migration_runner, admin.
+        The ticket and its initial note are written atomically. sourceSystem and sourceId must be sent
+        together or not at all (400); a (sourceSystem, sourceId) pair that already exists returns 409
+        CONFLICT with detail code duplicate_source_record.
       requestBody:
         required: true
         content:
@@ -85,6 +89,11 @@ paths:
       responses:
         "201":
           description: Ticket created.
+          headers:
+            Location:
+              description: URL of the created ticket, /api/v1/crm-tickets/tickets/{id}.
+              schema:
+                type: string
           content:
             application/json:
               schema:
