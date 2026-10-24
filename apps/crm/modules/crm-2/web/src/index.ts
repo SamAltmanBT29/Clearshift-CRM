@@ -32,4 +32,5 @@ export * from './pages/QuoteFormPage.js';
 export * from './pages/PipelineOverviewPage.js';
 export * from './pages/QuotesListPage.js';
 export * from './pages/BatchLoaderPage.js';
+export * from './pages/WizardMappingPage.js';
 export * from './App.js';
