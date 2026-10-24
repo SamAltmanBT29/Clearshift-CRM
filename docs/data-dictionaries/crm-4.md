@@ -59,6 +59,35 @@
 
 **Business Rule BR-CRM4-01:** Opt-out / unsubscribe is strictly monotonic. Once a contact is marked `unsubscribed`, neither migration imports nor standard UI actions may revert the status to `subscribed`. Any membership write or consent update verifies this monotonic invariant.
 
+### 1.5 `crm4.crm4_import_batches`
+
+| Field | Type | Nullability | Meaning | Constraints |
+|---|---|---|---|---|
+| `id` | UUID | NOT NULL | Import batch identifier | Primary key |
+| `source_system` | TEXT | NOT NULL | Origin system identifier | Non-empty string |
+| `status` | TEXT | NOT NULL | Batch processing state | `pending`, `processing`, `completed`, `failed` |
+| `idempotency_key` | TEXT | NULL | Batch replay key | Unique |
+| `request_hash` | TEXT | NULL | Payload digest | SHA-256 |
+| `loaded_count` | INTEGER | NOT NULL | Loaded rows count | Default 0, non-negative |
+| `rejected_count` | INTEGER | NOT NULL | Rejected rows count | Default 0, non-negative |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Initiation timestamp | Default now() |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | Update timestamp | Default now() |
+| `completed_at` | TIMESTAMPTZ | NULL | Completion timestamp | Nullable |
+
+### 1.6 `crm4.crm4_import_receipts`
+
+| Field | Type | Nullability | Meaning | Constraints |
+|---|---|---|---|---|
+| `id` | UUID | NOT NULL | Durable receipt identifier | Primary key |
+| `batch_id` | UUID | NOT NULL | Parent batch reference | FK to `crm4_import_batches(id)` |
+| `source_row` | INTEGER | NOT NULL | Source spreadsheet/CSV row index | Positive integer |
+| `entity` | TEXT | NOT NULL | Ingested entity kind | `list`, `campaign`, `member`, `consent` |
+| `source_system` | TEXT | NOT NULL | Origin system tag | Non-empty string |
+| `source_id` | TEXT | NOT NULL | Origin primary key | Non-empty string |
+| `target_id` | UUID | NOT NULL | Committed target record ID | Target UUID |
+| `idempotency_key` | TEXT | NOT NULL | Row idempotency key | Unique |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Receipt timestamp | Default now() |
+
 ---
 
 ## 2. V1 Screen & Form Inventory
