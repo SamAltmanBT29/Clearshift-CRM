@@ -7,11 +7,56 @@
     "bytes": 29937,
     "rows": 100
   },
+  "fixtures": {
+    "dirty-pack-100.csv": {
+      "file": "dirty-pack-100.csv",
+      "sha256": "a87d39a0f1432eb5e6a12c639b3f82f80d01a542802275dfd658c54cccb77062",
+      "bytes": 29937,
+      "rows": 100
+    },
+    "dirty-data-v1.csv": {
+      "file": "dirty-data-v1.csv",
+      "sha256": "23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0",
+      "bytes": 28988,
+      "rows": 100
+    }
+  },
   "outcomes": {
     "loaded": 74,
     "merged": 8,
     "rejected": 18,
-    "skipped": 0
+    "skipped": 0,
+    "accept": 54,
+    "normalize": 8,
+    "merge": 4,
+    "reject": 34
+  },
+  "rulesOutcomes": {
+    "accept": 54,
+    "normalize": 8,
+    "merge": 4,
+    "reject": 34
+  },
+  "byRule": {
+    "CRM1-DQ-001": 3,
+    "CRM1-DQ-002": 3,
+    "CRM1-DQ-003": 4,
+    "CRM1-DQ-004": 5,
+    "CRM1-DQ-005": 4,
+    "CRM1-DQ-006": 5,
+    "CRM1-DQ-007": 4,
+    "CRM1-DQ-008": 2,
+    "CRM1-DQ-009": 5,
+    "CRM1-DQ-010": 4,
+    "CRM1-DQ-011": 3,
+    "CRM1-DQ-012": 3,
+    "CRM1-DQ-013": 3,
+    "CRM1-DQ-014": 3,
+    "CRM1-DQ-015": 11,
+    "CRM1-DQ-016": 1,
+    "CRM1-DQ-017": 1,
+    "CRM1-DQ-018": 1,
+    "CRM1-DQ-019": 1
   },
   "columns": {
     "id": {
