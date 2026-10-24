@@ -227,11 +227,11 @@ describe('CRM-3 Web Shell & Browser Journey Test Suite ([CRM3-10] / Issue #35)',
 
       expect(cardSection.props.className).toBe('cs-page-card');
       expect(cardSection.props.children.props.children).toEqual([1, ' tickets loaded.']);
-      expect(TICKETS_COLUMNS).toHaveLength(7);
-      expect(TICKETS_COLUMNS[0]!.label).toBe('Ticket ID');
-      expect(TICKETS_COLUMNS[1]!.label).toBe('Subject');
-      expect(TICKETS_COLUMNS[2]!.label).toBe('Status');
-      expect(TICKETS_COLUMNS[3]!.label).toBe('Priority');
+      expect(TICKETS_COLUMNS).toHaveLength(8);
+      expect(TICKETS_COLUMNS[0]!.header).toBe('Ticket ID');
+      expect(TICKETS_COLUMNS[1]!.header).toBe('Subject');
+      expect(TICKETS_COLUMNS[2]!.header).toBe('Status');
+      expect(TICKETS_COLUMNS[3]!.header).toBe('Priority');
     });
   });
 

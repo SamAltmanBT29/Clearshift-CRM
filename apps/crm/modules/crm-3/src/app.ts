@@ -6,8 +6,8 @@ import { crm3Routes, type Crm3RoutesOptions } from './routes/crm3.routes.js';
 import { Crm3Service, crm3Service } from './services/crm3.service.js';
 
 export interface AppOptions extends Crm3RoutesOptions {
-  service?: Crm3Service | undefined;
-  enforceAuth?: boolean | undefined;
+  service?: Crm3Service;
+  enforceAuth?: boolean;
 }
 
 /**
@@ -61,7 +61,6 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   app.register(crm3Routes, {
     prefix: CRM3_API_PREFIX,
     service,
-    auditService: opts.auditService,
     enforceAuth,
   });
 

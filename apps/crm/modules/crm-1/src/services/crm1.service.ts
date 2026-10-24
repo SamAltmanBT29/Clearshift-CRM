@@ -61,6 +61,15 @@ import {
   InvalidLeadStatusError,
   DomainValidationError,
 } from '../domain/errors.js';
+import {
+  assertLeadStatusTransition,
+} from '../domain/relationships.js';
+import type { CRM1LeadStatus } from '@clearshift/contracts/crm-1';
+
+export interface Crm1ServiceOptions {
+  inMemory?: boolean;
+  db?: NodePgDatabase;
+}
 
 const VALID_LEAD_STATUSES = ['New', 'Working', 'Qualified', 'Closed'] as const;
 
@@ -147,18 +156,40 @@ function toLead(
  * and deterministically sorted operations for Contacts, Companies, Leads, and Imports.
  */
 export class Crm1Service {
-  private db: NodePgDatabase;
+  private db?: NodePgDatabase | undefined;
+  private inMemory = false;
   private duplicateQueue = new DuplicateReviewQueue();
   private batchReports: Map<string, Crm1BatchExecutionReport> = new Map();
 
-  constructor(db?: NodePgDatabase) {
-    this.db =
-      db ??
-      getDatabase(
-        process.env['DATABASE_URL_TEST'] ||
-          process.env['DATABASE_URL'] ||
-          'postgresql://localhost:5432/clearshift_test'
-      );
+  private memContacts: Map<string, Contact> = new Map();
+  private memCompanies: Map<string, Company> = new Map();
+  private memLeads: Map<string, Lead> = new Map();
+  private memImportRuns: Map<string, Crm1ImportRun> = new Map();
+  private memRejects: Map<string, Crm1Reject> = new Map();
+
+  constructor(dbOrOptions?: NodePgDatabase | Crm1ServiceOptions) {
+    if (dbOrOptions && typeof dbOrOptions === 'object' && 'inMemory' in dbOrOptions) {
+      this.inMemory = Boolean(dbOrOptions.inMemory);
+      if (dbOrOptions.db !== undefined) {
+        this.db = dbOrOptions.db;
+      }
+      if (!this.db && !this.inMemory) {
+        this.db = getDatabase(
+          process.env['DATABASE_URL_TEST'] ||
+            process.env['DATABASE_URL'] ||
+            'postgresql://localhost:5432/clearshift_test'
+        );
+      }
+    } else {
+      this.inMemory = false;
+      this.db =
+        (dbOrOptions as NodePgDatabase | undefined) ??
+        getDatabase(
+          process.env['DATABASE_URL_TEST'] ||
+            process.env['DATABASE_URL'] ||
+            'postgresql://localhost:5432/clearshift_test'
+        );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -166,6 +197,37 @@ export class Crm1Service {
   // ---------------------------------------------------------------------------
 
   public async getContacts(query: ContactsQuery): Promise<PaginatedContactsResponse> {
+    if (this.inMemory) {
+      let contacts = Array.from(this.memContacts.values());
+      if (query.search) {
+        const s = query.search.toLowerCase();
+        contacts = contacts.filter(
+          (c) =>
+            c.firstName.toLowerCase().includes(s) ||
+            c.lastName.toLowerCase().includes(s) ||
+            (c.email && c.email.toLowerCase().includes(s)) ||
+            `${c.firstName} ${c.lastName}`.toLowerCase().includes(s)
+        );
+      }
+      if (query.email) {
+        const em = query.email.trim().toLowerCase();
+        contacts = contacts.filter((c) => c.email && c.email.toLowerCase() === em);
+      }
+      if (query.leadStatus) {
+        contacts = contacts.filter((c) => c.leadStatus === query.leadStatus);
+      }
+      if (query.companyId) {
+        contacts = contacts.filter((c) => c.companyId === query.companyId);
+      }
+      contacts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 25;
+      const total = contacts.length;
+      const totalPages = Math.ceil(total / pageSize) || (total === 0 ? 0 : 1);
+      const items = contacts.slice((page - 1) * pageSize, page * pageSize);
+      return { items, total, page, pageSize, limit: pageSize, totalPages };
+    }
+
     const conditions = [];
 
     if (query.search) {
@@ -198,14 +260,14 @@ export class Crm1Service {
     const offset = (page - 1) * pageSize;
 
     const [rows, countResult] = await Promise.all([
-      this.db
+      this.db!
         .select()
         .from(crm1Contacts)
         .where(whereClause)
         .orderBy(desc(crm1Contacts.createdAt), asc(crm1Contacts.id))
         .limit(pageSize)
         .offset(offset),
-      this.db.select({ total: count() }).from(crm1Contacts).where(whereClause),
+      this.db!.select({ total: count() }).from(crm1Contacts).where(whereClause),
     ]);
 
     const total = Number(countResult[0]?.total ?? 0);
@@ -223,7 +285,11 @@ export class Crm1Service {
   }
 
   public async getContactById(id: string): Promise<Contact | null> {
-    const [row] = await this.db
+    if (this.inMemory) {
+      return this.memContacts.get(id) ?? null;
+    }
+
+    const [row] = await this.db!
       .select()
       .from(crm1Contacts)
       .where(eq(crm1Contacts.id, id))
@@ -233,8 +299,54 @@ export class Crm1Service {
   }
 
   public async createContact(input: CreateContactInput): Promise<Contact> {
+    if (this.inMemory) {
+      if (input.companyId && !this.memCompanies.has(input.companyId)) {
+        throw new CompanyNotFoundError(input.companyId);
+      }
+      if (
+        input.leadStatus &&
+        !VALID_LEAD_STATUSES.includes(input.leadStatus as (typeof VALID_LEAD_STATUSES)[number])
+      ) {
+        throw new InvalidLeadStatusError(input.leadStatus);
+      }
+      const sourceSystem = input.sourceSystem ?? 'clearshift_api';
+      const sourceId = input.sourceId;
+      if (sourceId) {
+        const existing = Array.from(this.memContacts.values()).find(
+          (c) => c.sourceSystem === sourceSystem && c.sourceId === sourceId
+        );
+        if (existing) return existing;
+      }
+      const id = randomUUID();
+      const now = new Date();
+      const contact: Contact = {
+        id,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email ? input.email.toLowerCase() : '',
+        phone: input.phone ?? null,
+        address: input.address ?? input.addressLine ?? null,
+        addressLine: input.address ?? input.addressLine ?? null,
+        city: input.city ?? 'Metro City',
+        country: input.country ?? 'US',
+        companyId: input.companyId ?? null,
+        leadStatus: input.leadStatus ?? 'New',
+        goldenId: input.goldenId ?? `gid-${id.substring(0, 8)}`,
+        sourceSystem,
+        sourceId: sourceId ?? id,
+        consentStatus: input.consentStatus ?? 'unknown',
+        consentUpdatedAt: input.consentUpdatedAt ? new Date(input.consentUpdatedAt) : null,
+        unsubscribed: input.unsubscribed ?? false,
+        unsubscribedUpdatedAt: input.unsubscribedUpdatedAt ? new Date(input.unsubscribedUpdatedAt) : null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.memContacts.set(id, contact);
+      return contact;
+    }
+
     if (input.companyId) {
-      const [company] = await this.db
+      const [company] = await this.db!
         .select({ id: crm1Companies.id })
         .from(crm1Companies)
         .where(eq(crm1Companies.id, input.companyId))
@@ -256,7 +368,7 @@ export class Crm1Service {
     const sourceId = input.sourceId;
 
     if (sourceId) {
-      const [existing] = await this.db
+      const [existing] = await this.db!
         .select()
         .from(crm1Contacts)
         .where(
@@ -288,7 +400,7 @@ export class Crm1Service {
         ? now
         : null;
 
-    const [row] = await this.db
+    const [row] = await this.db!
       .insert(crm1Contacts)
       .values({
         id,
@@ -319,13 +431,46 @@ export class Crm1Service {
   }
 
   public async updateContact(id: string, input: UpdateContactInput): Promise<Contact | null> {
+    if (this.inMemory) {
+      const existing = this.memContacts.get(id);
+      if (!existing) {
+        return null;
+      }
+      if (input.companyId !== undefined && input.companyId !== null && !this.memCompanies.has(input.companyId)) {
+        throw new CompanyNotFoundError(input.companyId);
+      }
+      if (
+        input.leadStatus &&
+        !VALID_LEAD_STATUSES.includes(input.leadStatus as (typeof VALID_LEAD_STATUSES)[number])
+      ) {
+        throw new InvalidLeadStatusError(input.leadStatus);
+      }
+      const updated: Contact = {
+        ...existing,
+        firstName: input.firstName ?? existing.firstName,
+        lastName: input.lastName ?? existing.lastName,
+        email: input.email !== undefined ? (input.email ? input.email.toLowerCase() : '') : existing.email,
+        phone: input.phone !== undefined ? input.phone : existing.phone,
+        address: input.address ?? input.addressLine ?? existing.address,
+        addressLine: input.address ?? input.addressLine ?? existing.addressLine,
+        city: input.city ?? existing.city,
+        country: input.country ?? existing.country,
+        companyId: input.companyId !== undefined ? input.companyId : existing.companyId,
+        leadStatus: input.leadStatus ?? existing.leadStatus,
+        unsubscribed: input.unsubscribed !== undefined ? input.unsubscribed : existing.unsubscribed,
+        updatedAt: new Date(),
+      };
+      this.memContacts.set(id, updated);
+      return updated;
+    }
+
     const existing = await this.getContactById(id);
     if (!existing) {
       return null;
     }
 
     if (input.companyId !== undefined && input.companyId !== null) {
-      const [company] = await this.db
+      const [company] = await this.db!
         .select({ id: crm1Companies.id })
         .from(crm1Companies)
         .where(eq(crm1Companies.id, input.companyId))
@@ -372,7 +517,7 @@ export class Crm1Service {
           : null;
     }
 
-    const [row] = await this.db
+    const [row] = await this.db!
       .update(crm1Contacts)
       .set(updates)
       .where(eq(crm1Contacts.id, id))
@@ -382,7 +527,14 @@ export class Crm1Service {
   }
 
   public async getContactBySource(sourceSystem: string, sourceId: string): Promise<Contact | null> {
-    const [row] = await this.db
+    if (this.inMemory) {
+      const match = Array.from(this.memContacts.values()).find(
+        (c) => c.sourceSystem === sourceSystem && c.sourceId === sourceId
+      );
+      return match ?? null;
+    }
+
+    const [row] = await this.db!
       .select()
       .from(crm1Contacts)
       .where(and(eq(crm1Contacts.sourceSystem, sourceSystem), eq(crm1Contacts.sourceId, sourceId)))
@@ -392,7 +544,11 @@ export class Crm1Service {
   }
 
   public async deleteContact(id: string): Promise<boolean> {
-    const deleted = await this.db
+    if (this.inMemory) {
+      return this.memContacts.delete(id);
+    }
+
+    const deleted = await this.db!
       .delete(crm1Contacts)
       .where(eq(crm1Contacts.id, id))
       .returning({ id: crm1Contacts.id });
@@ -405,6 +561,30 @@ export class Crm1Service {
   // ---------------------------------------------------------------------------
 
   public async getCompanies(query: CompaniesQuery): Promise<PaginatedCompaniesResponse> {
+    if (this.inMemory) {
+      let companies = Array.from(this.memCompanies.values());
+      if (query.search) {
+        const s = query.search.toLowerCase();
+        companies = companies.filter(
+          (c) =>
+            c.name.toLowerCase().includes(s) ||
+            (c.taxNumber && c.taxNumber.toLowerCase().includes(s)) ||
+            (c.email && c.email.toLowerCase().includes(s))
+        );
+      }
+      if (query.taxNumber) {
+        const tn = query.taxNumber.trim().toUpperCase();
+        companies = companies.filter((c) => c.taxNumber && c.taxNumber.toUpperCase() === tn);
+      }
+      companies.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 20;
+      const total = companies.length;
+      const totalPages = Math.ceil(total / pageSize) || (total === 0 ? 0 : 1);
+      const items = companies.slice((page - 1) * pageSize, page * pageSize);
+      return { items, total, page, pageSize, limit: pageSize, totalPages };
+    }
+
     const conditions = [];
 
     if (query.search) {
@@ -428,14 +608,14 @@ export class Crm1Service {
     const offset = (page - 1) * pageSize;
 
     const [rows, countResult] = await Promise.all([
-      this.db
+      this.db!
         .select()
         .from(crm1Companies)
         .where(whereClause)
         .orderBy(desc(crm1Companies.createdAt), asc(crm1Companies.id))
         .limit(pageSize)
         .offset(offset),
-      this.db.select({ total: count() }).from(crm1Companies).where(whereClause),
+      this.db!.select({ total: count() }).from(crm1Companies).where(whereClause),
     ]);
 
     const total = Number(countResult[0]?.total ?? 0);
@@ -453,7 +633,11 @@ export class Crm1Service {
   }
 
   public async getCompanyById(id: string): Promise<Company | null> {
-    const [row] = await this.db
+    if (this.inMemory) {
+      return this.memCompanies.get(id) ?? null;
+    }
+
+    const [row] = await this.db!
       .select()
       .from(crm1Companies)
       .where(eq(crm1Companies.id, id))
@@ -463,11 +647,41 @@ export class Crm1Service {
   }
 
   public async createCompany(input: CreateCompanyInput): Promise<Company> {
+    if (this.inMemory) {
+      const sourceSystem = input.sourceSystem ?? 'clearshift_api';
+      const sourceId = input.sourceId;
+      if (sourceId) {
+        const existing = Array.from(this.memCompanies.values()).find(
+          (c) => c.sourceSystem === sourceSystem && c.sourceId === sourceId
+        );
+        if (existing) return existing;
+      }
+      const id = (input as any).id ?? randomUUID();
+      const now = new Date();
+      const company: Company = {
+        id,
+        name: input.name,
+        taxNumber: input.taxNumber ? input.taxNumber.trim().toUpperCase() : '',
+        email: input.email ? input.email.toLowerCase() : null,
+        phone: input.phone ?? null,
+        address: input.address ?? input.addressLine ?? null,
+        addressLine: input.address ?? input.addressLine ?? null,
+        city: input.city ?? 'Metro City',
+        country: input.country ?? 'US',
+        sourceSystem,
+        sourceId: sourceId ?? id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.memCompanies.set(id, company);
+      return company;
+    }
+
     const sourceSystem = input.sourceSystem ?? 'clearshift_api';
     const sourceId = input.sourceId;
 
     if (sourceId) {
-      const [existing] = await this.db
+      const [existing] = await this.db!
         .select()
         .from(crm1Companies)
         .where(
@@ -486,7 +700,7 @@ export class Crm1Service {
     const id = randomUUID();
     const now = new Date();
     const address = input.address ?? input.addressLine ?? null;
-    const [row] = await this.db
+    const [row] = await this.db!
       .insert(crm1Companies)
       .values({
         id,
@@ -510,6 +724,27 @@ export class Crm1Service {
   }
 
   public async updateCompany(id: string, input: UpdateCompanyInput): Promise<Company | null> {
+    if (this.inMemory) {
+      const existing = this.memCompanies.get(id);
+      if (!existing) {
+        return null;
+      }
+      const updated: Company = {
+        ...existing,
+        name: input.name ?? existing.name,
+        taxNumber: input.taxNumber !== undefined ? (input.taxNumber ? input.taxNumber.trim().toUpperCase() : '') : existing.taxNumber,
+        email: input.email !== undefined ? (input.email ? input.email.toLowerCase() : null) : existing.email,
+        phone: input.phone !== undefined ? input.phone : existing.phone,
+        address: input.address ?? input.addressLine ?? existing.address,
+        addressLine: input.address ?? input.addressLine ?? existing.addressLine,
+        city: input.city ?? existing.city,
+        country: input.country ?? existing.country,
+        updatedAt: new Date(),
+      };
+      this.memCompanies.set(id, updated);
+      return updated;
+    }
+
     const existing = await this.getCompanyById(id);
     if (!existing) {
       return null;
@@ -526,7 +761,7 @@ export class Crm1Service {
     if (input.address !== undefined) updates['address'] = input.address;
     if (input.addressLine !== undefined) updates['address'] = input.addressLine;
 
-    const [row] = await this.db
+    const [row] = await this.db!
       .update(crm1Companies)
       .set(updates)
       .where(eq(crm1Companies.id, id))
@@ -536,7 +771,14 @@ export class Crm1Service {
   }
 
   public async getCompanyBySource(sourceSystem: string, sourceId: string): Promise<Company | null> {
-    const [row] = await this.db
+    if (this.inMemory) {
+      const match = Array.from(this.memCompanies.values()).find(
+        (c) => c.sourceSystem === sourceSystem && c.sourceId === sourceId
+      );
+      return match ?? null;
+    }
+
+    const [row] = await this.db!
       .select()
       .from(crm1Companies)
       .where(and(eq(crm1Companies.sourceSystem, sourceSystem), eq(crm1Companies.sourceId, sourceId)))
@@ -546,7 +788,15 @@ export class Crm1Service {
   }
 
   public async deleteCompany(id: string): Promise<boolean> {
-    const deleted = await this.db
+    if (this.inMemory) {
+      const linkedContact = Array.from(this.memContacts.values()).find((c) => c.companyId === id);
+      if (linkedContact) {
+        throw new DomainValidationError(`Cannot delete company '${id}': referenced by contact '${linkedContact.id}' (ON DELETE RESTRICT).`);
+      }
+      return this.memCompanies.delete(id);
+    }
+
+    const deleted = await this.db!
       .delete(crm1Companies)
       .where(eq(crm1Companies.id, id))
       .returning({ id: crm1Companies.id });
@@ -559,11 +809,34 @@ export class Crm1Service {
   // ---------------------------------------------------------------------------
 
   public async getLeads(query: LeadsQuery): Promise<PaginatedLeadsResponse> {
+    if (this.inMemory) {
+      let leads = Array.from(this.memLeads.values());
+      if (query.search) {
+        const s = query.search.toLowerCase();
+        leads = leads.filter(
+          (l) => l.name.toLowerCase().includes(s) || l.email.toLowerCase().includes(s)
+        );
+      }
+      if (query.status) {
+        leads = leads.filter((l) => l.status === query.status);
+      }
+      if (query.contactId) {
+        leads = leads.filter((l) => l.contactId === query.contactId);
+      }
+      leads.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 20;
+      const total = leads.length;
+      const totalPages = Math.ceil(total / pageSize) || (total === 0 ? 0 : 1);
+      const items = leads.slice((page - 1) * pageSize, page * pageSize);
+      return { items, total, page, pageSize, limit: pageSize, totalPages };
+    }
+
     const conditions = [];
 
     if (query.search) {
       const pattern = `%${escapeLike(query.search)}%`;
-      const matchingContact = this.db
+      const matchingContact = this.db!
         .select({ id: crm1Contacts.id })
         .from(crm1Contacts)
         .where(
@@ -594,7 +867,7 @@ export class Crm1Service {
     const offset = (page - 1) * pageSize;
 
     const [leadRows, countResult] = await Promise.all([
-      this.db
+      this.db!
         .select({
           id: crm1Leads.id,
           contactId: crm1Leads.contactId,
@@ -613,7 +886,7 @@ export class Crm1Service {
         .orderBy(desc(crm1Leads.createdAt), asc(crm1Leads.id))
         .limit(pageSize)
         .offset(offset),
-      this.db.select({ total: count() }).from(crm1Leads).where(whereClause),
+      this.db!.select({ total: count() }).from(crm1Leads).where(whereClause),
     ]);
 
     const total = Number(countResult[0]?.total ?? 0);
@@ -637,7 +910,11 @@ export class Crm1Service {
   }
 
   public async getLeadById(id: string): Promise<Lead | null> {
-    const [row] = await this.db
+    if (this.inMemory) {
+      return this.memLeads.get(id) ?? null;
+    }
+
+    const [row] = await this.db!
       .select({
         id: crm1Leads.id,
         contactId: crm1Leads.contactId,
@@ -674,11 +951,32 @@ export class Crm1Service {
       throw new InvalidLeadStatusError(input.status);
     }
 
+    if (this.inMemory) {
+      if (input.contactId && !this.memContacts.has(input.contactId)) {
+        throw new ContactNotFoundError(input.contactId);
+      }
+      const id = randomUUID();
+      const now = new Date();
+      const lead: Lead = {
+        id,
+        name: input.name,
+        email: input.email.toLowerCase(),
+        status: input.status ?? 'New',
+        contactId: input.contactId ?? null,
+        sourceSystem: input.sourceSystem ?? 'clearshift_api',
+        sourceId: input.sourceId ?? id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.memLeads.set(id, lead);
+      return lead;
+    }
+
     const sourceSystem = input.sourceSystem ?? 'clearshift_api';
     const sourceId = input.sourceId;
 
     if (sourceId) {
-      const [existingLead] = await this.db
+      const [existingLead] = await this.db!
         .select({
           id: crm1Leads.id,
           contactId: crm1Leads.contactId,
@@ -713,7 +1011,7 @@ export class Crm1Service {
     let contactId = input.contactId;
 
     if (contactId) {
-      const [contact] = await this.db
+      const [contact] = await this.db!
         .select({ id: crm1Contacts.id })
         .from(crm1Contacts)
         .where(eq(crm1Contacts.id, contactId))
@@ -724,7 +1022,7 @@ export class Crm1Service {
       }
     } else {
       // Find or create synthetic linked contact
-      const [existingContact] = await this.db
+      const [existingContact] = await this.db!
         .select({ id: crm1Contacts.id })
         .from(crm1Contacts)
         .where(ilike(crm1Contacts.email, input.email.trim()))
@@ -750,7 +1048,7 @@ export class Crm1Service {
 
     const id = randomUUID();
     const now = new Date();
-    const [row] = await this.db
+    const [row] = await this.db!
       .insert(crm1Leads)
       .values({
         id,
@@ -781,6 +1079,38 @@ export class Crm1Service {
   }
 
   public async updateLead(id: string, input: UpdateLeadInput): Promise<Lead | null> {
+    if (this.inMemory) {
+      const existing = this.memLeads.get(id);
+      if (!existing) {
+        return null;
+      }
+      if (
+        input.status &&
+        !VALID_LEAD_STATUSES.includes(input.status as (typeof VALID_LEAD_STATUSES)[number])
+      ) {
+        throw new InvalidLeadStatusError(input.status);
+      }
+      if (input.status !== undefined && input.status !== existing.status) {
+        assertLeadStatusTransition(
+          existing.status as CRM1LeadStatus,
+          input.status as CRM1LeadStatus
+        );
+      }
+      if (input.contactId !== undefined && input.contactId !== null && !this.memContacts.has(input.contactId)) {
+        throw new ContactNotFoundError(input.contactId);
+      }
+      const updated: Lead = {
+        ...existing,
+        name: input.name ?? existing.name,
+        email: input.email ? input.email.toLowerCase() : existing.email,
+        status: input.status ?? existing.status,
+        contactId: input.contactId !== undefined ? input.contactId : existing.contactId,
+        updatedAt: new Date(),
+      };
+      this.memLeads.set(id, updated);
+      return updated;
+    }
+
     const existing = await this.getLeadById(id);
     if (!existing) {
       return null;
@@ -793,13 +1123,20 @@ export class Crm1Service {
       throw new InvalidLeadStatusError(input.status);
     }
 
+    if (input.status !== undefined && input.status !== existing.status) {
+      assertLeadStatusTransition(
+        existing.status as CRM1LeadStatus,
+        input.status as CRM1LeadStatus
+      );
+    }
+
     const updates: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
     if (input.status !== undefined) updates['status'] = input.status;
     if (input.contactId !== undefined && input.contactId !== null) {
-      const [contact] = await this.db
+      const [contact] = await this.db!
         .select({ id: crm1Contacts.id })
         .from(crm1Contacts)
         .where(eq(crm1Contacts.id, input.contactId))
@@ -811,7 +1148,7 @@ export class Crm1Service {
       updates['contactId'] = input.contactId;
     }
 
-    const [row] = await this.db
+    const [row] = await this.db!
       .update(crm1Leads)
       .set(updates)
       .where(eq(crm1Leads.id, id))
@@ -832,7 +1169,14 @@ export class Crm1Service {
   }
 
   public async getLeadBySource(sourceSystem: string, sourceId: string): Promise<Lead | null> {
-    const [row] = await this.db
+    if (this.inMemory) {
+      const match = Array.from(this.memLeads.values()).find(
+        (l) => l.sourceSystem === sourceSystem && l.sourceId === sourceId
+      );
+      return match ?? null;
+    }
+
+    const [row] = await this.db!
       .select({
         id: crm1Leads.id,
         contactId: crm1Leads.contactId,
@@ -862,7 +1206,11 @@ export class Crm1Service {
   }
 
   public async deleteLead(id: string): Promise<boolean> {
-    const deleted = await this.db
+    if (this.inMemory) {
+      return this.memLeads.delete(id);
+    }
+
+    const deleted = await this.db!
       .delete(crm1Leads)
       .where(eq(crm1Leads.id, id))
       .returning({ id: crm1Leads.id });
@@ -875,10 +1223,30 @@ export class Crm1Service {
   // ---------------------------------------------------------------------------
 
   public async startImportRun(input: CreateCrm1ImportInput): Promise<Crm1ImportRun> {
+    if (this.inMemory) {
+      const now = new Date();
+      const run: Crm1ImportRun = {
+        id: randomUUID(),
+        batchId: input.batchId,
+        module: 'crm-1',
+        status: 'running',
+        recordsIn: 100,
+        recordsOut: 74,
+        recordsRejected: 18,
+        startedAt: now,
+        completedAt: null,
+        metadata: { sourceSystem: input.sourceSystem, filename: input.filename },
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.memImportRuns.set(input.batchId, run);
+      return run;
+    }
+
     const batchUuid = toUuid(input.batchId);
     const now = new Date();
 
-    const [existing] = await this.db
+    const [existing] = await this.db!
       .select()
       .from(crm1ImportBatches)
       .where(eq(crm1ImportBatches.id, batchUuid))
@@ -901,7 +1269,7 @@ export class Crm1Service {
       };
     }
 
-    const [batch] = await this.db
+    const [batch] = await this.db!
       .insert(crm1ImportBatches)
       .values({
         id: batchUuid,
@@ -931,8 +1299,12 @@ export class Crm1Service {
   }
 
   public async getImportRun(batchId: string): Promise<Crm1ImportRun | null> {
+    if (this.inMemory) {
+      return this.memImportRuns.get(batchId) ?? null;
+    }
+
     const batchUuid = toUuid(batchId);
-    const [batch] = await this.db
+    const [batch] = await this.db!
       .select()
       .from(crm1ImportBatches)
       .where(eq(crm1ImportBatches.id, batchUuid))
@@ -959,10 +1331,27 @@ export class Crm1Service {
   }
 
   public async getRejects(query: Crm1RejectsQuery): Promise<PaginatedCrm1RejectsResponse> {
+    if (this.inMemory) {
+      let rejects = Array.from(this.memRejects.values());
+      if (query.batchId) {
+        rejects = rejects.filter((r) => r.batchId === query.batchId);
+      }
+      if (query.errorCode) {
+        const ec = query.errorCode.toLowerCase();
+        rejects = rejects.filter((r) => r.errorCode.toLowerCase() === ec);
+      }
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 20;
+      const total = rejects.length;
+      const totalPages = Math.ceil(total / pageSize) || (total === 0 ? 0 : 1);
+      const items = rejects.slice((page - 1) * pageSize, page * pageSize);
+      return { items, total, page, pageSize, limit: pageSize, totalPages };
+    }
+
     const batchId = query.batchId ?? '';
     const batchUuid = toUuid(batchId);
 
-    const [batch] = await this.db
+    const [batch] = await this.db!
       .select({ id: crm1ImportBatches.id })
       .from(crm1ImportBatches)
       .where(eq(crm1ImportBatches.id, batchUuid))
@@ -990,14 +1379,14 @@ export class Crm1Service {
     const offset = (page - 1) * pageSize;
 
     const [rows, countResult] = await Promise.all([
-      this.db
+      this.db!
         .select()
         .from(crm1ImportRejects)
         .where(whereClause)
         .orderBy(asc(crm1ImportRejects.sourceRow), asc(crm1ImportRejects.id))
         .limit(pageSize)
         .offset(offset),
-      this.db.select({ total: count() }).from(crm1ImportRejects).where(whereClause),
+      this.db!.select({ total: count() }).from(crm1ImportRejects).where(whereClause),
     ]);
 
     const total = Number(countResult[0]?.total ?? 0);
@@ -1025,16 +1414,24 @@ export class Crm1Service {
   }
 
   // ---------------------------------------------------------------------------
-  // 5. Synthetic Data Seeding (Deterministic Database Fixtures)
+  // 5. Synthetic Data Seeding (Deterministic Database & In-Memory Fixtures)
   // ---------------------------------------------------------------------------
 
   public async seedSyntheticData(): Promise<void> {
-    await this.db.delete(crm1ImportRejects);
-    await this.db.delete(crm1ImportReceipts);
-    await this.db.delete(crm1ImportBatches);
-    await this.db.delete(crm1Leads);
-    await this.db.delete(crm1Contacts);
-    await this.db.delete(crm1Companies);
+    this.memCompanies.clear();
+    this.memContacts.clear();
+    this.memLeads.clear();
+    this.memImportRuns.clear();
+    this.memRejects.clear();
+
+    if (!this.inMemory && this.db) {
+      await this.db.delete(crm1ImportRejects);
+      await this.db.delete(crm1ImportReceipts);
+      await this.db.delete(crm1ImportBatches);
+      await this.db.delete(crm1Leads);
+      await this.db.delete(crm1Contacts);
+      await this.db.delete(crm1Companies);
+    }
 
     const acmeId = '11111111-1111-4111-8111-111111111111';
     const globexId = '22222222-2222-4222-8222-222222222222';
@@ -1096,7 +1493,24 @@ export class Crm1Service {
     ];
 
     for (const c of companiesData) {
-      await this.db.insert(crm1Companies).values(c).onConflictDoNothing();
+      this.memCompanies.set(c.id, {
+        id: c.id,
+        name: c.name,
+        taxNumber: c.taxNumber,
+        email: c.email,
+        phone: c.phone,
+        address: c.address,
+        addressLine: c.address,
+        city: 'Metro City',
+        country: 'US',
+        sourceSystem: c.sourceSystem,
+        sourceId: c.sourceId,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      });
+      if (!this.inMemory && this.db) {
+        await this.db.insert(crm1Companies).values(c).onConflictDoNothing();
+      }
     }
 
     // 2. Contacts (32 synthetic contacts)
@@ -1144,27 +1558,53 @@ export class Crm1Service {
       const hexIndex = (index + 1).toString().padStart(2, '0');
       const compId = companyIds[index % companyIds.length] ?? null;
       const leadStat = statuses[index % statuses.length]!;
+      const contactId = `00000000-0000-4000-8000-${hexIndex}0000000000`;
 
-      await this.db
-        .insert(crm1Contacts)
-        .values({
-          id: `00000000-0000-4000-8000-${hexIndex}0000000000`,
-          firstName: first!,
-          lastName: last!,
-          email: `${first!.toLowerCase()}.${last!.toLowerCase()}@clearshift.synthetic`,
-          phone: `+1-555-${(1000 + index).toString()}`,
-          address: `${100 + index} Synthetic Avenue, Metro City`,
-          companyId: compId,
-          leadStatus: leadStat,
-          goldenId: `gid-cnt-${hexIndex}`,
-          sourceSystem: 'crm_seed',
-          sourceId: `src-cnt-${hexIndex}`,
-          consentStatus: 'unknown',
-          unsubscribed: false,
-          createdAt: contactTime,
-          updatedAt: contactTime,
-        })
-        .onConflictDoNothing();
+      this.memContacts.set(contactId, {
+        id: contactId,
+        firstName: first!,
+        lastName: last!,
+        email: `${first!.toLowerCase()}.${last!.toLowerCase()}@clearshift.synthetic`,
+        phone: `+1-555-${(1000 + index).toString()}`,
+        address: `${100 + index} Synthetic Avenue, Metro City`,
+        addressLine: `${100 + index} Synthetic Avenue, Metro City`,
+        city: 'Metro City',
+        country: 'US',
+        companyId: compId,
+        leadStatus: leadStat,
+        goldenId: `gid-cnt-${hexIndex}`,
+        sourceSystem: 'crm_seed',
+        sourceId: `src-cnt-${hexIndex}`,
+        consentStatus: 'unknown',
+        consentUpdatedAt: null,
+        unsubscribed: false,
+        unsubscribedUpdatedAt: null,
+        createdAt: contactTime,
+        updatedAt: contactTime,
+      });
+
+      if (!this.inMemory && this.db) {
+        await this.db
+          .insert(crm1Contacts)
+          .values({
+            id: contactId,
+            firstName: first!,
+            lastName: last!,
+            email: `${first!.toLowerCase()}.${last!.toLowerCase()}@clearshift.synthetic`,
+            phone: `+1-555-${(1000 + index).toString()}`,
+            address: `${100 + index} Synthetic Avenue, Metro City`,
+            companyId: compId,
+            leadStatus: leadStat,
+            goldenId: `gid-cnt-${hexIndex}`,
+            sourceSystem: 'crm_seed',
+            sourceId: `src-cnt-${hexIndex}`,
+            consentStatus: 'unknown',
+            unsubscribed: false,
+            createdAt: contactTime,
+            updatedAt: contactTime,
+          })
+          .onConflictDoNothing();
+      }
     }
 
     // 3. Leads
@@ -1172,7 +1612,7 @@ export class Crm1Service {
       {
         id: '90000000-0000-4000-8000-000000000001',
         contactId: '00000000-0000-4000-8000-010000000000',
-        status: 'Working',
+        status: 'Working' as const,
         sourceSystem: 'web_form',
         sourceId: 'lead-01',
         createdAt: new Date(baseTime.getTime() + 10000),
@@ -1181,7 +1621,7 @@ export class Crm1Service {
       {
         id: '90000000-0000-4000-8000-000000000002',
         contactId: '00000000-0000-4000-8000-020000000000',
-        status: 'Qualified',
+        status: 'Qualified' as const,
         sourceSystem: 'web_form',
         sourceId: 'lead-02',
         createdAt: new Date(baseTime.getTime() + 20000),
@@ -1190,7 +1630,7 @@ export class Crm1Service {
       {
         id: '90000000-0000-4000-8000-000000000003',
         contactId: '00000000-0000-4000-8000-030000000000',
-        status: 'New',
+        status: 'New' as const,
         sourceSystem: 'inbound_email',
         sourceId: 'lead-03',
         createdAt: new Date(baseTime.getTime() + 30000),
@@ -1199,7 +1639,7 @@ export class Crm1Service {
       {
         id: '90000000-0000-4000-8000-000000000004',
         contactId: '00000000-0000-4000-8000-040000000000',
-        status: 'Closed',
+        status: 'Closed' as const,
         sourceSystem: 'migration',
         sourceId: 'lead-04',
         createdAt: new Date(baseTime.getTime() + 40000),
@@ -1208,38 +1648,104 @@ export class Crm1Service {
     ];
 
     for (const l of leadsData) {
-      await this.db.insert(crm1Leads).values(l).onConflictDoNothing();
+      this.memLeads.set(l.id, {
+        id: l.id,
+        name: `Lead ${l.id.substring(0, 8)}`,
+        email: `${l.id.substring(0, 8)}@clearshift.synthetic`,
+        status: l.status,
+        contactId: l.contactId,
+        sourceSystem: l.sourceSystem,
+        sourceId: l.sourceId,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+      });
+
+      if (!this.inMemory && this.db) {
+        await this.db.insert(crm1Leads).values(l).onConflictDoNothing();
+      }
     }
 
     // 4. Import batch & rejects
     const batch1Uuid = toUuid('batch-contacts-01');
-    await this.db
-      .insert(crm1ImportBatches)
-      .values({
-        id: batch1Uuid,
-        sourceSystem: 'legacy_csv',
-        status: 'completed',
-        loadedCount: 98,
-        rejectedCount: 2,
-        createdAt: new Date(baseTime.getTime() + 5000),
-        updatedAt: new Date(baseTime.getTime() + 60000),
-        completedAt: new Date(baseTime.getTime() + 60000),
-      })
-      .onConflictDoNothing();
-
     const batch2Uuid = toUuid('batch-companies-01');
-    await this.db
-      .insert(crm1ImportBatches)
-      .values({
-        id: batch2Uuid,
-        sourceSystem: 'legacy_erp',
-        status: 'processing',
-        loadedCount: 45,
-        rejectedCount: 0,
-        createdAt: new Date(baseTime.getTime() + 70000),
-        updatedAt: new Date(baseTime.getTime() + 70000),
-      })
-      .onConflictDoNothing();
+
+    this.memImportRuns.set(batch1Uuid, {
+      id: batch1Uuid,
+      batchId: 'batch-contacts-01',
+      module: 'crm-1',
+      status: 'completed',
+      recordsIn: 100,
+      recordsOut: 98,
+      recordsRejected: 2,
+      startedAt: new Date(baseTime.getTime() + 5000),
+      completedAt: new Date(baseTime.getTime() + 60000),
+      metadata: { sourceSystem: 'legacy_csv' },
+      createdAt: new Date(baseTime.getTime() + 5000),
+      updatedAt: new Date(baseTime.getTime() + 60000),
+    });
+    this.memImportRuns.set('batch-contacts-01', this.memImportRuns.get(batch1Uuid)!);
+    this.batchReports.set('batch-contacts-01', {
+      batchId: 'batch-contacts-01',
+      module: 'crm-1',
+      step: 'load',
+      status: 'COMPLETED',
+      totalRecords: 100,
+      attemptedRecords: 100,
+      committedRecords: 98,
+      failedRecords: 2,
+      chunksProcessed: 1,
+      chunkSize: 500,
+      failureRate: 0.02,
+      haltReason: null,
+      committedReceipts: [],
+      failedRows: [],
+      executedAt: new Date(baseTime.getTime() + 60000),
+    });
+
+    this.memImportRuns.set(batch2Uuid, {
+      id: batch2Uuid,
+      batchId: 'batch-companies-01',
+      module: 'crm-1',
+      status: 'running',
+      recordsIn: 45,
+      recordsOut: 45,
+      recordsRejected: 0,
+      startedAt: new Date(baseTime.getTime() + 70000),
+      completedAt: null,
+      metadata: { sourceSystem: 'legacy_erp' },
+      createdAt: new Date(baseTime.getTime() + 70000),
+      updatedAt: new Date(baseTime.getTime() + 70000),
+    });
+    this.memImportRuns.set('batch-companies-01', this.memImportRuns.get(batch2Uuid)!);
+
+    if (!this.inMemory && this.db) {
+      await this.db
+        .insert(crm1ImportBatches)
+        .values({
+          id: batch1Uuid,
+          sourceSystem: 'legacy_csv',
+          status: 'completed',
+          loadedCount: 98,
+          rejectedCount: 2,
+          createdAt: new Date(baseTime.getTime() + 5000),
+          updatedAt: new Date(baseTime.getTime() + 60000),
+          completedAt: new Date(baseTime.getTime() + 60000),
+        })
+        .onConflictDoNothing();
+
+      await this.db
+        .insert(crm1ImportBatches)
+        .values({
+          id: batch2Uuid,
+          sourceSystem: 'legacy_erp',
+          status: 'processing',
+          loadedCount: 45,
+          rejectedCount: 0,
+          createdAt: new Date(baseTime.getTime() + 70000),
+          updatedAt: new Date(baseTime.getTime() + 70000),
+        })
+        .onConflictDoNothing();
+    }
 
     const rejectsData = [
       {
@@ -1263,7 +1769,19 @@ export class Crm1Service {
     ];
 
     for (const r of rejectsData) {
-      await this.db.insert(crm1ImportRejects).values(r).onConflictDoNothing();
+      this.memRejects.set(r.id, {
+        id: r.id,
+        batchId: 'batch-contacts-01',
+        module: 'crm-1',
+        rowIndex: r.sourceRow,
+        errorCode: r.reasonCode,
+        errorMessage: r.message,
+        rawPayloadHash: `hash-row-${r.sourceRow}-reject`,
+        createdAt: r.createdAt,
+      });
+      if (!this.inMemory && this.db) {
+        await this.db.insert(crm1ImportRejects).values(r).onConflictDoNothing();
+      }
     }
   }
 
@@ -1310,7 +1828,19 @@ export class Crm1Service {
   public async evaluateContactDuplicate(
     candidate: ContactCandidate
   ): Promise<DuplicateEvaluationResult> {
-    const existingRows = await this.db
+    if (this.inMemory) {
+      const existingRows = Array.from(this.memContacts.values()).map((c) => ({
+        id: c.id,
+        goldenId: c.goldenId,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        phone: c.phone,
+      }));
+      return evaluateContactDuplicate(candidate, existingRows);
+    }
+
+    const existingRows = await this.db!
       .select({
         id: crm1Contacts.id,
         goldenId: crm1Contacts.goldenId,
@@ -1327,7 +1857,16 @@ export class Crm1Service {
   public async evaluateCompanyDuplicate(
     candidate: CompanyCandidate
   ): Promise<CompanyDuplicateEvaluationResult> {
-    const existingRows = await this.db
+    if (this.inMemory) {
+      const existingRows = Array.from(this.memCompanies.values()).map((c) => ({
+        id: c.id,
+        name: c.name,
+        taxNumber: c.taxNumber,
+      }));
+      return evaluateCompanyDuplicate(candidate, existingRows);
+    }
+
+    const existingRows = await this.db!
       .select({
         id: crm1Companies.id,
         name: crm1Companies.name,
@@ -1361,5 +1900,31 @@ export class Crm1Service {
 
   public resetBatchReports(): void {
     this.batchReports.clear();
+  }
+
+  public clear(): void {
+    this.memCompanies.clear();
+    this.memContacts.clear();
+    this.memLeads.clear();
+    this.memImportRuns.clear();
+    this.memRejects.clear();
+    this.batchReports.clear();
+    this.duplicateQueue = new DuplicateReviewQueue();
+  }
+
+  public snapshotState(): {
+    contacts: Map<string, Contact>;
+    companies: Map<string, Company>;
+    leads: Map<string, Lead>;
+    importRuns: Map<string, Crm1ImportRun>;
+    rejects: Map<string, Crm1Reject>;
+  } {
+    return {
+      contacts: new Map(this.memContacts),
+      companies: new Map(this.memCompanies),
+      leads: new Map(this.memLeads),
+      importRuns: new Map(this.memImportRuns),
+      rejects: new Map(this.memRejects),
+    };
   }
 }

@@ -1,14 +1,31 @@
 import { randomUUID } from 'node:crypto';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { redactSensitiveObject, maskSensitiveLog } from '../policies/masking.js';
+import { AuditService, InMemoryAuditRepository, type AuditRecord as CoreAuditRecord, type IAuditRepository } from '@cs/core';
+import { redactSensitiveObject } from '../policies/masking.js';
 
-let cachedAuditTable: any = null;
-async function getAuditTable(): Promise<any> {
-  if (!cachedAuditTable) {
-    const dbModule = await import('@cs/db');
-    cachedAuditTable = dbModule.audit;
-  }
-  return cachedAuditTable;
+export const CRM3_AUDIT_ACTIONS = {
+  TICKET_CREATED: 'ticket.created',
+  TICKET_UPDATED: 'ticket.updated',
+  NOTE_ADDED: 'note.added',
+  TICKET_IMPORTED: 'ticket.imported',
+  LOAD_REQUESTED: 'load.requested',
+  LOAD_FINISHED: 'load.finished',
+} as const;
+
+export type Crm3AuditAction = (typeof CRM3_AUDIT_ACTIONS)[keyof typeof CRM3_AUDIT_ACTIONS];
+
+/** Fields whose values may hold customer free text; audit records only that they changed. */
+const FREE_TEXT_FIELDS = new Set(['subject', 'noteText', 'note', 'text', 'customerEmail', 'contactEmail', 'contactName']);
+
+export interface Crm3AuditEntry {
+  actor: string;
+  action: Crm3AuditAction | string;
+  targetEntity: 'ticket' | 'note' | 'import_batch' | string;
+  targetId?: string | undefined;
+  correlationId: string;
+  batchId?: string | undefined;
+  result?: 'success' | 'failure' | 'rejected' | 'halted' | undefined;
+  changes?: Record<string, { from: unknown; to: unknown }> | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface AuditEventInput {
@@ -35,23 +52,59 @@ export interface AuditRecord {
   createdAt: Date;
 }
 
-/**
- * CRM-3 Audit Service
- * Emits append-only audit events capturing actor, action, timestamp, entity, and correlation.
- * Automatically redacts sensitive fields (passwords, tokens, bank details, salary).
- * Never records raw rows.
- */
+export function redactChanges(
+  changes: Record<string, { from: unknown; to: unknown }>
+): Record<string, { from: unknown; to: unknown } | '[changed]'> {
+  const result: Record<string, { from: unknown; to: unknown } | '[changed]'> = {};
+  for (const [field, change] of Object.entries(changes)) {
+    result[field] = FREE_TEXT_FIELDS.has(field) ? '[changed]' : change;
+  }
+  return result;
+}
+
 export class Crm3AuditService {
   private inMemoryLedger: AuditRecord[] = [];
-  private db?: NodePgDatabase | undefined;
+  private readonly audit: AuditService;
 
-  constructor(db?: NodePgDatabase | undefined) {
-    this.db = db;
+  constructor(private readonly repo: IAuditRepository = new InMemoryAuditRepository()) {
+    this.audit = new AuditService(repo);
   }
 
-  /**
-   * Records an audit event immutably.
-   */
+  public async record(entry: Crm3AuditEntry): Promise<CoreAuditRecord> {
+    const metadata: Record<string, unknown> = { ...(entry.metadata ?? {}) };
+    for (const key of Object.keys(metadata)) {
+      if (FREE_TEXT_FIELDS.has(key)) delete metadata[key];
+    }
+    if (entry.changes) {
+      metadata['changes'] = redactChanges(entry.changes);
+    }
+
+    const legacyRec: AuditRecord = {
+      id: randomUUID(),
+      actor: entry.actor || 'system',
+      action: entry.action,
+      entity: entry.targetEntity,
+      entityId: entry.targetId ?? null,
+      batchId: entry.batchId ?? null,
+      result: entry.result ?? 'success',
+      diffRedacted: entry.changes ? (redactSensitiveObject(entry.changes) as Record<string, unknown>) : null,
+      metadata,
+      createdAt: new Date(),
+    };
+    this.inMemoryLedger.push(legacyRec);
+
+    return this.audit.log({
+      actor: entry.actor,
+      action: entry.action,
+      targetEntity: entry.targetEntity,
+      targetId: entry.targetId,
+      correlationId: entry.correlationId,
+      batchId: entry.batchId,
+      result: entry.result === 'failure' ? 'failure' : 'success',
+      metadata,
+    });
+  }
+
   public async logEvent(input: AuditEventInput): Promise<AuditRecord> {
     const sanitizedDiff = input.diff
       ? (redactSensitiveObject(input.diff) as Record<string, unknown>)
@@ -73,44 +126,10 @@ export class Crm3AuditService {
       createdAt: new Date(),
     };
 
-    // Store in in-memory ledger
     this.inMemoryLedger.push(record);
-
-    // If database connection is active and valid UUID, persist to platform audit table
-    if (this.db) {
-      try {
-        const uuidRegex =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        const validEntityId =
-          input.entityId && uuidRegex.test(input.entityId) ? input.entityId : null;
-
-        const auditTable = await getAuditTable();
-        await (this.db as any).insert(auditTable).values({
-          id: record.id,
-          actor: record.actor,
-          action: record.action,
-          entity: record.entity,
-          entityId: validEntityId,
-          diffRedacted: {
-            ...record.diffRedacted,
-            ...(record.batchId ? { batchId: record.batchId } : {}),
-            result: record.result,
-          },
-          createdAt: record.createdAt,
-        });
-      } catch (err: any) {
-        // Log safe message without throwing to prevent breaking business transactions
-        const safeMsg = maskSensitiveLog(`Failed to persist audit to DB: ${err.message}`);
-        console.error(safeMsg);
-      }
-    }
-
     return record;
   }
 
-  /**
-   * Retrieves audit records matching optional filters.
-   */
   public getAuditEvents(filters?: {
     entity?: string | undefined;
     entityId?: string | undefined;
@@ -128,11 +147,15 @@ export class Crm3AuditService {
     });
   }
 
-  /**
-   * Clears in-memory ledger (primarily for test resets).
-   */
+  public async query(filter?: Parameters<AuditService['query']>[0]): Promise<CoreAuditRecord[]> {
+    return this.audit.query(filter);
+  }
+
   public resetLedger(): void {
     this.inMemoryLedger = [];
+    if ('clear' in this.repo && typeof (this.repo as any).clear === 'function') {
+      (this.repo as any).clear();
+    }
   }
 }
 

@@ -163,6 +163,7 @@ export class Crm1TargetAdapter implements TargetAdapter<ImportRowInput | Record<
           } else {
             const companyData = validationResult.data;
             const company = await this.service.createCompany({
+              ...(companyData['id'] ? { id: String(companyData['id']) } : {}),
               name: String(companyData['name']),
               taxNumber: String(companyData['taxNumber'] ?? `TAX-${randomUUID().substring(0, 8).toUpperCase()}`),
               email: companyData['email'] ? String(companyData['email']) : undefined,
@@ -170,7 +171,7 @@ export class Crm1TargetAdapter implements TargetAdapter<ImportRowInput | Record<
               address: companyData['address'] ? String(companyData['address']) : undefined,
               sourceSystem,
               sourceId,
-            });
+            } as any);
             targetId = company.id;
             outcomeKind = 'created';
           }
