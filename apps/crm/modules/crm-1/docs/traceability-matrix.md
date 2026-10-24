@@ -26,10 +26,11 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | Requirement ID | Requirement Description | Priority | Source Authority | Domain Layer | Test Type | Automated Test Suite & File Location | Verification Status |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- | :---: |
 | **`FR-CRM1-01`** | Show contact list with case-insensitive search by name and email, bounded paging (default 25, max 100). | **Must** | SDS CRM v2.0 §4.2 | API / Web | Contract | `apps/crm/modules/crm-1/tests/api/list.test.ts`<br>`CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])` | **VERIFIED (Green)** |
-| **`FR-CRM1-02`** | Create and edit contact: first name, last name, email, phone, address, company link, lead status. | **Must** | SDS CRM v2.0 §4.2 | API / Domain | Regression | `apps/crm/modules/crm-1/tests/api/mutations.test.ts`<br>`CRM-1 mutation API` | **VERIFIED (Green)** |
-| **`FR-CRM1-03`** | Create and edit flat company: name, tax number, email, phone, address. | **Must** | SDS CRM v2.0 §4.2 | API / Domain | Regression | `apps/crm/modules/crm-1/tests/api/mutations.test.ts`<br>`CRM-1 mutation API` | **VERIFIED (Green)** |
+| **`FR-CRM1-02`** | Create and edit contact: first name, last name, email, phone, address, company link, lead status. | **Must** | SDS CRM v2.0 §4.2 | API / Web | Regression | `apps/crm/modules/crm-1/tests/api/mutations.test.ts`<br>`apps/crm/modules/crm-1/web/tests/ContactForm.test.tsx` | **VERIFIED (Green)** |
+| **`FR-CRM1-03`** | Create and edit flat company: name, tax number, email, phone, address. | **Must** | SDS CRM v2.0 §4.2 | API / Web | Regression | `apps/crm/modules/crm-1/tests/api/mutations.test.ts`<br>`apps/crm/modules/crm-1/web/tests/CompanyForm.test.tsx` | **VERIFIED (Green)** |
 | **`FR-CRM1-04`** | Link contact to one company (optional field, restrict on delete). | **Must** | SDS CRM v2.0 §4.2 | Database | Schema | `apps/crm/modules/crm-1/tests/db/schema.test.ts`<br>`CRM-1 Drizzle schema constraints` | **VERIFIED (Green)** |
-| **`FR-CRM1-05`** | Lead status workflow follow allowlist: `New -> Working -> Qualified -> Closed`. Regressions return 422. | **Must** | SDS CRM v2.0 §4.2 | Domain | Unit | `apps/crm/modules/crm-1/tests/domain/relationships.test.ts`<br>`CRM-1 Relationships & Domain Invariants` | **VERIFIED (Green)** |
+| **`FR-CRM1-05`** | Lead status workflow follow allowlist: `New -> Working -> Qualified -> Closed`. Regressions return 422. | **Must** | SDS CRM v2.0 §4.2 | Domain / Web | Unit | `apps/crm/modules/crm-1/tests/domain/relationships.test.ts`<br>`apps/crm/modules/crm-1/web/tests/LeadForm.test.tsx` | **VERIFIED (Green)** |
+| **`FR-CRM1-05-01`** | Complete human-operated create/edit forms and detail workflows for Contacts, Companies, Leads, and Import/Reject views with field-level validation and back-to-list navigation. | **Must** | Issue #10 [CRM1-05] | Web / UI | Component / Contract | `apps/crm/modules/crm-1/web/tests/DetailPages.test.tsx`<br>`apps/crm/modules/crm-1/web/tests/ContactForm.test.tsx` | **VERIFIED (Green)** |
 | **`FR-CRM1-06`** | Import screen / API: upload CSV/stream, profile report, run batch, watch status. | **Must** | SDS CRM v2.0 §4.2 | Migration | Integration | `apps/crm/modules/crm-1/tests/services/crm1-mutation.service.test.ts`<br>`CRM-1 mutation service & idempotent imports` | **VERIFIED (Green)** |
 | **`FR-CRM1-07`** | Reject list: row-level failures with reason code and privacy-safe message, downloadable as CSV. | **Must** | SDS CRM v2.0 §4.2 | API | Contract | `apps/crm/modules/crm-1/tests/api/list.test.ts`<br>`CRM-1 List/Read API & Contracts (Issue #7 / [CRM1-02])` | **VERIFIED (Green)** |
 | **`FR-CRM1-08`** | List screens render accessible empty state when dataset is empty ("No contacts yet — import a CSV file"). | **Should** | SDS CRM v2.0 §4.2 | Web | Unit | `apps/crm/modules/crm-1/tests/web/routes.test.ts`<br>`CRM-1 Frontend Route Registration & Layout Shell` | **VERIFIED (Green)** |
@@ -119,9 +120,13 @@ apps/crm/modules/crm-1/tests/
     ├── mapping-templates-page.test.ts       ( 4 tests) — Mapping templates page component & route
     ├── routes.test.ts                       (14 tests) — Frontend route guards, layout shell, ARIA landmarks
     ├── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
-    └── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
+    ├── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
+    ├── ContactForm.test.tsx                 (10 tests) — ContactForm create/edit, client validation, dirty confirmation (Issue #10 / [CRM1-05])
+    ├── CompanyForm.test.tsx                 ( 7 tests) — CompanyForm create/edit, taxNumber formatting, flat company invariant (Issue #10 / [CRM1-05])
+    ├── LeadForm.test.tsx                    ( 7 tests) — LeadForm create/edit, status transition validation (Issue #10 / [CRM1-05])
+    └── DetailPages.test.tsx                 ( 4 tests) — Contact, Company, Lead, Import batch detail pages & back links (Issue #10 / [CRM1-05])
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 443 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 471 tests (100% Green, 0 Failures)
 ```
 
 ---
@@ -149,3 +154,6 @@ Total Automated Test Cases: 443 tests (100% Green, 0 Failures)
 * [x] **10% Failure Rate Stop Policy:** Batch execution stops immediately when failure rate exceeds 10% after 50 attempted rows.
 * [x] **Durable Partial Commits:** Transition to `STOPPED_EXCESSIVE_FAILURES` preserves all committed rows and receipts without rollback sagas.
 * [x] **Zero Duplicate Platform Infra:** Reuses shared normalizers and registry from `@cs/core`.
+* [x] **Human-Operated V1 Screens (CRM1-05):** Complete create/edit/detail workflows for contacts, companies, leads, and import batches linking back to their list context.
+* [x] **Field-Level Contract Validation:** Field labels, helper text, and validation errors aligned with OpenAPI contract; client validation improves UX while server validation remains authoritative.
+* [x] **Read-Only / Protected Invariants:** Golden ID, source metadata, and consent state cannot be mutated through standard UI forms; flat companies strictly preserved.

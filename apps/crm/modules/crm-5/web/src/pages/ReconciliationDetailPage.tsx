@@ -4,6 +4,7 @@ import { Crm5ApiClient, crm5Api } from '../api/crm-5.js';
 
 export interface ReconciliationDetailPageProps {
   batchId: string;
+  initialReport?: ReconciliationReport;
   apiClient?: Crm5ApiClient;
   onBackToList?: () => void;
 }
@@ -16,14 +17,16 @@ export interface ReconciliationDetailPageProps {
  */
 export const ReconciliationDetailPage: React.FC<ReconciliationDetailPageProps> = ({
   batchId,
+  initialReport,
   apiClient = crm5Api,
   onBackToList,
 }) => {
-  const [report, setReport] = useState<ReconciliationReport | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [report, setReport] = useState<ReconciliationReport | null>(initialReport ?? null);
+  const [isLoading, setIsLoading] = useState<boolean>(!initialReport);
   const [error, setError] = useState<string | null>(null);
 
   const loadReport = useCallback(async () => {
+    if (initialReport && !error) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -34,11 +37,13 @@ export const ReconciliationDetailPage: React.FC<ReconciliationDetailPageProps> =
     } finally {
       setIsLoading(false);
     }
-  }, [batchId, apiClient]);
+  }, [batchId, apiClient, initialReport, error]);
 
   useEffect(() => {
-    loadReport();
-  }, [loadReport]);
+    if (!initialReport) {
+      loadReport();
+    }
+  }, [loadReport, initialReport]);
 
   if (isLoading) {
     return (
