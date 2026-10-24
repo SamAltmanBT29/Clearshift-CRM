@@ -33,9 +33,16 @@ export const CRM4_ENDPOINT_CAPABILITIES: Record<Crm4EndpointKey, CapabilityType>
 
   MEMBERS_LIST: Capabilities.MODULE_READ,
   MEMBERS_CREATE: Capabilities.MODULE_WRITE,
+  MEMBERS_UPDATE: Capabilities.MODULE_WRITE,
 
   CONSENTS_READ: Capabilities.MODULE_READ,
   CONSENTS_SET: Capabilities.MODULE_WRITE,
+
+  MAPPINGS_READ: Capabilities.MODULE_READ,
+  MAPPINGS_EXECUTE: Capabilities.MODULE_WRITE,
+
+  DUPLICATES_DETECT: Capabilities.MODULE_READ,
+  DUPLICATES_RESOLVE: Capabilities.MODULE_WRITE,
 };
 
 /**
@@ -47,6 +54,12 @@ export const IMMUTABLE_MUTATION_FIELDS = [
   'list_id',
   'createdAt',
   'created_at',
+  'updatedAt',
+  'updated_at',
+  'campaignCount',
+  'campaign_count',
+  'memberCount',
+  'member_count',
   'id',
 ] as const;
 
