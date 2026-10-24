@@ -33,6 +33,8 @@ export default defineConfig({
       { find: /^@clearshift\/contracts\/crm-1$/, replacement: resolve(__dirname, './packages/contracts/src/crm-1.ts') },
       { find: /^@clearshift\/contracts\/crm-2$/, replacement: resolve(__dirname, './packages/contracts/src/crm-2.ts') },
       { find: /^@clearshift\/contracts\/crm-3$/, replacement: resolve(__dirname, './packages/contracts/src/crm-3.ts') },
+      { find: /^@clearshift\/contracts\/crm-3-events$/, replacement: resolve(__dirname, './packages/contracts/src/crm-3-events.ts') },
+      { find: /^@clearshift\/contracts\/crm-3-mock$/, replacement: resolve(__dirname, './packages/contracts/src/crm-3-mock.ts') },
       { find: /^@clearshift\/database$/, replacement: resolve(__dirname, './packages/database/src/index.ts') },
       { find: /^@clearshift\/contracts$/, replacement: resolve(__dirname, './packages/contracts/src/index.ts') },
       { find: /^@clearshift\/ui$/, replacement: resolve(__dirname, './packages/ui/src/index.ts') },
