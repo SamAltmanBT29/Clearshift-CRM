@@ -281,6 +281,39 @@ State is bidirectionally synchronized with browser URL query parameters:
 - **Deep Linking**: Preserves exact filter and sorting states.
 - **Pagination Boundary Invariant**: Any mutation to search input or faceted filters immediately resets `page` to 1.
 
+---
+
+## 7. UI Presentation States & Error Sanitization Specification (CRM2-19)
+
+### 7.1 Deterministic State Dispatch Hierarchy
+All collection views, data tables, and page controllers across CRM-2 evaluate presentation states in a deterministic 5-level hierarchy:
+1. **Access Denied (403 Forbidden)**: Checked first. If HTTP status is 403 or `isAccessDenied` is true, renders `AccessDeniedView` with RBAC capability context.
+2. **API Error Banner (5xx/4xx Failures)**: If error is present and not 403, renders `ErrorAlert` with sanitized messaging and retry action.
+3. **Animated Table Skeleton (Loading)**: If initial data fetching is in progress (`isLoading` / `loading`), renders `TableSkeleton` with shimmer placeholders.
+4. **Zero-Data Empty State**: If data collection has zero records (`data.length === 0` or `isEmpty`), renders `EmptyState` with call-to-action button or filter reset.
+5. **Populated Data Table**: Renders loaded rows with sorting, selection, and pagination controls.
+
+### 7.2 Standard Shared Component Specifications
+- **TableSkeleton (`TableSkeleton.tsx`)**:
+  - Configurable `rowCount` (default 5) and `columnCount` (default 6).
+  - WAI-ARIA compliance: `role="status"`, `aria-busy="true"`, `aria-live="polite"`.
+  - Accessible screen-reader text (`.cs-sr-only`) announcing loading status.
+  - CSS shimmer animation (`.cs-skeleton-shimmer`, `.cs-table-skeleton-cell`).
+- **EmptyState (`EmptyState.tsx`)**:
+  - Contextual icon, title, description, and primary CTA (`.cs-empty-cta-btn`).
+  - Active filter support (`hasActiveFilters=true`): renders `.cs-empty-filter-state` container with "Reset All Filters" action.
+- **ErrorAlert (`ErrorAlert.tsx` & `sanitizeErrorMessage`)**:
+  - Conforms to standard ClearShift error envelope `{ code, message, details }`.
+  - WAI-ARIA compliance: `role="alert"`, `aria-live="assertive"`.
+  - Security invariant: Raw stack traces (`at ...`), local filesystem paths (`/Users/`, `/home/`, `node_modules/`), and connection strings are masked. Maximum message length capped at 240 chars.
+  - Actionable retry button (`onRetry`) and optional dismiss button (`onDismiss`).
+- **AccessDeniedView (`AccessDeniedView.tsx`)**:
+  - Renders 403 Forbidden badge (`.cs-access-denied-badge`), required capability (default `module.read` or `crm2.deals.read`), required role, and current user role.
+  - Keyboard-accessible return/home navigation action.
+
+### 7.3 Automated Verification Suites (CRM2-19)
+- `apps/crm/modules/crm-2/tests/web/ui-states.test.ts`: Automated test suite (48 tests) covering all 4 presentation states, error sanitization security masking, HTML controller state rendering, and page-level integration across `DealsListPage`, `QuotesListPage`, `PipelineOverviewPage`, `DataTable`, and `DealsTable`.
+
 
 
 

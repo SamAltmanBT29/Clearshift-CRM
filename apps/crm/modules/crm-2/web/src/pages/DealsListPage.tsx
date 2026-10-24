@@ -261,7 +261,7 @@ export function DealsListPage({
   // Fetch deals from server
   const loadDeals = useCallback(async () => {
     // If external data is supplied, do not fetch
-    if (dataProp !== undefined) return;
+    if (dataProp !== undefined || isEmptyProp) return;
 
     setIsLoading(true);
     setError(null);
@@ -404,9 +404,9 @@ export function DealsListPage({
         activePills.length > 0;
 
   const displayData = isEmptyProp ? [] : dataProp ?? deals;
-  const loading = isLoadingProp ?? isLoading;
-  const accessForbidden = isAccessDeniedProp || httpStatus === 403 || error?.isPermissionDenied;
-  const activeError = errorProp || error;
+  const loading = isLoadingProp !== undefined ? isLoadingProp : (dataProp !== undefined || isEmptyProp ? false : isLoading);
+  const accessForbidden = isAccessDeniedProp || httpStatus === 403 || error?.isPermissionDenied || simulatePermissionDenied;
+  const activeError = errorProp !== undefined ? errorProp : (simulateError ? 'An unexpected system error occurred' : error);
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 cs-page-container">
@@ -583,3 +583,6 @@ export function DealsListPage({
     </div>
   );
 }
+
+export default DealsListPage;
+
