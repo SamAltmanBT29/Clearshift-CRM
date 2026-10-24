@@ -656,7 +656,7 @@ export class Crm1Service {
         );
         if (existing) return existing;
       }
-      const id = randomUUID();
+      const id = (input as any).id ?? randomUUID();
       const now = new Date();
       const company: Company = {
         id,
@@ -1900,5 +1900,31 @@ export class Crm1Service {
 
   public resetBatchReports(): void {
     this.batchReports.clear();
+  }
+
+  public clear(): void {
+    this.memCompanies.clear();
+    this.memContacts.clear();
+    this.memLeads.clear();
+    this.memImportRuns.clear();
+    this.memRejects.clear();
+    this.batchReports.clear();
+    this.duplicateQueue = new DuplicateReviewQueue();
+  }
+
+  public snapshotState(): {
+    contacts: Map<string, Contact>;
+    companies: Map<string, Company>;
+    leads: Map<string, Lead>;
+    importRuns: Map<string, Crm1ImportRun>;
+    rejects: Map<string, Crm1Reject>;
+  } {
+    return {
+      contacts: new Map(this.memContacts),
+      companies: new Map(this.memCompanies),
+      leads: new Map(this.memLeads),
+      importRuns: new Map(this.memImportRuns),
+      rejects: new Map(this.memRejects),
+    };
   }
 }

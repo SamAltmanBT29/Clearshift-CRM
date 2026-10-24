@@ -78,12 +78,13 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-13-05`** | Batch execution endpoints `POST /batches/execute-load` and `GET /batches/:batchId/report` enforced by RBAC (`KIT_RUN`, `KIT_READ`) and BatchLoaderPage operator UI. | **Must** | Issue #106 [CRM1-13] / KIT-12 | API / Web | Contract / Web | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`apps/crm/modules/crm-1/tests/web/batch-loader-page.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM1-26`** | Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment. | **Must** | SDS ClearShift CRM v2.0 §4.2, §4.11, §4.12 & Issue #119 [CRM1-26] | Migration | Unit | `apps/crm/modules/crm-1/tests/kit/profiler.test.ts`<br>`CRM-1 Profiling Configuration & Manifest Assertions` | **VERIFIED (Green)** |
 | **`FR-CRM1-29`** | Module contract, regression and browser test suite: OpenAPI 3.1.0 conformance, multi-browser simulated journeys, and zero flaky tests. | **Must** | Issue #122 [CRM1-29] / SDS §4.1, §4.2, §7.1 | API / Web / QA | Contract / Regression | `apps/crm/modules/crm-1/tests/api/module-contract-regression.test.ts`<br>`apps/crm/modules/crm-1/tests/contracts/openapi.test.ts`<br>`apps/crm/modules/crm-1/tests/web/browser-journey.test.tsx` | **VERIFIED (Green)** |
+| **`FR-CRM1-30`** | Module reconciliation proof and Gate G4 evidence pack: exact row accounting (source = loaded + rejected + merged + skipped, unaccounted = 0), relational link integrity, durable receipt completeness, and signed acceptance archive. | **Must** | Issue #123 [CRM1-30] / SDS §4.2, §4.11-4.12 | Migration / QA | Acceptance / Regression | `apps/crm/modules/crm-1/tests/domain/reconciliation-acceptance.test.ts`<br>`CRM-1 Module Reconciliation Proof & Gate G4 Acceptance Suite` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 30 test files:
+The CRM-1 automated test suite comprises 31 test files:
 
 ```
 apps/crm/modules/crm-1/tests/
@@ -103,6 +104,7 @@ apps/crm/modules/crm-1/tests/
 │   ├── batch-loader.test.ts                 (10 tests) — Chunking 500 rows, bounded backoff, 10% halt policy, durable partial commits (Issue #106 / [CRM1-13])
 │   ├── duplicate-policy.test.ts             (27 tests) — Exact key registry, candidate detector, review queue, no fuzzy auto-merge (Issue #105 / [CRM1-12])
 │   ├── qa-g1-design.test.ts                 (15 tests) — Data dictionary, ERD, traceability, dirty pack
+│   ├── reconciliation-acceptance.test.ts    (14 tests) — Exact row accounting (source=loaded+rejected+merged+skipped, unaccounted=0), link integrity, receipt completeness (Issue #123 / [CRM1-30])
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
 ├── fixtures/
 │   └── dirty-pack.test.ts                   (31 tests) — 100-row synthetic pack, manifest outcomes, conservation equation & edge cases (Issue #118 / [CRM1-25])
@@ -133,16 +135,19 @@ apps/crm/modules/crm-1/tests/
     ├── LeadForm.test.tsx                    ( 7 tests) — LeadForm create/edit, status transition validation (Issue #10 / [CRM1-05])
     └── DetailPages.test.tsx                 ( 4 tests) — Contact, Company, Lead, Import batch detail pages & back links (Issue #10 / [CRM1-05])
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 533 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 547 tests (100% Green, 0 Failures)
 ```
 
 ---
 
-## 4. Gate G2 & G3 Sign-Off Verification
+## 4. Gate G2, G3 & G4 Sign-Off Verification
 
 * [x] **Zero Real Data:** 100% synthetic generation verified with RFC-2606 reserved domains.
 * [x] **Canonical Dirty Data Pack (100 rows):** Seeded anomalies and deterministic manifest published in fixtures and sample-data.
 * [x] **Conservation Invariant:** Exactly balanced `source = loaded + rejected + merged + skipped` (`unaccounted = 0`).
+* [x] **Relational Link Integrity:** Validated across all foreign keys, status allowlists, Golden IDs, and flat company constraints.
+* [x] **Durable Receipt Completeness:** 100% receipt completeness verified without duplicate mutations.
+* [x] **Gate G4 Acceptance Pack:** Compiled and signed in `apps/crm/modules/crm-1/docs/gate-g4-acceptance-pack.md`.
 * [x] **Deterministic Key Registration:** Exact normalized keys registered for email, phone+name, tax number, phone, and SKU.
 * [x] **Deterministic Duplicate Grouping:** Identical keys grouped without non-deterministic heuristics.
 * [x] **Zero Fuzzy Auto-Merge:** Auto-merging strictly prohibited in V1; raises 422 `AUTO_MERGE_FORBIDDEN`.
