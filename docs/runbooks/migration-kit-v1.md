@@ -572,82 +572,108 @@ Upon completing Step 4:
 
 ---
 
-## 11. Step 6: Shared Target Validation & Post-Load Integrity Engine (KIT-06)
+## 11. Step 5: Dry-Run Planner with Strict No-Target-Mutation Guarantee (KIT-07)
 
-**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.8 (FR-VA-01–04), §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #73 `[KIT-06]`.
+### 11.1 Purpose & Architectural Role
+The **Dry-Run Planner** (`DryRunPlanner` in `apps/migration-kit/src/load/dry-run.ts`) executes Step 5 of the ClearShift Migration Kit pipeline (SDS §§3-4, §4.8, §§11.1-11.9; Project Plan v3.0 §§9, 11, 17; Decision C9).
 
-### 11.1 Pipeline Stage Overview
+It simulates the entire loading procedure without altering target business tables or creating target import receipts. It classifies every mapped row into an exact terminal outcome, enforces the 10% error halt threshold policy, and produces a cryptographic dry-run plan token required as a mandatory precondition for Step 6 (Load).
 
-Step 6 (**Validate**) runs module-declared validation rules against ingested, cleaned, and loaded datasets to verify both business-level and database-level integrity before signoff and reconciliation.
+### 11.2 Strict No-Target-Mutation Guarantee (Non-Negotiable)
+- **Zero Target Mutations**: Dry-run executes zero `INSERT`, `UPDATE`, or `DELETE` statements on target domain tables (e.g., `crm1_contacts`, `crm1_companies`, `crm2_deals`).
+- **Zero Permanent Receipts**: Dry-run creates zero permanent records in target receipt tables (e.g., `crm1_import_receipts`, `crm5_import_receipts`).
+- **DB Snapshot Invariance**: Database snapshots of target tables and target receipts taken immediately before and after dry-run execution are 100% byte-for-byte and row-count identical.
+- **Runtime Target Mutation Guard**: Target adapter and repository facades are protected during dry-run with a security proxy that intercepts and aborts any target write attempt by throwing `DryRunTargetMutationForbiddenError`.
 
-```
-       [public.clean_crm] / Target Domain Records
-                           │
-                           ▼
-    ┌──────────────────────────────────────────────────────────────┐
-    │ Shared Target Validation Engine                              │
-    │ 1. Pre-Load Business Checks (Formats, Enums, Required)       │
-    │ 2. Post-Load Referential Link Integrity (Foreign Key Target) │
-    │ 3. Domain Rules (Freshness Timestamps, Cross-Field Balance)  │
-    │ 4. Deterministic Checksum & Failure Attribution             │
-    └──────────────────────┬───────────────────────────────────────┘
-                           │
-             ┌─────────────┴─────────────┐
-             ▼                           ▼
-      [All Rules Pass]            [Failures Detected]
-      - State: `validated`        - State: `failed`
-      - Emit `batch.validated`   - Reconciliation strictly BLOCKED
-      - Proceed to Step 7         - Detailed failure report with ruleId,
-                                    sourceRow, targetId, reasonCode
-```
+### 11.3 Exact Row Conservation Invariant
+Every single source row is deterministically evaluated and assigned exactly one planned terminal outcome:
+$$\text{total} = \text{planned\_loaded} + \text{planned\_rejected} + \text{planned\_merged} + \text{planned\_skipped}$$
+$$\text{unaccounted} = 0$$
 
-### 11.2 Typed Validation Rule Types
+- **`loaded`**: Valid, schema-compliant new row ready for insertion.
+- **`rejected`**: Fails target invariants, required fields, enum validation, or referential foreign keys.
+- **`merged`**: Matches an existing target golden ID / duplicate key or an intra-batch duplicate planned for non-destructive deduplication.
+- **`skipped`**: Filtered or ignored in accordance with module policy.
 
-The validation engine supports five standardized, typed rule categories:
+If $\text{unaccounted} \neq 0$, `assertDryRunConservation` throws `DryRunPreconditionError('CONSERVATION_VIOLATION')`.
 
-| Rule Type | Scope | Example | Behavior on Failure |
-| :--- | :---: | :--- | :--- |
-| **`required_field`** | Pre-Load | `CRM1-VAL-REQ-01`: `contacts.first_name` cannot be empty. | Fails row with `REQUIRED_FIELD_MISSING`. |
-| **`format`** | Pre-Load | `CRM1-VAL-FMT-01`: `contacts.email` must match RFC email regex. | Fails row with `INVALID_FORMAT`. |
-| **`enum`** | Pre-Load | `CRM1-VAL-ENUM-01`: `contacts.lead_status` in `['New', 'Working', 'Qualified', 'Closed']`. | Fails row with `INVALID_ENUM_VALUE`. |
-| **`relationship`** | Post-Load | `CRM1-VAL-REL-01`: `contacts.company_id` must exist in `crm1_companies`. | Fails row with `RELATIONSHIP_NOT_FOUND` (Link integrity error). |
-| **`domain`** | Pre/Post | `CRM1-VAL-DOM-01`: Non-unknown consent must have `consent_updated_at`. | Fails row with `DOMAIN_RULE_VIOLATION`. |
+### 11.4 Policy Evaluation & 10% Error Halt Threshold (Decision C9)
+In accordance with ClearShift Master Architecture Decision C9, migrations halt when the planned failure rate exceeds 10%:
+$$\text{failure\_rate} = \frac{\text{planned\_rejected}}{\text{total}}$$
 
-### 11.3 Strict Referential Link Integrity Gate
+- **Clean Datasets ($\text{failure\_rate} \le 10\%$)**:
+  - `policyPassed = true`, `canProceedToLoad = true`.
+  - Batch status transitions from `mapped` to `dry_run_passed`.
+  - Checkpoint advances to `dry_run_passed`.
+- **High-Error Datasets ($\text{failure\_rate} > 10\%$, including 40%-invalid fixtures)**:
+  - `policyPassed = false`, `canProceedToLoad = false`.
+  - Batch status transitions from `mapped` to `failed` with error code `POLICY_VIOLATION_THRESHOLD_EXCEEDED`.
+  - Checkpoint remains `mapped`.
+  - Real load execution is strictly blocked; calling `assertCanExecuteLoad` throws `DryRunPolicyViolationError`.
 
-A critical non-negotiable invariant of ClearShift data reliability:
-1. Every loaded record's external entity references (e.g. `order -> customer`, `deal -> contact`, `contact -> company`) are checked in post-load validation.
-2. If any link integrity failure is detected:
-   - The failure is explicitly recorded with `ruleId`, `sourceRow`, `targetId`, and reason `RELATIONSHIP_NOT_FOUND`.
-   - The validation report is marked `isValid: false`.
-   - The batch status in `public.kit_batches` transitions to `'failed'`.
-   - **Reconciliation & Signoff Gate:** `ValidationService.assertBatchCanReconcile()` strictly blocks execution of Step 7 (Reconcile). No batch with failed link integrity can be signed off as successful.
+### 11.5 Deterministic Token & Load Precondition Protocol
+To prevent stale, tampered, or mismatched dry-run plans from being executed in Step 6, `DryRunPlanner` computes a deterministic SHA-256 token:
+$$\text{token} = \text{SHA256}(\text{batchId} \mid \text{mappingChecksum} \mid \text{ruleVersion} \mid \text{targetBaselineHash} \mid \text{plannedCounts} \mid \text{policyConfig})$$
 
-### 11.4 Deterministic Output & Audit Trail
+Before Step 6 (Load) begins, the orchestrator invokes `assertCanExecuteLoad(plan, precondition)`:
+1. **Policy Check**: Asserts `plan.policyPassed === true` and `plan.canProceedToLoad === true`.
+2. **Token Check**: Asserts `precondition.token === plan.token`.
+3. **Target Baseline Drift Check**: Recomputes SHA-256 fingerprint of target tables. If target data changed since the dry-run, throws `DryRunPreconditionError('BASELINE_DRIFT')`.
+4. **Mapping Template Drift Check**: If mapping rules or template changed, throws `DryRunPreconditionError('MAPPING_CHANGED')`.
+5. **Rule Version Drift Check**: If rule version changed, throws `DryRunPreconditionError('RULE_VERSION_CHANGED')`.
+6. **Conservation Verification**: Confirms `unaccounted === 0`.
 
-- **Determinism:** Validation failures are always sorted by `sourceRow ASC`, then `ruleId ASC`, then `field ASC`.
-- **SHA-256 Checksum:** Every report calculates a cryptographic hash over the failure array. Repeated executions against the same dataset produce identical checksums.
-- **Outbox Event (`batch.validated`):**
-  ```json
-  {
-    "eventType": "batch.validated",
-    "aggregateType": "kit_batch",
-    "aggregateId": "BATCH_UUID",
-    "payload": {
-      "batch_id": "BATCH_UUID",
-      "module": "crm-1",
-      "total_checked": 500,
-      "validation_failures": 0,
-      "is_valid": true,
-      "checksum": "a3f5c7...",
-      "timestamp": "2026-10-23T22:30:00.000Z"
-    }
+### 11.6 Operational Procedures & CLI Verification
+
+#### Running Dry-Run via API:
+```http
+POST /api/v1/migration-kit/batches/BATCH_UUID/dry-run
+Content-Type: application/json
+
+{
+  "actor": "operator_parii",
+  "policyConfig": {
+    "maxFailureRate": 0.10
   }
-  ```
+}
+```
+
+#### Sample Dry-Run Plan Report Output:
+```json
+{
+  "planId": "3b294021-97b4-4b5f-9721-a47734891b98",
+  "batchId": "6c498320-1d84-48f1-94bb-12501e7492c1",
+  "module": "crm",
+  "targetEntity": "contacts",
+  "token": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "planVersion": "1.0.0",
+  "ruleVersion": "1.0.0",
+  "policyPassed": true,
+  "failureRate": 0.02,
+  "canProceedToLoad": true,
+  "plannedCounts": {
+    "total": 100,
+    "loaded": 95,
+    "rejected": 2,
+    "merged": 3,
+    "skipped": 0,
+    "unaccounted": 0
+  },
+  "targetWriteCalls": 0,
+  "targetReceiptsCreated": 0
+}
+```
+
+#### Step Ledger Verification:
+```sql
+SELECT step_number, step_name, from_status, to_status, records_in, records_out, records_rejected, metadata->>'token' AS dry_run_token
+FROM public.kit_batch_steps
+WHERE batch_id = 'BATCH_UUID' AND step_name = 'dry_run';
+```
 
 ---
 
-## 12. Step 5: Generic Target Adapter, Stable Idempotency & Import Receipts (KIT-08)
+## 12. Step 6: Generic Target Adapter, Stable Idempotency & Import Receipts (KIT-08)
 
 **Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #75 `[KIT-08]`.
 
@@ -718,4 +744,81 @@ Key invariants:
 Migration Kit operates under strict privilege separation (ADR-004 / Decision C4):
 - **No Direct Table Privileges:** The Migration Kit worker role possesses ZERO insert, update, or delete privileges on module-owned domain schemas (`crm1.*`, `crm2.*`, `crm3.*`, `crm4.*`).
 - **Adapter In-Process Port:** All loads are mediated via the owning module's `MigrationTargetAdapter`, ensuring that module business rules, events, and transactional boundaries are strictly respected.
+
+---
+
+## 13. Step 7: Shared Target Validation & Post-Load Integrity Engine (KIT-06)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.8 (FR-VA-01–04), §11.1–11.9; Project Plan v3.0 §§9, 11, 17; Issue #73 `[KIT-06]`.
+
+### 13.1 Pipeline Stage Overview
+
+Step 6 (**Validate**) runs module-declared validation rules against ingested, cleaned, and loaded datasets to verify both business-level and database-level integrity before signoff and reconciliation.
+
+```
+       [public.clean_crm] / Target Domain Records
+                           │
+                           ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ Shared Target Validation Engine                              │
+    │ 1. Pre-Load Business Checks (Formats, Enums, Required)       │
+    │ 2. Post-Load Referential Link Integrity (Foreign Key Target) │
+    │ 3. Domain Rules (Freshness Timestamps, Cross-Field Balance)  │
+    │ 4. Deterministic Checksum & Failure Attribution             │
+    └──────────────────────┬───────────────────────────────────────┘
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+      [All Rules Pass]            [Failures Detected]
+      - State: `validated`        - State: `failed`
+      - Emit `batch.validated`   - Reconciliation strictly BLOCKED
+      - Proceed to Step 7         - Detailed failure report with ruleId,
+                                    sourceRow, targetId, reasonCode
+```
+
+### 13.2 Typed Validation Rule Types
+
+The validation engine supports five standardized, typed rule categories:
+
+| Rule Type | Scope | Example | Behavior on Failure |
+| :--- | :---: | :--- | :--- |
+| **`required_field`** | Pre-Load | `CRM1-VAL-REQ-01`: `contacts.first_name` cannot be empty. | Fails row with `REQUIRED_FIELD_MISSING`. |
+| **`format`** | Pre-Load | `CRM1-VAL-FMT-01`: `contacts.email` must match RFC email regex. | Fails row with `INVALID_FORMAT`. |
+| **`enum`** | Pre-Load | `CRM1-VAL-ENUM-01`: `contacts.lead_status` in `['New', 'Working', 'Qualified', 'Closed']`. | Fails row with `INVALID_ENUM_VALUE`. |
+| **`relationship`** | Post-Load | `CRM1-VAL-REL-01`: `contacts.company_id` must exist in `crm1_companies`. | Fails row with `RELATIONSHIP_NOT_FOUND` (Link integrity error). |
+| **`domain`** | Pre/Post | `CRM1-VAL-DOM-01`: Non-unknown consent must have `consent_updated_at`. | Fails row with `DOMAIN_RULE_VIOLATION`. |
+
+### 13.3 Strict Referential Link Integrity Gate
+
+A critical non-negotiable invariant of ClearShift data reliability:
+1. Every loaded record's external entity references (e.g. `order -> customer`, `deal -> contact`, `contact -> company`) are checked in post-load validation.
+2. If any link integrity failure is detected:
+   - The failure is explicitly recorded with `ruleId`, `sourceRow`, `targetId`, and reason `RELATIONSHIP_NOT_FOUND`.
+   - The validation report is marked `isValid: false`.
+   - The batch status in `public.kit_batches` transitions to `'failed'`.
+   - **Reconciliation & Signoff Gate:** `ValidationService.assertBatchCanReconcile()` strictly blocks execution of Step 7 (Reconcile). No batch with failed link integrity can be signed off as successful.
+
+### 13.4 Deterministic Output & Audit Trail
+
+- **Determinism:** Validation failures are always sorted by `sourceRow ASC`, then `ruleId ASC`, then `field ASC`.
+- **SHA-256 Checksum:** Every report calculates a cryptographic hash over the failure array. Repeated executions against the same dataset produce identical checksums.
+- **Outbox Event (`batch.validated`):**
+  ```json
+  {
+    "eventType": "batch.validated",
+    "aggregateType": "kit_batch",
+    "aggregateId": "BATCH_UUID",
+    "payload": {
+      "batch_id": "BATCH_UUID",
+      "module": "crm-1",
+      "total_checked": 500,
+      "validation_failures": 0,
+      "is_valid": true,
+      "checksum": "a3f5c7...",
+      "timestamp": "2026-10-23T22:30:00.000Z"
+    }
+  }
+  ```
+
+---
 
