@@ -64,3 +64,16 @@ export const IMPORTS_COLUMNS: DataTableColumn[] = [
   { key: 'targetId', header: 'PostgreSQL UUID', sortable: false, align: 'left', width: '180px' },
   { key: 'createdAt', header: 'Committed At', sortable: true, align: 'left', width: '160px' },
 ];
+
+/**
+ * Duplicate Review Candidates Data Table Columns for CRM-4 ([CRM4-12])
+ */
+export const DUPLICATES_COLUMNS: DataTableColumn[] = [
+  { key: 'id', header: 'Candidate ID', sortable: true, align: 'left', width: '180px' },
+  { key: 'entity', header: 'Entity', sortable: true, align: 'left', width: '120px' },
+  { key: 'keyType', header: 'Key Rule', sortable: true, align: 'left', width: '150px' },
+  { key: 'normalizedKey', header: 'Matched Normalized Key', sortable: true, align: 'left', width: '220px' },
+  { key: 'recordIds', header: 'Record IDs', sortable: false, align: 'left', width: '200px' },
+  { key: 'status', header: 'Review Status', sortable: true, align: 'center', width: '140px' },
+  { key: 'detectedAt', header: 'Detected Date', sortable: true, align: 'left', width: '160px' },
+];

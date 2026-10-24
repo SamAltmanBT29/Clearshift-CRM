@@ -13,6 +13,7 @@ export * from './interface/authz.js';
 export * from './routes/crm4.routes.js';
 export * from './app.js';
 export * from './public.js';
+export * from './domain/relationships.js';
 export * from './domain/qa-specs.js';
 export * from './kit/profiler.js';
 export * from './kit/cleaner.js';
