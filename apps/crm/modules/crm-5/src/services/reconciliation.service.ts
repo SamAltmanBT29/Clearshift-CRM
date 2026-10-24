@@ -47,8 +47,26 @@ export interface ReconcileBatchResult {
 }
 
 const MODULE_ALLOWLIST: readonly CrmModule[] = ['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5'] as const;
-const STEP_ALLOWLIST = ['extract', 'validate', 'transform', 'load', 'reconcile'] as const;
-const STATUS_ALLOWLIST = ['RUNNING', 'COMPLETED', 'FAILED'] as const;
+const STEP_ALLOWLIST = [
+  'extract',
+  'profile',
+  'clean',
+  'map',
+  'load',
+  'validate',
+  'reconcile',
+  'transform',
+] as const;
+const STATUS_ALLOWLIST = [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'halted',
+  'RUNNING',
+  'COMPLETED',
+  'FAILED',
+] as const;
 
 /**
  * CRM-5 Reconciliation & Gate G4 Acceptance Audit Service ([CRM5-30] / Issue #203)
