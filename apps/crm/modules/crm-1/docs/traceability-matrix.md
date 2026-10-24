@@ -62,12 +62,16 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-12-03`** | Automatic fuzzy merging is strictly prohibited in V1; autoMerge requests throw `AutoMergeForbiddenError` (HTTP 422). | **Must** | ClearShift Core Rules & [CRM1-12] | Domain / API | Unit / API | `apps/crm/modules/crm-1/tests/domain/duplicate-policy.test.ts`<br>`apps/crm/modules/crm-1/tests/api/duplicates.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM1-12-04`** | Immutable audit log records human merge decisions with actor ID, timestamp, kept ID, merged ID, and reason. | **Must** | Issue #105 [CRM1-12] / KIT-10 | Domain / Security | Unit / API | `apps/crm/modules/crm-1/tests/domain/duplicate-policy.test.ts`<br>`apps/crm/modules/crm-1/tests/api/duplicates.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM1-12-05`** | REST endpoints for duplicate candidate detection, held queue listing, resolution, and audit log inspection under `/api/v1/crm-contacts/duplicates/*`. | **Must** | Issue #105 [CRM1-12] / KIT-10 | API | Contract | `apps/crm/modules/crm-1/tests/api/duplicates.test.ts`<br>`CRM-1 Duplicate Key Policy & Human Review API` | **VERIFIED (Green)** |
+| **`FR-CRM1-08-01`** | Synthetic dirty data pack (`dirty-data-v1.csv`, 100 rows) and outcome manifest checked into repo with SHA-256 checksum and schema/version. | **Must** | Issue #13 [CRM1-08] | QA / Data | Fixture | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
+| **`FR-CRM1-08-02`** | Comprehensive rule catalogue (`CRM1-DQ-001..019`) defines required/optional fields, formatting, enumerations, candidate keys, and stable reject codes. | **Must** | Issue #13 [CRM1-08] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
+| **`FR-CRM1-08-03`** | Deterministic profiling reproduces exact outcome counts (`100 = 54 accept + 8 normalize + 4 merge + 34 reject`) and raw input values/checksums remain immutable. | **Must** | Issue #13 [CRM1-08] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
+| **`FR-CRM1-08-04`** | Canonical mapping template (`sample-data/crm-1/mapping-template.json`) defines source-to-target mapping for `crm1_contacts` with SHA-256 checksum. | **Must** | Issue #13 [CRM1-08] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 22 executing test files:
+The CRM-1 automated test suite comprises 23 executing test files:
 
 ```
 apps/crm/modules/crm-1/tests/
@@ -87,7 +91,8 @@ apps/crm/modules/crm-1/tests/
 │   ├── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
 │   └── mapping.test.ts                      (15 tests) — Field mapping, type coercion, enums, dry-run guards
 ├── migration/
-│   └── idempotency.test.ts                  (14 tests) — Target adapter, durable receipts, idempotency retries & 409 conflicts (Issue #12 / [CRM1-07])
+│   ├── idempotency.test.ts                  (14 tests) — Target adapter, durable receipts, idempotency retries & 409 conflicts (Issue #12 / [CRM1-07])
+│   └── rules.test.ts                        (43 tests) — Data-quality rules, profiling assertions & fixture checksums (Issue #13 / [CRM1-08])
 ├── security/
 │   └── authorization.test.ts                (51 tests) — EdDSA JWTs, RBAC 5 roles, sensitive masking, audit
 ├── services/
@@ -102,7 +107,7 @@ apps/crm/modules/crm-1/tests/
     ├── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
     └── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 347 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 390 tests (100% Green, 0 Failures)
 ```
 
 ---

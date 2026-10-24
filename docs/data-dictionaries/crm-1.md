@@ -237,6 +237,15 @@ $$\text{source} (1000) = \text{loaded} (780) + \text{rejected} (140) + \text{mer
 
 *Complete plan & sample payloads: See [dirty-data-pack-plan.md](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/docs/dirty-data-pack-plan.md).*
 
+### 4.1 V1 Data Quality Rules & Committed Sample Data (`[CRM1-08]`)
+
+* **Ruleset Version:** 1 (`CRM1-DQ-001` through `CRM1-DQ-019`)
+* **Rule Engine Implementation:** [`apps/crm/modules/crm-1/src/migration/rules.ts`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/src/migration/rules.ts)
+* **Rule Specification Catalogue:** [`apps/crm/modules/crm-1/docs/data-quality-rules.md`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/apps/crm/modules/crm-1/docs/data-quality-rules.md)
+* **Committed Sample Fixture:** [`sample-data/crm-1/dirty-data-v1.csv`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/dirty-data-v1.csv) (100 synthetic rows)
+* **Expected Profile Assertions:** [`sample-data/crm-1/expected-profile.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/expected-profile.json) (SHA-256: `23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0`)
+* **Canonical Mapping Template:** [`sample-data/crm-1/mapping-template.json`](file:///Users/ajitsingh/Desktop/Clearshift-CRM/sample-data/crm-1/mapping-template.json) (Checksum: `d6e91b238861236b25fa135146765bcecac26ea9aadd1d5378909858c4e735d5`)
+
 ---
 
 ## 5. Public API Endpoints (`/api/v1/crm-contacts`) & Authorization Matrix
