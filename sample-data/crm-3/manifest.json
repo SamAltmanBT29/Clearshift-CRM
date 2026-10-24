@@ -1,0 +1,738 @@
+{
+  "schemaVersion": 1,
+  "module": "crm-3",
+  "totalRecords": 100,
+  "cleanRecordsCount": 75,
+  "defectiveRecordsCount": 25,
+  "conservationEquation": {
+    "source": 100,
+    "loaded": 75,
+    "rejected": 17,
+    "merged": 8,
+    "skipped": 0,
+    "unaccounted": 0,
+    "isBalanced": true
+  },
+  "defectCategories": {
+    "EMPTY_SUBJECT": {
+      "count": 3
+    },
+    "INVALID_STATUS": {
+      "count": 4
+    },
+    "INVALID_PRIORITY": {
+      "count": 3
+    },
+    "INVALID_EMAIL": {
+      "count": 4
+    },
+    "CUSTOMER_UNRESOLVED": {
+      "count": 3
+    },
+    "DUPLICATE_SOURCE_KEY": {
+      "count": 8
+    }
+  },
+  "records": [
+    {
+      "sourceRow": 1,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0001",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 2,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0002",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 3,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0003",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 4,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0004",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 5,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0005",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 6,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0006",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 7,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0007",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 8,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0008",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 9,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0009",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 10,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0010",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 11,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0011",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 12,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0012",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 13,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0013",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 14,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0014",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 15,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0015",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 16,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0016",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 17,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0017",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 18,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0018",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 19,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0019",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 20,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0020",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 21,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0021",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 22,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0022",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 23,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0023",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 24,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0024",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 25,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0025",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 26,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0026",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 27,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0027",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 28,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0028",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 29,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0029",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 30,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0030",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 31,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0031",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 32,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0032",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 33,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0033",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 34,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0034",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 35,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0035",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 36,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0036",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 37,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0037",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 38,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0038",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 39,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0039",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 40,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0040",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 41,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0041",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 42,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0042",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 43,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0043",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 44,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0044",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 45,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0045",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 46,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0046",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 47,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0047",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 48,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0048",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 49,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0049",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 50,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0050",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 51,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0051",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 52,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0052",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 53,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0053",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 54,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0054",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 55,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0055",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 56,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0056",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 57,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0057",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 58,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0058",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 59,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0059",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 60,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0060",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 61,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0061",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 62,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0062",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 63,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0063",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 64,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0064",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 65,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0065",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 66,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0066",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 67,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0067",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 68,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0068",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 69,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0069",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 70,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0070",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 71,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0071",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 72,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0072",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 73,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0073",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 74,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0074",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 75,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0075",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline"
+    },
+    {
+      "sourceRow": 76,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0076",
+      "expectedOutcome": "rejected",
+      "category": "EMPTY_SUBJECT"
+    },
+    {
+      "sourceRow": 77,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0077",
+      "expectedOutcome": "rejected",
+      "category": "EMPTY_SUBJECT"
+    },
+    {
+      "sourceRow": 78,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0078",
+      "expectedOutcome": "rejected",
+      "category": "EMPTY_SUBJECT"
+    },
+    {
+      "sourceRow": 79,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0079",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_STATUS"
+    },
+    {
+      "sourceRow": 80,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0080",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_STATUS"
+    },
+    {
+      "sourceRow": 81,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0081",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_STATUS"
+    },
+    {
+      "sourceRow": 82,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0082",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_STATUS"
+    },
+    {
+      "sourceRow": 83,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0083",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_PRIORITY"
+    },
+    {
+      "sourceRow": 84,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0084",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_PRIORITY"
+    },
+    {
+      "sourceRow": 85,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0085",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_PRIORITY"
+    },
+    {
+      "sourceRow": 86,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0086",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_EMAIL"
+    },
+    {
+      "sourceRow": 87,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0087",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_EMAIL"
+    },
+    {
+      "sourceRow": 88,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0088",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_EMAIL"
+    },
+    {
+      "sourceRow": 89,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0089",
+      "expectedOutcome": "rejected",
+      "category": "INVALID_EMAIL"
+    },
+    {
+      "sourceRow": 90,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0090",
+      "expectedOutcome": "rejected",
+      "category": "CUSTOMER_UNRESOLVED"
+    },
+    {
+      "sourceRow": 91,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0091",
+      "expectedOutcome": "rejected",
+      "category": "CUSTOMER_UNRESOLVED"
+    },
+    {
+      "sourceRow": 92,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0092",
+      "expectedOutcome": "rejected",
+      "category": "CUSTOMER_UNRESOLVED"
+    },
+    {
+      "sourceRow": 93,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0001",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 94,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0002",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 95,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0003",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 96,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0004",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 97,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0005",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 98,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0006",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 99,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0007",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    },
+    {
+      "sourceRow": 100,
+      "entityType": "ticket",
+      "sourceId": "ZEN-ROW-0008",
+      "expectedOutcome": "merged",
+      "category": "DUPLICATE_SOURCE_KEY"
+    }
+  ]
+}
