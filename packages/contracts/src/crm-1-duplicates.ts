@@ -3,12 +3,26 @@ import {
   normalizeEmail,
   normalizePhone,
   normalizeName,
+  normalizeSku,
   normalizeTaxNumber,
 } from '@cs/core';
 import {
   CRM1LeadStatusSchema,
   type CRM1LeadStatus,
 } from './crm-1.js';
+import {
+  DuplicateCandidateStatusSchema,
+  DuplicateReviewDecisionSchema,
+  type DuplicateCandidateStatus,
+  type DuplicateReviewDecision,
+} from './crm-5.js';
+
+export {
+  DuplicateCandidateStatusSchema,
+  DuplicateReviewDecisionSchema,
+  type DuplicateCandidateStatus,
+  type DuplicateReviewDecision,
+};
 
 // ---------------------------------------------------------------------------
 // 1. Exact Key Builders
@@ -317,3 +331,134 @@ export function assertValidLeadTransition(
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// 4. Exact Key Types and Normalizers for CRM-1
+// ---------------------------------------------------------------------------
+
+export const Crm1ExactKeyTypeSchema = z.enum([
+  'email',
+  'phone_name',
+  'tax_number',
+  'tax_id',
+  'phone',
+  'sku',
+  'composite',
+  'source_key',
+]);
+export type Crm1ExactKeyType = z.infer<typeof Crm1ExactKeyTypeSchema>;
+
+/**
+ * Dispatches key normalization based on declared key type for CRM-1.
+ */
+export function normalizeCrm1ExactKey(type: Crm1ExactKeyType | string, value: string): string {
+  switch (type) {
+    case 'email':
+      return normalizeEmail(value);
+    case 'tax_number':
+    case 'tax_id':
+      return normalizeTaxNumber(value);
+    case 'phone':
+      return normalizePhone(value);
+    case 'sku':
+      return normalizeSku(value);
+    case 'phone_name':
+      return value.trim().toLowerCase().replace(/\s+/g, ' ');
+    case 'source_key':
+      return value.trim().toLowerCase();
+    case 'composite':
+      return value.trim().toLowerCase();
+    default:
+      return value.trim();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. API Schemas & DTOs for Duplicates & Human Review
+// ---------------------------------------------------------------------------
+
+export const Crm1RecordWithKeySchema = z.object({
+  id: z.string().min(1),
+  keyValue: z.string().min(1),
+  payload: z.record(z.unknown()).optional(),
+});
+export type Crm1RecordWithKey = z.infer<typeof Crm1RecordWithKeySchema>;
+
+export const Crm1DetectDuplicatesInputSchema = z.object({
+  batchId: z.string().max(128).optional(),
+  entity: z.enum(['contact', 'company', 'lead']).default('contact'),
+  keyType: Crm1ExactKeyTypeSchema,
+  autoMerge: z.boolean().optional(),
+  records: z.array(Crm1RecordWithKeySchema).min(1, 'records array must contain at least 1 record'),
+});
+export type Crm1DetectDuplicatesInput = z.infer<typeof Crm1DetectDuplicatesInputSchema>;
+
+export const Crm1DuplicateCandidateSchema = z.object({
+  id: z.string().uuid(),
+  batchId: z.string().optional(),
+  module: z.literal('crm-1').default('crm-1'),
+  entity: z.string().default('contact'),
+  keyType: Crm1ExactKeyTypeSchema,
+  normalizedKey: z.string().min(1),
+  recordIds: z.array(z.string()).min(2),
+  status: DuplicateCandidateStatusSchema,
+  detectedAt: z.coerce.date(),
+  metadata: z.record(z.unknown()).optional(),
+});
+export type Crm1DuplicateCandidate = z.infer<typeof Crm1DuplicateCandidateSchema>;
+
+export const Crm1ResolveDuplicateInputSchema = z
+  .object({
+    candidateId: z.string().min(1, 'candidateId is required'),
+    decision: DuplicateReviewDecisionSchema,
+    actorId: z.string().min(1, 'actorId is required'),
+    keptId: z.string().min(1, 'keptId is required'),
+    mergedId: z.string().min(1, 'mergedId is required'),
+    reason: z.string().min(1, 'reason is required'),
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.decision === 'MERGE') {
+        return data.keptId !== data.mergedId;
+      }
+      return true;
+    },
+    {
+      message: 'keptId and mergedId cannot be the same entity for MERGE decisions',
+      path: ['mergedId'],
+    }
+  );
+export type Crm1ResolveDuplicateInput = z.infer<typeof Crm1ResolveDuplicateInputSchema>;
+
+export const Crm1DuplicateAuditLogEntrySchema = z.object({
+  id: z.string().uuid(),
+  candidateId: z.string().uuid(),
+  decision: DuplicateReviewDecisionSchema,
+  actorId: z.string().min(1),
+  timestamp: z.coerce.date(),
+  keptId: z.string().min(1),
+  mergedId: z.string().min(1),
+  reason: z.string().min(1),
+  keyType: Crm1ExactKeyTypeSchema,
+  normalizedKey: z.string().min(1),
+  entity: z.string().default('contact'),
+  metadata: z.record(z.unknown()).optional(),
+});
+export type Crm1DuplicateAuditLogEntry = z.infer<typeof Crm1DuplicateAuditLogEntrySchema>;
+
+export const Crm1EvaluateContactDuplicateInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().nullable().optional(),
+});
+export type Crm1EvaluateContactDuplicateInput = z.infer<typeof Crm1EvaluateContactDuplicateInputSchema>;
+
+export const Crm1EvaluateCompanyDuplicateInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1, 'Company name is required'),
+  taxNumber: z.string().nullable().optional(),
+});
+export type Crm1EvaluateCompanyDuplicateInput = z.infer<typeof Crm1EvaluateCompanyDuplicateInputSchema>;

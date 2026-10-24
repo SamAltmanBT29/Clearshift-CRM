@@ -20,7 +20,24 @@ import type {
   Crm1Reject,
   Crm1RejectsQuery,
   PaginatedCrm1RejectsResponse,
+  Crm1DetectDuplicatesInput,
+  Crm1ResolveDuplicateInput,
+  Crm1DuplicateCandidate,
+  Crm1DuplicateAuditLogEntry,
+  ContactCandidate,
+  CompanyCandidate,
+  DuplicateEvaluationResult,
+  CompanyDuplicateEvaluationResult,
 } from '@clearshift/contracts';
+import {
+  evaluateContactDuplicate,
+  evaluateCompanyDuplicate,
+} from '@clearshift/contracts';
+import {
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+  type DuplicateDetectionResult,
+} from '../domain/duplicate-policy.js';
 import { getDatabase } from '@cs/db';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, asc, count, desc, eq, exists, ilike, or, sql } from 'drizzle-orm';
@@ -125,6 +142,7 @@ function toLead(
  */
 export class Crm1Service {
   private db: NodePgDatabase;
+  private duplicateQueue = new DuplicateReviewQueue();
 
   constructor(db?: NodePgDatabase) {
     this.db =
@@ -1240,5 +1258,80 @@ export class Crm1Service {
     for (const r of rejectsData) {
       await this.db.insert(crm1ImportRejects).values(r).onConflictDoNothing();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. Exact Duplicates & Human Review (CRM1-12)
+  // ---------------------------------------------------------------------------
+
+  public detectDuplicates(input: Crm1DetectDuplicatesInput): DuplicateDetectionResult {
+    const result = detectExactDuplicates(input.records, input.keyType, {
+      batchId: input.batchId,
+      entity: input.entity,
+      autoMerge: input.autoMerge,
+    });
+    this.duplicateQueue.addCandidates(result.duplicateCandidates);
+    return result;
+  }
+
+  public getHeldDuplicates(query?: {
+    batchId?: string | undefined;
+    keyType?: string | undefined;
+    entity?: string | undefined;
+  }): Crm1DuplicateCandidate[] {
+    return this.duplicateQueue.listHeld(query);
+  }
+
+  public getDuplicateCandidate(id: string): Crm1DuplicateCandidate | undefined {
+    return this.duplicateQueue.getCandidate(id);
+  }
+
+  public resolveDuplicate(input: Crm1ResolveDuplicateInput): Crm1DuplicateAuditLogEntry {
+    return this.duplicateQueue.resolve(input);
+  }
+
+  public getDuplicateAuditLogs(query?: {
+    candidateId?: string | undefined;
+    actorId?: string | undefined;
+    entity?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }) {
+    return this.duplicateQueue.getAuditLogs(query);
+  }
+
+  public async evaluateContactDuplicate(
+    candidate: ContactCandidate
+  ): Promise<DuplicateEvaluationResult> {
+    const existingRows = await this.db
+      .select({
+        id: crm1Contacts.id,
+        goldenId: crm1Contacts.goldenId,
+        firstName: crm1Contacts.firstName,
+        lastName: crm1Contacts.lastName,
+        email: crm1Contacts.email,
+        phone: crm1Contacts.phone,
+      })
+      .from(crm1Contacts);
+
+    return evaluateContactDuplicate(candidate, existingRows);
+  }
+
+  public async evaluateCompanyDuplicate(
+    candidate: CompanyCandidate
+  ): Promise<CompanyDuplicateEvaluationResult> {
+    const existingRows = await this.db
+      .select({
+        id: crm1Companies.id,
+        name: crm1Companies.name,
+        taxNumber: crm1Companies.taxNumber,
+      })
+      .from(crm1Companies);
+
+    return evaluateCompanyDuplicate(candidate, existingRows);
+  }
+
+  public resetDuplicateStore(): void {
+    this.duplicateQueue.clear();
   }
 }

@@ -842,3 +842,48 @@ The detail view embeds 4 linked sub-tables displaying related records for the ba
 * **Status:** Verified, Tests Passing, Gate G3 Ready
 * **Sign-off Authority:** Group 5 Lead & Role 3 (Frontend Engineer)
 
+---
+
+## 20. Migration Control Center: Create/Edit/Detail Workflow & Client-Side Validation (Gate G3 / CRM5-05 / Issue #50)
+
+### 20.1 Scope & Architecture Alignment
+Under SDS ClearShift CRM v2.0 §4.8, FR-CRM5-01..07, and Issue #50 (`[CRM5-05]`), the human-operated workflow for migration run projections and reconciliation reports is fully realized with dedicated pages, client-side validation, server-authoritative error handling, read-only protections, and confirmation dialogs for destructive actions.
+
+### 20.2 V1 Workflow Screens & Context Navigation (AC 1)
+All three V1 screens are linked and provide accessible breadcrumb navigation back to their list context:
+1. **MigrationRunFormPage (`/crm-5/runs/new`, `/crm-5/runs/:id/edit`):**
+   - Implements create mode for manual registration of pipeline step projections (`POST /api/v1/crm-control/runs`) and edit mode (`PATCH /api/v1/crm-control/runs/:id`).
+   - Breadcrumb navigation links back to `/crm-5/runs` via an accessible button element.
+   - Preserves all entered form values upon receiving API 400/409/422 validation errors.
+2. **MigrationRunDetailPage (`/crm-5/runs/:id`):**
+   - Displays primary telemetry: Correlation Batch ID, Target Module, Step, Status Badge, Record Conservation Counts (Records In, Records Out, Records Rejected), Duration, and Timestamps.
+   - Integrates aggregated `BatchSummaryContract` (Data Quality Score, Reconciliation Status, and Consistency).
+   - Provides safe action transitions with confirmation dialogs.
+3. **ReconciliationDetailPage (`/crm-5/reconciliation/:batch`):**
+   - Displays mathematical conservation balance sheet: `Source = Loaded + Rejected + Merged + Skipped + Unaccounted`.
+   - Invariant: `status === 'OK'` if and only if `unaccounted === 0`.
+   - Provides one-click re-audit action and breadcrumb navigation back to `/crm-5/reconciliation`.
+
+### 20.3 Client-Side Validation & Invariant Assertions (AC 3, AC 6)
+The form layer uses `RunFormInputSchema` (`@clearshift/contracts`) and client validation rules in `MigrationRunForm`:
+* **Batch Correlation ID:** Required non-empty string, maximum 128 characters. Locked and read-only in edit mode.
+* **Target CRM Module & Step:** Must be one of the allowlisted CRM modules (`crm-1`..`crm-5`) and valid migration lifecycle steps (`extract`, `profile`, `clean`, `map`, `load`, `validate`, `reconcile`).
+* **Non-Negative Integer Counts:** `recordsIn`, `recordsOut`, and `recordsRejected` must be non-negative integers (`>= 0`).
+* **Conservation Invariant:** Enforces `recordsOut + recordsRejected <= recordsIn`. Submissions violating this rule are blocked client-side with an explicit invariant error message.
+
+### 20.4 Error State & Value Preservation (AC 4)
+* **FormValidationSummary:** Renders field-level and server errors prominently with `role="alert"` and `aria-live="assertive"`.
+* **Zero Value Loss:** When the API returns a 400 Bad Request or 409 Conflict, user-entered values in all fields are retained intact, enabling the operator to adjust values without re-entering data.
+
+### 20.5 Read-Only Guards & Destructive Action Confirmations (AC 5)
+* **Browser State Guarding:** `batchId`, `module`, `step`, and system audit metadata (`id`, `createdAt`, `updatedAt`) cannot be altered in edit mode.
+* **State Machine Guarding:** Status transitions strictly enforce `canTransition(current, next)`. Terminal states (`completed`, `failed`) reject further transitions.
+* **Confirmation Dialog (`ConfirmActionDialog`):** Destructive actions (`Halt Execution`, `Abort Run to Terminal Failure`) trigger an accessible modal with `role="dialog"`, `aria-modal="true"`, focus trapped on the Cancel button by default, and `Escape` key handling.
+
+### 20.6 Versioned Contract Change Record & Sign-off
+* **Change Record ID:** `CR-CRM5-G3-005`
+* **Milestone:** Gate G3 — Create/Edit/Detail Workflow and Validation (Weeks 3–6)
+* **Date:** 2026-10-24
+* **Status:** Verified, Tests Passing, Gate G3 Ready
+* **Sign-off Authority:** Group 5 — Role 3 (Frontend / Review-screen Engineer)
+
