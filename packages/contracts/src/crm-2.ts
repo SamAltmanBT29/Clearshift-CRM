@@ -629,3 +629,37 @@ export type Crm2BatchExecutionReport = z.infer<typeof Crm2BatchExecutionReportSc
 // CRM-2 Exact Duplicate Key Policy Contracts & Normalizers (CRM2-12)
 export * from './crm-2-duplicates.js';
 
+// ---------------------------------------------------------------------------
+// Security & Audit Schemas (Issue #24 / [CRM2-09])
+// ---------------------------------------------------------------------------
+
+export const CRM2AuditEventSchema = z.object({
+  id: z.string().uuid(),
+  actor: z.string().min(1),
+  action: z.string().min(1),
+  entity: z.string().min(1),
+  entityId: z.string().uuid().nullable().optional(),
+  batchId: z.string().nullable().optional(),
+  result: z.enum(['success', 'failure', 'rejected', 'halted']),
+  diffRedacted: z.record(z.string(), z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  createdAt: z.coerce.date(),
+});
+export type CRM2AuditEvent = z.infer<typeof CRM2AuditEventSchema>;
+
+export const CRM2ErrorEnvelopeSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.array(z.unknown()).optional(),
+  correlation_id: z.string().optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      details: z.array(z.unknown()).optional(),
+    })
+    .optional(),
+});
+export type CRM2ErrorEnvelope = z.infer<typeof CRM2ErrorEnvelopeSchema>;
+
+
