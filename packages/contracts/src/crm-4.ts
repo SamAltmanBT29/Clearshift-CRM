@@ -237,6 +237,9 @@ export const CRM4_ENDPOINT_ROLES = {
 
   CONSENTS_READ: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ANALYST, ClearShiftRoles.ADMIN] as RoleType[],
   CONSENTS_SET: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
+
+  DUPLICATES_DETECT: [ClearShiftRoles.VIEWER, ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN, ClearShiftRoles.ANALYST] as RoleType[],
+  DUPLICATES_RESOLVE: [ClearShiftRoles.EDITOR, ClearShiftRoles.ADMIN] as RoleType[],
 } as const;
 
 export type CRM4EndpointKey = keyof typeof CRM4_ENDPOINT_ROLES;
