@@ -71,8 +71,8 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
       const data = (raw as ImportRowInput).data ?? raw;
       const sourceRow = (raw as ImportRowInput).sourceRow ?? (data as any).rowIndex ?? index;
       const dataWithBatch = {
-        ...data,
         batchId,
+        ...data,
         ...(entity === 'rejects' ? { rowIndex: (data as any).rowIndex ?? sourceRow } : {}),
       };
       const validation = this.validateEntityData(entity, dataWithBatch);
@@ -145,8 +145,8 @@ export class Crm5TargetAdapter implements TargetAdapter<ImportRowInput | Record<
 
     // 4. Validate domain business rules with injected rowIndex for rejects
     const dataWithBatch = {
-      ...normalizedData,
       batchId,
+      ...normalizedData,
       ...(entity === 'rejects' ? { rowIndex: (normalizedData as any).rowIndex ?? sourceRow } : {}),
     };
 

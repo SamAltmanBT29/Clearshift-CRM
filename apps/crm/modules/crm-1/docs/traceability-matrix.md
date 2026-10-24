@@ -76,12 +76,13 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-13-03`** | Batch execution stops immediately if row failures exceed 10% of attempted rows after minimum 50 attempted rows. | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Migration | Unit | `apps/crm/modules/crm-1/tests/domain/batch-loader.test.ts`<br>`shouldHaltBatch & BatchLoadHaltedError` | **VERIFIED (Green)** |
 | **`FR-CRM1-13-04`** | Committed rows and receipts remain durable; batch state transitions to `STOPPED_EXCESSIVE_FAILURES` without rollback saga or destructive uncommitted data loss. | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Service | Integration | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`Crm1Service.executeBatchLoad` | **VERIFIED (Green)** |
 | **`FR-CRM1-13-05`** | Batch execution endpoints `POST /batches/execute-load` and `GET /batches/:batchId/report` enforced by RBAC (`KIT_RUN`, `KIT_READ`) and BatchLoaderPage operator UI. | **Must** | Issue #106 [CRM1-13] / KIT-12 | API / Web | Contract / Web | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`apps/crm/modules/crm-1/tests/web/batch-loader-page.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM1-26`** | Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment. | **Must** | SDS ClearShift CRM v2.0 §4.2, §4.11, §4.12 & Issue #119 [CRM1-26] | Migration | Unit | `apps/crm/modules/crm-1/tests/kit/profiler.test.ts`<br>`CRM-1 Profiling Configuration & Manifest Assertions` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 26 test files:
+The CRM-1 automated test suite comprises 27 test files:
 
 ```
 apps/crm/modules/crm-1/tests/
@@ -103,7 +104,8 @@ apps/crm/modules/crm-1/tests/
 │   └── dirty-pack.test.ts                   (31 tests) — 100-row synthetic pack, manifest outcomes, conservation equation & edge cases (Issue #118 / [CRM1-25])
 ├── kit/
 │   ├── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
-│   └── mapping.test.ts                      (15 tests) — Field mapping, type coercion, enums, dry-run guards
+│   ├── mapping.test.ts                      (15 tests) — Field mapping, type coercion, enums, dry-run guards
+│   └── profiler.test.ts                     (21 tests) — Profiling stats, duplicate detection & manifest comparison (Issue #119 / [CRM1-26])
 ├── migration/
 │   ├── idempotency.test.ts                  (14 tests) — Target adapter, durable receipts, idempotency retries & 409 conflicts (Issue #12 / [CRM1-07])
 │   └── rules.test.ts                        (43 tests) — Data-quality rules, profiling assertions & fixture checksums (Issue #13 / [CRM1-08])
@@ -126,7 +128,7 @@ apps/crm/modules/crm-1/tests/
     ├── LeadForm.test.tsx                    ( 7 tests) — LeadForm create/edit, status transition validation (Issue #10 / [CRM1-05])
     └── DetailPages.test.tsx                 ( 4 tests) — Contact, Company, Lead, Import batch detail pages & back links (Issue #10 / [CRM1-05])
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 471 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 492 tests (100% Green, 0 Failures)
 ```
 
 ---
