@@ -1036,6 +1036,17 @@ export const CRM1_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'CRM-1 QA Gate G1 Design Specifications',
     verificationEvidence: 'Excessive failure halts further processing, preserving committed rows and receipts.',
   },
+  {
+    reqId: 'FR-CRM1-26',
+    requirement: 'Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.2, §4.11, §4.12 & Issue #119 [CRM1-26]',
+    category: 'Migration',
+    testType: 'unit',
+    testFile: 'apps/crm/modules/crm-1/tests/kit/profiler.test.ts',
+    testSuite: 'CRM-1 Profiling Configuration & Manifest Assertions (#119 / [CRM1-26])',
+    verificationEvidence: 'profileCrm1Batch accurately computes total rows, null counts, distinct counts, invalid format rates, and 100% matches manifest defect numbers.',
+  },
 ];
 
 // =============================================================================
