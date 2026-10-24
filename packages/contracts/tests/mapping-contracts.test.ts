@@ -8,6 +8,7 @@ import {
   MappingValidationResultSchema,
   BatchMappedPayloadSchema,
   CRM_TARGET_ENTITIES,
+  CRM2_TARGET_ENTITIES,
 } from '../src/migration-target.js';
 
 describe('KIT-05: Mapping Contracts & Zod Schemas', () => {
@@ -65,6 +66,23 @@ describe('KIT-05: Mapping Contracts & Zod Schemas', () => {
     expect(CRM_TARGET_ENTITIES.contacts.fields.some((f) => f.name === 'email' && f.required)).toBe(true);
     expect(CRM_TARGET_ENTITIES.leads).toBeDefined();
     expect(CRM_TARGET_ENTITIES.leads.fields.some((f) => f.name === 'leadStatus' && f.required)).toBe(true);
+
+    // CRM-2 target entities
+    expect(CRM_TARGET_ENTITIES.crm2_deals).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm2_deals.module).toBe('crm-2');
+    expect(CRM_TARGET_ENTITIES.crm2_deals.fields.some((f) => f.name === 'name' && f.required)).toBe(true);
+    expect(CRM_TARGET_ENTITIES.crm2_deals.fields.some((f) => f.name === 'value' && f.dataType === 'number')).toBe(true);
+    expect(CRM_TARGET_ENTITIES.crm2_deals.fields.some((f) => f.name === 'stage_name' && f.dataType === 'enum')).toBe(true);
+
+    expect(CRM_TARGET_ENTITIES.crm2_quotes).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm2_quotes.module).toBe('crm-2');
+    expect(CRM_TARGET_ENTITIES.crm2_quotes.fields.some((f) => f.name === 'quote_number' && f.required)).toBe(true);
+    expect(CRM_TARGET_ENTITIES.crm2_quotes.fields.some((f) => f.name === 'amount' && f.dataType === 'number')).toBe(true);
+
+    expect(CRM_TARGET_ENTITIES.crm2_stages).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm2_stages.module).toBe('crm-2');
+    expect(CRM_TARGET_ENTITIES.crm2_quote_lines).toBeDefined();
+    expect(CRM_TARGET_ENTITIES.crm2_quote_lines.module).toBe('crm-2');
 
     // CRM-5 target entities
     expect(CRM_TARGET_ENTITIES.crm5_runs).toBeDefined();
