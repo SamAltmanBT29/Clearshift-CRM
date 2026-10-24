@@ -21,6 +21,7 @@ export * from "./policies/index.js";
 export * from "./plugins/auth.js";
 export * from "./interface/authz.js";
 export * from "./migration/target-adapter.js";
+export * from "./migration/rules.js";
 export * from "./app.js";
 
 export interface ModuleDefinition {
