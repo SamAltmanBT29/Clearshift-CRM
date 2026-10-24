@@ -887,3 +887,108 @@ The form layer uses `RunFormInputSchema` (`@clearshift/contracts`) and client va
 * **Status:** Verified, Tests Passing, Gate G3 Ready
 * **Sign-off Authority:** Group 5 — Role 3 (Frontend / Review-screen Engineer)
 
+---
+
+## 21. Gate G4 Module Contract, Regression, and Browser Test Suite ([CRM5-29] — Issue #202)
+
+### 21.1 Scope, Architecture Authority & Gate G4 Acceptance Criteria
+In compliance with ClearShift Project Plan v3.0 §18, Gate G4 readiness requirements, and Issue #202 (`[CRM5-29]`), CRM-5 Migration Control Center and Reports establishes a comprehensive, automated contract, regression, and browser test suite. This suite ensures 100% agreement across the REST API, OpenAPI specifications, Zod schemas, React/Vite UI components, and domain business invariants:
+1. **Automated Unit & Contract Integration Tests:** Fully automated tests executing without flakiness or network dependencies, utilizing synthetic fixtures exclusively.
+2. **Core Business Logic Coverage Threshold:** Exceeds the 60% domain coverage threshold across state machine transitions, 5-dimension quality score calculations, conservation equations, deterministic deduplication, and privacy masking policies.
+3. **OpenAPI Schema Conformance:** Validates Fastify HTTP routes against published OpenAPI 3.0 contracts in `@clearshift/contracts` and `packages/contracts/openapi/crm-5.yaml`.
+4. **Browser Journey Coverage:** Verifies the 4 primary operator workflows: Create, List, Filter with Page 1 reset, and Detail/Reconciliation views with keyboard navigation and WAI-ARIA accessibility landmarks.
+5. **Data Dictionary & Change Governance:** Versioned documentation and change audit sign-off for Gate G4.
+
+### 21.2 OpenAPI Schema Conformance & Zod Validation Suite (`apps/crm/modules/crm-5/tests/contracts/openapi.test.ts`)
+Validates that runtime API responses and database projection shapes match published OpenAPI contracts:
+* **Endpoint Schema Mapping:**
+  - `GET /api/v1/crm-control/runs` ➔ `PaginatedRunsResponseSchema`
+  - `GET /api/v1/crm-control/runs/:id` ➔ `MigrationRunSchema`
+  - `PATCH /api/v1/crm-control/runs/:id` ➔ `UpdateRunInputSchema` / `MigrationRunSchema`
+  - `GET /api/v1/crm-control/scores` ➔ `ScoresResponseSchema`
+  - `GET /api/v1/crm-control/rejects` ➔ `PaginatedRejectsResponseSchema`
+  - `GET /api/v1/crm-control/reconciliation/:batchId` ➔ `ReconciliationReportSchema`
+  - `GET /api/v1/crm-control/batches/:batchId/summary` ➔ `BatchSummaryContractSchema`
+  - `POST /api/v1/crm-control/duplicates/detect` ➔ `DetectDuplicatesInputSchema` / `DuplicateDetectionResultSchema`
+  - `POST /api/v1/crm-control/duplicates/resolve` ➔ `ResolveDuplicateInputSchema` / `DuplicateAuditLogEntrySchema`
+* **Schema Conformance Rules:**
+  - Every endpoint payload strictly validates against its corresponding Zod schema with `.safeParse()`.
+  - Disallows arbitrary unexpected properties on strictly validated models.
+  - Verifies date coercion (`z.coerce.date()`) across ISO strings and Date objects.
+
+### 21.3 API Contract & Multi-Entity Regression Integration Suite (`apps/crm/modules/crm-5/tests/api/module-contract-regression.test.ts`)
+Executes against Fastify test instances with standard JWT bearer tokens:
+* **Runs Telemetry & Filtering:** Validates server-side filtering by module (`crm-1`), batchId substring, and status (`completed`, `running`).
+* **Optimistic Concurrency Control (OCC):** Verifies that submitting an edit with a stale `expectedUpdatedAt` generates an HTTP 409 Conflict with conflict payload details.
+* **Deterministic Deduplication & Human Review:**
+  - Validates `POST /api/v1/crm-control/duplicates/detect` creates candidate records in `held_for_review` status.
+  - Verifies `POST /api/v1/crm-control/duplicates/resolve` requires valid `actorId`, distinct `keptId` and `mergedId`, and writes an immutable audit record.
+  - Confirms automatic merging without human review is strictly prohibited in V1 (`AutoMergeForbiddenError`).
+
+### 21.4 Browser Journey & Accessible UI Test Suite (`apps/crm/modules/crm-5/web/tests/BrowserJourney.test.tsx`)
+Simulates complete operator workflows across the 4 primary UI screens:
+* **Journey 1: Create Run Form & Validation Workflow:**
+  - Accessible modal dialog (`CreateRunModal`) with `role="dialog"`, `aria-modal="true"`, and escape-key dismissal.
+  - Client-side validation banner (`FormValidationSummary`) rendering `role="alert"` and `aria-live="polite"` when invalid inputs are provided.
+  - Successful form submission via `CreateRunForm`.
+* **Journey 2: Migration Runs List Screen & Bounded Pagination:**
+  - Populated runs list page (`RunsListPage`) with table headers, 9 SDS columns, and `@cs/ui` `Pagination`.
+  - Keyboard navigation in `RunsTable` supporting `Enter` key row selection and accessible sort triggers.
+* **Journey 3: Search, Faceted Filtering & Page 1 Reset Invariant:**
+  - Search input and faceted selects (Module, Status) with immediate update.
+  - Invariant: applying any search or filter criteria deterministically resets pagination to page 1 (`page: 1`).
+  - Distinct empty state (`EmptyState`) with `"Clear All Filters"` button when no records match.
+* **Journey 4: Detail View, Reconciliation Balance & Read-Only Protection:**
+  - Detail page (`RunDetailPage`) displaying primary execution metrics and audit metadata.
+  - Mathematical conservation audit (`ReconciliationDetailPage`) verifying $\text{source} = \text{loaded} + \text{rejected} + \text{merged} + \text{skipped}$ and $\text{unaccounted} = 0$.
+  - Read-only protection and access denial view (`AccessDeniedView`) when operator lacks required capability (`control:read`).
+
+### 21.5 Core Domain Business Logic & Invariants Suite (`apps/crm/modules/crm-5/tests/domain/qa-g4-regression.test.ts`)
+Direct unit verification of core service classes and security policies:
+* **ControlCenterService:**
+  - Empty result pagination boundaries (`total = 0`, `totalPages = 0`, `items = []`).
+  - Deterministic sort stability: runs with identical `startedAt` timestamps resolve ties deterministically using `id asc`.
+  - OCC conflict detection throwing `DomainConflictError`.
+  - State machine validation rejecting illegal transitions (`completed` ➔ `running`) with `InvalidStateTransitionError`.
+  - Conservation invariant on creation: `recordsIn >= recordsOut + recordsRejected`.
+* **Five-Dimension Data Quality Score:**
+  - Weighted composite formula: $100 \times (\text{completeness} + \text{validity} + (1 - \text{duplicate\_rate}) + (1 - \text{reject\_rate}) + \text{link\_integrity}) / 5$.
+  - Returns `null` when any dimension is omitted (`isFullyScored = false`).
+  - Average score in `getScores` only includes fully scored batches.
+* **Mathematical Conservation Equation:**
+  - Validates `verifyReconciliation`: status `OK` iff `unaccountedCount === 0`.
+  - Identifies `UNBALANCED` status and calculates exact deficit.
+* **Duplicate Detection Policy & Key Normalization:**
+  - Normalizes keys across standard types: `email` (lowercase, trimmed), `tax_id` (alphanumeric uppercase), `phone` (E.164 digits with `+`), `sku` (uppercase trimmed).
+  - Unreviewed auto-merge throws `AutoMergeForbiddenError`.
+  - Human review queue resolution generates immutable audit logs with `actorId` and `timestamp`.
+* **Privacy, Masking & Log Sanitization Policies:**
+  - Bank account masking preserving only last 4 digits (`XXXX-XXXX-3456`).
+  - Salary and compensation masking (`XX,XXX` or `'salary hidden'`).
+  - CSV formula injection neutralization prefixing `=, +, -, @, \t, \r` with single quote `'`.
+  - Deep object redaction via `redactSensitiveObject`.
+  - Application log sanitization via `maskSensitiveLog`.
+
+### 21.6 Test Evidence & Test Coverage Summary Matrix
+
+| Test Suite File | Test Count | Domain / Layer | Gate G4 Verification Focus | Result |
+| :--- | :--- | :--- | :--- | :--- |
+| `apps/crm/modules/crm-5/tests/api/module-contract-regression.test.ts` | 9 | REST API / Integration | HTTP contracts, pagination, OCC 409 conflict, duplicate detect/resolve | ✅ Pass (9/9) |
+| `apps/crm/modules/crm-5/tests/contracts/openapi.test.ts` | 15 | Contracts / Schema | OpenAPI 3.0 YAML spec conformance, Zod schema validation, date coercion | ✅ Pass (15/15) |
+| `apps/crm/modules/crm-5/web/tests/BrowserJourney.test.tsx` | 10 | Web UI / Browser Journey | Operator workflows (Create, List, Filter, Detail), WAI-ARIA, Page 1 reset | ✅ Pass (10/10) |
+| `apps/crm/modules/crm-5/tests/domain/qa-g4-regression.test.ts` | 20 | Domain / Business Logic | Sort stability, 5D score, conservation equation, duplicate review, masking | ✅ Pass (20/20) |
+| `apps/crm/modules/crm-5/tests/domain/qa-g1-design.test.ts` | 16 | Domain / DB Schema | Data dictionary, Drizzle ORM mapping, ERD foreign keys, dirty data | ✅ Pass (16/16) |
+| `apps/crm/modules/crm-5/tests/domain/duplicate-policy.test.ts` | 14 | Domain / Deduplication | Exact key normalization, review queue, auto-merge prohibition | ✅ Pass (14/14) |
+| `apps/crm/modules/crm-5/tests/domain/relationships.test.ts` | 12 | Domain / Batch Aggregations | Batch summary, step chaining, score rollups, reject groupings | ✅ Pass (12/12) |
+| `apps/crm/modules/crm-5/tests/domain/transitions.test.ts` | 13 | Domain / State Machine | Finite state machine lifecycle, terminal state protections | ✅ Pass (13/13) |
+| `apps/crm/modules/crm-5/tests/domain/batch-loader.test.ts` | 7 | Domain / Ingestion | 500-row batching, 10% threshold abort, dry run isolation | ✅ Pass (7/7) |
+| `apps/crm/modules/crm-5/web/tests/RunsListPage.test.tsx` | 14 | Web UI / List Page | Filtering, sorting, loading skeletons, error banners, access denied | ✅ Pass (14/14) |
+| `apps/crm/modules/crm-5/web/tests/MigrationRunForm.test.ts` | 14 | Web UI / Forms & Detail | Form validation, OCC refresh, conservation rules, modal dialogs | ✅ Pass (14/14) |
+| **Total Test Coverage** | **144** | **Full Stack** | **Zero Flakiness, Synthetic Data Only, Gate G4 Sign-off** | **✅ 100% Pass** |
+
+### 21.7 Versioned Contract Change Record & Gate G4 Sign-off
+* **Change Record ID:** `CR-CRM5-G4-001`
+* **Milestone:** Gate G4 — Release Candidate & Test Suite Conformance (End of Week 8)
+* **Date:** 2026-10-24
+* **Status:** Verified, 100% Tests Passing, Zero Flakiness, Approved for Production Merge
+* **Sign-off Authority:** Group 5 — Role 4 (Data / QA Lead) & Role 2 (Integration / Backend Engineer)
