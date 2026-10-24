@@ -148,8 +148,6 @@ describe('CRM-5 Playwright / Browser Journey Test Suite (Issue #202 / [CRM5-29])
         recordsIn: 100,
         recordsOut: 95,
         recordsRejected: 5,
-        startedAt: '2026-10-24T10:00',
-        metadataNotes: 'Synthetic test execution notes.',
       };
 
       const form = asEl(
@@ -314,6 +312,7 @@ describe('CRM-5 Playwright / Browser Journey Test Suite (Issue #202 / [CRM5-29])
         unaccountedCount: 0,
         status: 'OK',
         createdAt: new Date('2026-10-24T10:05:00Z'),
+        reconciledAt: new Date('2026-10-24T10:05:00Z'),
       };
 
       const reconPage = asEl(
