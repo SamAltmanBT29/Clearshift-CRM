@@ -66,6 +66,10 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-08-02`** | Comprehensive rule catalogue (`CRM1-DQ-001..019`) defines required/optional fields, formatting, enumerations, candidate keys, and stable reject codes. | **Must** | Issue #13 [CRM1-08] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
 | **`FR-CRM1-08-03`** | Deterministic profiling reproduces exact outcome counts (`100 = 54 accept + 8 normalize + 4 merge + 34 reject`) and raw input values/checksums remain immutable. | **Must** | Issue #13 [CRM1-08] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
 | **`FR-CRM1-08-04`** | Canonical mapping template (`sample-data/crm-1/mapping-template.json`) defines source-to-target mapping for `crm1_contacts` with SHA-256 checksum. | **Must** | Issue #13 [CRM1-08] | Migration / QA | Unit | `apps/crm/modules/crm-1/tests/migration/rules.test.ts`<br>`CRM-1 data-quality rules` | **VERIFIED (Green)** |
+| **`FR-CRM1-25-01`** | Canonical Dirty Data Pack contains at least 100 realistic synthetic rows with zero real personal data or credentials. | **Must** | Issue #118 [CRM1-25] | QA / Data | Fixture | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
+| **`FR-CRM1-25-02`** | Deterministic outcome manifest documents expected outcome per row (`valid`, `malformed`, `null_required`, `exact_duplicate`, `foreign_key_missing`) satisfying conservation balance sheet (`100 = 74 + 18 + 8 + 0`). | **Must** | Issue #118 [CRM1-25] | QA / Data | Fixture | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
+| **`FR-CRM1-25-03`** | Edge case scenarios cover multi-byte UTF-8, whitespace padding, date format variants, boundary numbers, formula injection risks, and field length capacity. | **Must** | Issue #118 [CRM1-25] | QA / Data | Fixture | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
+| **`FR-CRM1-25-04`** | Test suite verifies fixture counts and SHA-256 hashes reproduce identically across multiple runs and synchronize with `sample-data/crm-1/`. | **Must** | Issue #118 [CRM1-25] | QA / Data | Unit | `apps/crm/modules/crm-1/tests/fixtures/dirty-pack.test.ts`<br>`CRM-1 Canonical Module Dirty Data Pack` | **VERIFIED (Green)** |
 
 ---
 
@@ -87,6 +91,8 @@ apps/crm/modules/crm-1/tests/
 │   ├── duplicate-policy.test.ts             (27 tests) — Exact key registry, candidate detector, review queue, no fuzzy auto-merge (Issue #105 / [CRM1-12])
 │   ├── qa-g1-design.test.ts                 (15 tests) — Data dictionary, ERD, traceability, dirty pack
 │   └── relationships.test.ts                (16 tests) — Lifecycle allowlist, foreign key restrictions
+├── fixtures/
+│   └── dirty-pack.test.ts                   (31 tests) — 100-row synthetic pack, manifest outcomes, conservation equation & edge cases (Issue #118 / [CRM1-25])
 ├── kit/
 │   ├── cleaner.test.ts                      (20 tests) — Standard normalizers, field-level audit, row rejects
 │   └── mapping.test.ts                      (15 tests) — Field mapping, type coercion, enums, dry-run guards
@@ -107,13 +113,16 @@ apps/crm/modules/crm-1/tests/
     ├── search-filters.test.ts               (17 tests) — Debounced search, faceted filter toolbar
     └── ui-states.test.ts                    (32 tests) — Shared loading, error, empty, and forbidden states
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 390 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 421 tests (100% Green, 0 Failures)
 ```
 
 ---
 
-## 4. Gate G3 Sign-Off Verification
+## 4. Gate G2 & G3 Sign-Off Verification
 
+* [x] **Zero Real Data:** 100% synthetic generation verified with RFC-2606 reserved domains.
+* [x] **Canonical Dirty Data Pack (100 rows):** Seeded anomalies and deterministic manifest published in fixtures and sample-data.
+* [x] **Conservation Invariant:** Exactly balanced `source = loaded + rejected + merged + skipped` (`unaccounted = 0`).
 * [x] **Deterministic Key Registration:** Exact normalized keys registered for email, phone+name, tax number, phone, and SKU.
 * [x] **Deterministic Duplicate Grouping:** Identical keys grouped without non-deterministic heuristics.
 * [x] **Zero Fuzzy Auto-Merge:** Auto-merging strictly prohibited in V1; raises 422 `AUTO_MERGE_FORBIDDEN`.

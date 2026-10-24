@@ -1,0 +1,1068 @@
+{
+  "module": "crm-1",
+  "name": "CRM-1 Contacts, Companies and Leads Canonical Dirty Data Pack",
+  "version": "1.0.0",
+  "specification": "ClearShift Project Plan v3.0 §17, SDS CRM v2.0 §4.11-4.12, Issue #118 [CRM1-25]",
+  "targetTable": "crm1_contacts",
+  "fixtureFile": "dirty-pack-100.csv",
+  "totalRecords": 100,
+  "summary": {
+    "cleanRecordsCount": 74,
+    "defectiveRecordsCount": 26,
+    "loadedCount": 74,
+    "rejectedCount": 18,
+    "mergedCount": 8,
+    "skippedCount": 0,
+    "unaccounted": 0,
+    "totalDefectCategories": 7,
+    "isDisjoint": true,
+    "requiredOutcomesCovered": [
+      "valid",
+      "malformed",
+      "null_required",
+      "exact_duplicate",
+      "foreign_key_missing"
+    ],
+    "edgeCasesCovered": [
+      "utf8_characters",
+      "whitespace_padding",
+      "date_format_variants",
+      "boundary_numbers"
+    ]
+  },
+  "defectCategories": {
+    "EXACT_DUPLICATE": {
+      "description": "Exact normalized email or compound phone+name duplicate pairs requiring human merge review",
+      "expectedOutcome": "exact_duplicate",
+      "count": 8,
+      "recordIndices": [
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82
+      ]
+    },
+    "NULL_REQUIRED": {
+      "description": "Missing or whitespace mandatory attributes (first_name, last_name)",
+      "expectedOutcome": "null_required",
+      "count": 4,
+      "recordIndices": [
+        83,
+        84,
+        85,
+        86
+      ]
+    },
+    "MALFORMED": {
+      "description": "Invalid RFC-5322 emails, non-E.164 phone numbers, and forbidden lead status transitions",
+      "expectedOutcome": "malformed",
+      "count": 8,
+      "recordIndices": [
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94
+      ]
+    },
+    "FOREIGN_KEY_MISSING": {
+      "description": "Non-existent parent company_id violating referential foreign key restrict rule",
+      "expectedOutcome": "foreign_key_missing",
+      "count": 2,
+      "recordIndices": [
+        95,
+        96
+      ]
+    },
+    "FORMULA_INJECTION_RISK": {
+      "description": "Spreadsheet formula injection vectors starting with =, +, -, or @",
+      "expectedOutcome": "malformed",
+      "count": 2,
+      "recordIndices": [
+        97,
+        98
+      ]
+    },
+    "BOUNDARY_NUMBERS": {
+      "description": "Out-of-range negative financial values violating domain non-negative constraints",
+      "expectedOutcome": "malformed",
+      "count": 1,
+      "recordIndices": [
+        99
+      ]
+    },
+    "FIELD_TOO_LONG": {
+      "description": "Values exceeding database text column boundary capacity (> 255 chars)",
+      "expectedOutcome": "malformed",
+      "count": 1,
+      "recordIndices": [
+        100
+      ]
+    }
+  },
+  "records": [
+    {
+      "index": 1,
+      "id": "c1000001-0000-4000-8000-000000000001",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 2,
+      "id": "c1000001-0000-4000-8000-000000000002",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 3,
+      "id": "c1000001-0000-4000-8000-000000000003",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 4,
+      "id": "c1000001-0000-4000-8000-000000000004",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 5,
+      "id": "c1000001-0000-4000-8000-000000000005",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 6,
+      "id": "c1000001-0000-4000-8000-000000000006",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 7,
+      "id": "c1000001-0000-4000-8000-000000000007",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 8,
+      "id": "c1000001-0000-4000-8000-000000000008",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 9,
+      "id": "c1000001-0000-4000-8000-000000000009",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 10,
+      "id": "c1000001-0000-4000-8000-000000000010",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 11,
+      "id": "c1000001-0000-4000-8000-000000000011",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 12,
+      "id": "c1000001-0000-4000-8000-000000000012",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 13,
+      "id": "c1000001-0000-4000-8000-000000000013",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 14,
+      "id": "c1000001-0000-4000-8000-000000000014",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 15,
+      "id": "c1000001-0000-4000-8000-000000000015",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 16,
+      "id": "c1000001-0000-4000-8000-000000000016",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 17,
+      "id": "c1000001-0000-4000-8000-000000000017",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 18,
+      "id": "c1000001-0000-4000-8000-000000000018",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 19,
+      "id": "c1000001-0000-4000-8000-000000000019",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 20,
+      "id": "c1000001-0000-4000-8000-000000000020",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 21,
+      "id": "c1000001-0000-4000-8000-000000000021",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 22,
+      "id": "c1000001-0000-4000-8000-000000000022",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 23,
+      "id": "c1000001-0000-4000-8000-000000000023",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 24,
+      "id": "c1000001-0000-4000-8000-000000000024",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 25,
+      "id": "c1000001-0000-4000-8000-000000000025",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 26,
+      "id": "c1000001-0000-4000-8000-000000000026",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 27,
+      "id": "c1000001-0000-4000-8000-000000000027",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 28,
+      "id": "c1000001-0000-4000-8000-000000000028",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 29,
+      "id": "c1000001-0000-4000-8000-000000000029",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 30,
+      "id": "c1000001-0000-4000-8000-000000000030",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 31,
+      "id": "c1000001-0000-4000-8000-000000000031",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 32,
+      "id": "c1000001-0000-4000-8000-000000000032",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 33,
+      "id": "c1000001-0000-4000-8000-000000000033",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 34,
+      "id": "c1000001-0000-4000-8000-000000000034",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 35,
+      "id": "c1000001-0000-4000-8000-000000000035",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 36,
+      "id": "c1000001-0000-4000-8000-000000000036",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 37,
+      "id": "c1000001-0000-4000-8000-000000000037",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 38,
+      "id": "c1000001-0000-4000-8000-000000000038",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 39,
+      "id": "c1000001-0000-4000-8000-000000000039",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 40,
+      "id": "c1000001-0000-4000-8000-000000000040",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 41,
+      "id": "c1000001-0000-4000-8000-000000000041",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 42,
+      "id": "c1000001-0000-4000-8000-000000000042",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 43,
+      "id": "c1000001-0000-4000-8000-000000000043",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 44,
+      "id": "c1000001-0000-4000-8000-000000000044",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 45,
+      "id": "c1000001-0000-4000-8000-000000000045",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 46,
+      "id": "c1000001-0000-4000-8000-000000000046",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 47,
+      "id": "c1000001-0000-4000-8000-000000000047",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 48,
+      "id": "c1000001-0000-4000-8000-000000000048",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 49,
+      "id": "c1000001-0000-4000-8000-000000000049",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 50,
+      "id": "c1000001-0000-4000-8000-000000000050",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 51,
+      "id": "c1000001-0000-4000-8000-000000000051",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 52,
+      "id": "c1000001-0000-4000-8000-000000000052",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 53,
+      "id": "c1000001-0000-4000-8000-000000000053",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 54,
+      "id": "c1000001-0000-4000-8000-000000000054",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 55,
+      "id": "c1000001-0000-4000-8000-000000000055",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 56,
+      "id": "c1000001-0000-4000-8000-000000000056",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 57,
+      "id": "c1000001-0000-4000-8000-000000000057",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 58,
+      "id": "c1000001-0000-4000-8000-000000000058",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 59,
+      "id": "c1000001-0000-4000-8000-000000000059",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 60,
+      "id": "c1000001-0000-4000-8000-000000000060",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 61,
+      "id": "c1000001-0000-4000-8000-000000000061",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 62,
+      "id": "c1000001-0000-4000-8000-000000000062",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 63,
+      "id": "c1000001-0000-4000-8000-000000000063",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 64,
+      "id": "c1000001-0000-4000-8000-000000000064",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 65,
+      "id": "c1000001-0000-4000-8000-000000000065",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 66,
+      "id": "c1000001-0000-4000-8000-000000000066",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 67,
+      "id": "c1000001-0000-4000-8000-000000000067",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 68,
+      "id": "c1000001-0000-4000-8000-000000000068",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 69,
+      "id": "c1000001-0000-4000-8000-000000000069",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 70,
+      "id": "c1000001-0000-4000-8000-000000000070",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 71,
+      "id": "c1000001-0000-4000-8000-000000000071",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 72,
+      "id": "c1000001-0000-4000-8000-000000000072",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 73,
+      "id": "c1000001-0000-4000-8000-000000000073",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 74,
+      "id": "c1000001-0000-4000-8000-000000000074",
+      "expectedOutcome": "valid",
+      "terminalOutcome": "loaded",
+      "status": "VALID",
+      "defects": []
+    },
+    {
+      "index": 75,
+      "id": "c1000001-0000-4000-8000-000000000075",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "email",
+          "reason": "Exact normalized email duplicate candidate (pair 1 / primary)"
+        }
+      ]
+    },
+    {
+      "index": 76,
+      "id": "c1000001-0000-4000-8000-000000000076",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "email",
+          "reason": "Exact normalized email duplicate candidate (pair 1 / secondary)"
+        }
+      ]
+    },
+    {
+      "index": 77,
+      "id": "c1000001-0000-4000-8000-000000000077",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "email",
+          "reason": "Exact normalized email duplicate candidate (pair 2 / primary)"
+        }
+      ]
+    },
+    {
+      "index": 78,
+      "id": "c1000001-0000-4000-8000-000000000078",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "email",
+          "reason": "Exact normalized email duplicate candidate (pair 2 / secondary)"
+        }
+      ]
+    },
+    {
+      "index": 79,
+      "id": "c1000001-0000-4000-8000-000000000079",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "phone#name",
+          "reason": "Exact phone+name compound duplicate candidate (pair 3 / primary)"
+        }
+      ]
+    },
+    {
+      "index": 80,
+      "id": "c1000001-0000-4000-8000-000000000080",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "phone#name",
+          "reason": "Exact phone+name compound duplicate candidate (pair 3 / secondary)"
+        }
+      ]
+    },
+    {
+      "index": 81,
+      "id": "c1000001-0000-4000-8000-000000000081",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "phone#name",
+          "reason": "Exact phone+name compound duplicate candidate (pair 4 / primary)"
+        }
+      ]
+    },
+    {
+      "index": 82,
+      "id": "c1000001-0000-4000-8000-000000000082",
+      "expectedOutcome": "exact_duplicate",
+      "terminalOutcome": "merged",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "phone#name",
+          "reason": "Exact phone+name compound duplicate candidate (pair 4 / secondary)"
+        }
+      ]
+    },
+    {
+      "index": 83,
+      "id": "c1000001-0000-4000-8000-000000000083",
+      "expectedOutcome": "null_required",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "first_name",
+          "reason": "Mandatory field first_name is empty"
+        }
+      ]
+    },
+    {
+      "index": 84,
+      "id": "c1000001-0000-4000-8000-000000000084",
+      "expectedOutcome": "null_required",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "first_name",
+          "reason": "Mandatory field first_name is pure whitespace"
+        }
+      ]
+    },
+    {
+      "index": 85,
+      "id": "c1000001-0000-4000-8000-000000000085",
+      "expectedOutcome": "null_required",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "last_name",
+          "reason": "Mandatory field last_name is empty"
+        }
+      ]
+    },
+    {
+      "index": 86,
+      "id": "c1000001-0000-4000-8000-000000000086",
+      "expectedOutcome": "null_required",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "last_name",
+          "reason": "Mandatory field last_name is pure whitespace"
+        }
+      ]
+    },
+    {
+      "index": 87,
+      "id": "c1000001-0000-4000-8000-000000000087",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "email",
+          "reason": "Email missing @ delimiter violates RFC-5322"
+        }
+      ]
+    },
+    {
+      "index": 88,
+      "id": "c1000001-0000-4000-8000-000000000088",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "email",
+          "reason": "Email missing domain part violates RFC-5322"
+        }
+      ]
+    },
+    {
+      "index": 89,
+      "id": "c1000001-0000-4000-8000-000000000089",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "email",
+          "reason": "Email contains unquoted space violates RFC-5322"
+        }
+      ]
+    },
+    {
+      "index": 90,
+      "id": "c1000001-0000-4000-8000-000000000090",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "email",
+          "reason": "Email contains consecutive dots violates RFC-5322"
+        }
+      ]
+    },
+    {
+      "index": 91,
+      "id": "c1000001-0000-4000-8000-000000000091",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "phone",
+          "reason": "Phone contains alphabetic characters"
+        }
+      ]
+    },
+    {
+      "index": 92,
+      "id": "c1000001-0000-4000-8000-000000000092",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "phone",
+          "reason": "Phone has insufficient digits for E.164 normalization"
+        }
+      ]
+    },
+    {
+      "index": 93,
+      "id": "c1000001-0000-4000-8000-000000000093",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "lead_status",
+          "reason": "Lead status 'Reopened' violates CRM SDS allowlist ('New', 'Working', 'Qualified', 'Closed')"
+        }
+      ]
+    },
+    {
+      "index": 94,
+      "id": "c1000001-0000-4000-8000-000000000094",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "MALFORMED",
+          "field": "lead_status",
+          "reason": "Lead status 'Archived_Legacy' violates CRM SDS allowlist"
+        }
+      ]
+    },
+    {
+      "index": 95,
+      "id": "c1000001-0000-4000-8000-000000000095",
+      "expectedOutcome": "foreign_key_missing",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "FOREIGN_KEY_MISSING",
+          "field": "company_id",
+          "reason": "Referenced company_id '00000000-0000-0000-0000-000000000000' does not exist in crm1_companies"
+        }
+      ]
+    },
+    {
+      "index": 96,
+      "id": "c1000001-0000-4000-8000-000000000096",
+      "expectedOutcome": "foreign_key_missing",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "FOREIGN_KEY_MISSING",
+          "field": "company_id",
+          "reason": "Referenced company_id 'ffffffff-ffff-ffff-ffff-ffffffffffff' does not exist in crm1_companies"
+        }
+      ]
+    },
+    {
+      "index": 97,
+      "id": "c1000001-0000-4000-8000-000000000097",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "FORMULA_INJECTION_RISK",
+          "field": "first_name",
+          "reason": "Value starts with formula execution trigger '='"
+        }
+      ]
+    },
+    {
+      "index": 98,
+      "id": "c1000001-0000-4000-8000-000000000098",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "FORMULA_INJECTION_RISK",
+          "field": "last_name",
+          "reason": "Value starts with formula execution trigger '+'"
+        }
+      ]
+    },
+    {
+      "index": 99,
+      "id": "c1000001-0000-4000-8000-000000000099",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "BOUNDARY_NUMBERS",
+          "field": "annual_revenue",
+          "reason": "Annual revenue cannot be negative (-50000)"
+        }
+      ]
+    },
+    {
+      "index": 100,
+      "id": "c1000001-0000-4000-8000-000000000100",
+      "expectedOutcome": "malformed",
+      "terminalOutcome": "rejected",
+      "status": "DEFECTIVE",
+      "defects": [
+        {
+          "category": "FIELD_TOO_LONG",
+          "field": "first_name",
+          "reason": "Length (500) exceeds maximum allowable text column constraint (255)"
+        }
+      ]
+    }
+  ]
+}

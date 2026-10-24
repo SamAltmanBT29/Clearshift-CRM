@@ -35,35 +35,20 @@ if (!fs.existsSync(dir)) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-// Generate the canonical CSV and expected profile if not present or ensuring synchronization
-const generatedRows = generateCanonicalCrm1Rows();
-const generatedCsv = formatRowsToCsv(generatedRows);
-const generatedResults = evaluateRows(generatedRows, companyRegistryLedger);
-const generatedSummary = summarize(generatedResults);
-
 const csvPath = path.join(dir, 'dirty-data-v1.csv');
-fs.writeFileSync(csvPath, generatedCsv, 'utf8');
+if (!fs.existsSync(csvPath)) {
+  const generatedRows = generateCanonicalCrm1Rows();
+  const generatedCsv = formatRowsToCsv(generatedRows);
+  fs.writeFileSync(csvPath, generatedCsv, 'utf8');
+}
 
 const csvBuf = fs.readFileSync(csvPath);
 const sha256 = createHash('sha256').update(csvBuf).digest('hex');
 
-const expectedProfileData = {
-  schemaVersion: 1,
-  rulesetVersion: RULESET_VERSION,
-  fixture: {
-    file: 'dirty-data-v1.csv',
-    sha256,
-    bytes: csvBuf.length,
-    rows: 100,
-  },
-  outcomes: generatedSummary.outcomes,
-  byRule: generatedSummary.byRule,
-};
-
 const profilePath = path.join(dir, 'expected-profile.json');
-fs.writeFileSync(profilePath, JSON.stringify(expectedProfileData, null, 2) + '\n', 'utf8');
-
 const expected = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+const fixtureMeta = expected.fixtures?.['dirty-data-v1.csv'] || expected.fixture;
+const expectedOutcomes = expected.rulesOutcomes || expected.outcomes;
 
 const docsPath = path.join(root, 'apps/crm/modules/crm-1/docs/data-quality-rules.md');
 const docs = fs.existsSync(docsPath) ? fs.readFileSync(docsPath, 'utf8') : '';
@@ -96,9 +81,9 @@ const one = (patch: Record<string, string>) => run([{ ...valid, ...patch }])[0]!
 
 describe('CRM-1 data-quality rules (CRM1-08, #13)', () => {
   it('fixture matches committed checksum, size and row count', () => {
-    expect(sha(csvBuf)).toBe(expected.fixture.sha256);
-    expect(csvBuf.length).toBe(expected.fixture.bytes);
-    expect(rows().length).toBe(expected.fixture.rows);
+    expect(sha(csvBuf)).toBe(fixtureMeta.sha256);
+    expect(csvBuf.length).toBe(fixtureMeta.bytes);
+    expect(rows().length).toBe(fixtureMeta.rows);
     expect(rows().length).toBe(100);
   });
 
@@ -106,7 +91,7 @@ describe('CRM-1 data-quality rules (CRM1-08, #13)', () => {
     const a = summarize(run(rows()));
     const b = summarize(run(rows()));
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-    expect(a.outcomes).toEqual(expected.outcomes);
+    expect(a.outcomes).toEqual(expectedOutcomes);
     expect(a.byRule).toEqual(expected.byRule);
     expect(expected.rulesetVersion).toBe(RULESET_VERSION);
   });
@@ -116,7 +101,7 @@ describe('CRM-1 data-quality rules (CRM1-08, #13)', () => {
     const before = JSON.stringify(data);
     run(data);
     expect(JSON.stringify(data)).toBe(before);
-    expect(sha(fs.readFileSync(path.join(dir, 'dirty-data-v1.csv')))).toBe(expected.fixture.sha256);
+    expect(sha(fs.readFileSync(path.join(dir, 'dirty-data-v1.csv')))).toBe(fixtureMeta.sha256);
   });
 
   it('every rule has stable id, version, condition, reason and is documented', () => {

@@ -2,12 +2,36 @@
   "schemaVersion": 1,
   "rulesetVersion": 1,
   "fixture": {
-    "file": "dirty-data-v1.csv",
-    "sha256": "23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0",
-    "bytes": 28988,
+    "file": "dirty-pack-100.csv",
+    "sha256": "a87d39a0f1432eb5e6a12c639b3f82f80d01a542802275dfd658c54cccb77062",
+    "bytes": 29937,
     "rows": 100
   },
+  "fixtures": {
+    "dirty-pack-100.csv": {
+      "file": "dirty-pack-100.csv",
+      "sha256": "a87d39a0f1432eb5e6a12c639b3f82f80d01a542802275dfd658c54cccb77062",
+      "bytes": 29937,
+      "rows": 100
+    },
+    "dirty-data-v1.csv": {
+      "file": "dirty-data-v1.csv",
+      "sha256": "23d214a7a308a81c4b867ec7f8907b23d1cdb87c5e24c3c05d4ce9b15d23a6d0",
+      "bytes": 28988,
+      "rows": 100
+    }
+  },
   "outcomes": {
+    "loaded": 74,
+    "merged": 8,
+    "rejected": 18,
+    "skipped": 0,
+    "accept": 54,
+    "normalize": 8,
+    "merge": 4,
+    "reject": 34
+  },
+  "rulesOutcomes": {
     "accept": 54,
     "normalize": 8,
     "merge": 4,
@@ -33,5 +57,82 @@
     "CRM1-DQ-017": 1,
     "CRM1-DQ-018": 1,
     "CRM1-DQ-019": 1
+  },
+  "columns": {
+    "id": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "uuid"
+    },
+    "first_name": {
+      "emptyCount": 2,
+      "invalidCount": 2,
+      "inferredType": "string"
+    },
+    "last_name": {
+      "emptyCount": 2,
+      "invalidCount": 1,
+      "inferredType": "string"
+    },
+    "email": {
+      "emptyCount": 0,
+      "invalidCount": 4,
+      "inferredType": "email"
+    },
+    "phone": {
+      "emptyCount": 0,
+      "invalidCount": 2,
+      "inferredType": "phone"
+    },
+    "address": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "string"
+    },
+    "company_id": {
+      "emptyCount": 0,
+      "invalidCount": 2,
+      "inferredType": "uuid"
+    },
+    "company_name": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "string"
+    },
+    "lead_status": {
+      "emptyCount": 0,
+      "invalidCount": 2,
+      "inferredType": "enum"
+    },
+    "source_system": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "string"
+    },
+    "source_id": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "string"
+    },
+    "consent_status": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "enum"
+    },
+    "unsubscribed": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "boolean"
+    },
+    "annual_revenue": {
+      "emptyCount": 0,
+      "invalidCount": 1,
+      "inferredType": "decimal"
+    },
+    "created_at": {
+      "emptyCount": 0,
+      "invalidCount": 0,
+      "inferredType": "timestamp"
+    }
   }
 }
