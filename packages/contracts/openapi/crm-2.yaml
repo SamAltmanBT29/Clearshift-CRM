@@ -169,6 +169,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Deal'
+        '400':
+          description: Invalid deal ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Deal not found
           content:
@@ -342,6 +348,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Quote'
+        '400':
+          description: Invalid quote ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Quote not found
           content:

@@ -10,14 +10,17 @@ import {
   ScoresResponseSchema,
   PaginatedRejectsResponseSchema,
   ReconciliationReportSchema,
-  HealthCheckResponseSchema,
+  MigrationRunSchema,
+  BatchSummarySchema,
+  DuplicateCandidateSchema,
+  DuplicateAuditLogEntrySchema,
 } from '@clearshift/contracts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const OPENAPI_FILE_PATH = path.resolve(__dirname, '../../../../../../packages/contracts/openapi/crm-5.yaml');
 
-describe('CRM-5 OpenAPI Contract Conformance & Regression Suite (#55, [CRM5-10])', () => {
+describe('CRM-5 OpenAPI Contract Conformance & Regression Suite (#202, [CRM5-29])', () => {
   let app: ReturnType<typeof buildApp>;
   let service: ControlCenterService;
   let adminToken: string;
@@ -43,12 +46,26 @@ describe('CRM-5 OpenAPI Contract Conformance & Regression Suite (#55, [CRM5-10])
     });
 
     it('documents all required baseline and mutation endpoints in paths', () => {
-      expect(openapiYaml).toContain('/health:');
-      expect(openapiYaml).toContain('/runs:');
-      expect(openapiYaml).toContain('/scores:');
-      expect(openapiYaml).toContain('/rejects:');
-      expect(openapiYaml).toContain('/reconciliation/{batch}:');
-      expect(openapiYaml).toContain('/import/row:');
+      const requiredPaths = [
+        '/health:',
+        '/runs:',
+        '/runs/{id}:',
+        '/scores:',
+        '/rejects:',
+        '/reconciliation/{batch}:',
+        '/reconciliation:',
+        '/batches/{batch}:',
+        '/duplicates/detect:',
+        '/duplicates/held:',
+        '/duplicates/resolve:',
+        '/duplicates/audit:',
+        '/import/row:',
+        '/import/receipts:',
+      ];
+
+      for (const endpoint of requiredPaths) {
+        expect(openapiYaml).toContain(endpoint);
+      }
     });
 
     it('documents HTTP bearerAuth security scheme across all protected endpoints', () => {
@@ -77,6 +94,22 @@ describe('CRM-5 OpenAPI Contract Conformance & Regression Suite (#55, [CRM5-10])
         expect(parsed.data.pageSize).toBe(10);
         expect(Array.isArray(parsed.data.items)).toBe(true);
       }
+    });
+
+    it('GET /api/v1/crm-control/runs/:id returns schema-compliant migration run entity', async () => {
+      const runs = service.getRuns({ page: 1, pageSize: 5 });
+      const targetRun = runs.items[0]!;
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/crm-control/runs/${targetRun.id}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      const parsed = MigrationRunSchema.safeParse(body);
+      expect(parsed.success).toBe(true);
     });
 
     it('GET /api/v1/crm-control/scores returns schema-compliant quality scores', async () => {
@@ -128,6 +161,35 @@ describe('CRM-5 OpenAPI Contract Conformance & Regression Suite (#55, [CRM5-10])
         expect(parsed.data.batchId).toBe('batch-contacts-01');
         expect(parsed.data.unaccountedCount).toBe(0);
         expect(parsed.data.status).toBe('OK');
+      }
+    });
+
+    it('GET /api/v1/crm-control/batches/:batch returns schema-compliant batch summary', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-control/batches/batch-contacts-01',
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      const parsed = BatchSummarySchema.safeParse(body);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('GET /api/v1/crm-control/duplicates/held returns array of duplicate candidates', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/crm-control/duplicates/held',
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      const list = Array.isArray(body) ? body : body.items;
+      expect(Array.isArray(list)).toBe(true);
+      for (const item of list) {
+        expect(DuplicateCandidateSchema.safeParse(item).success).toBe(true);
       }
     });
 

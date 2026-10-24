@@ -55,6 +55,13 @@ export class InvalidTicketStatusTransitionError extends AppError {
   }
 }
 
+export class ConflictError extends AppError {
+  constructor(message: string, details: ErrorDetail[] = []) {
+    super('CONFLICT', message, 409, details);
+    this.name = 'ConflictError';
+  }
+}
+
 export class DomainValidationError extends AppError {
   constructor(message: string, details: ErrorDetail[] = [], statusCode = 400) {
     super('VALIDATION_ERROR', message, statusCode, details);
