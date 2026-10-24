@@ -8,7 +8,7 @@ import {
   CRM3NoteCreateSchema,
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
-import { crm3Service, Crm3Service } from '../services/crm3.service.js';
+import { crm3Service, Crm3Service, type Crm3MutationContext } from '../services/crm3.service.js';
 import { requireRoles, resolveNoteAuthor } from '../plugins/auth.js';
 import { CRM3_ENDPOINT_ROLES } from '../policies/roles.js';
 
@@ -28,6 +28,10 @@ const UuidParamSchema = z.object({
 function correlationIdOf(request: FastifyRequest): string {
   const header = request.headers['x-correlation-id'];
   return typeof header === 'string' && header.length > 0 ? header : `corr-${request.id}`;
+}
+
+function mutationContext(request: FastifyRequest): Crm3MutationContext {
+  return { actorId: request.user?.sub, correlationId: correlationIdOf(request) };
 }
 
 function getPreHandlers(
@@ -142,7 +146,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
 
       try {
         const authorId = request.user?.sub || 'system';
-        const created = await service.createTicket(parse.data, authorId);
+        const created = await service.createTicket(parse.data, authorId, mutationContext(request));
         return reply
           .status(201)
           .header('Location', `/api/v1/crm-tickets/tickets/${created.id}`)
@@ -191,7 +195,11 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       }
 
       try {
-        const updated = await service.updateTicket(paramResult.data.id, parse.data);
+        const updated = await service.updateTicket(
+          paramResult.data.id,
+          parse.data,
+          mutationContext(request)
+        );
         return reply.status(200).send(updated);
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
@@ -277,7 +285,8 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
         const created = await service.addNote(
           parse.data.ticketId,
           parse.data.noteText,
-          authorId
+          authorId,
+          mutationContext(request)
         );
         return reply.status(201).send(created);
       } catch (err: any) {
@@ -335,7 +344,8 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
         const created = await service.addNote(
           paramResult.data.id,
           parse.data.noteText,
-          authorId
+          authorId,
+          mutationContext(request)
         );
         return reply.status(201).send(created);
       } catch (err: any) {

@@ -280,3 +280,29 @@ Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/r
 | Create | `201` with `Location: /api/v1/crm-tickets/tickets/{id}`. |
 | Update | Only `subject, status, priority, contactId, orderRef` can change; `updatedAt` is refreshed; protected fields (`id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId`) are rejected with 400. |
 | Test data | Deterministic factories in `tests/factories/crm3.factories.ts` (`makeTicket`, `makeNote`, `makeTicketCreateInput`, `makeInvalidTicket(kind)`). |
+
+## 11. Event Production & Audit Trail (CRM3-08)
+
+The CRM-3 service now emits the §5 events. Each event is appended to the outbox (`Crm3Store.appendOutboxEvent`) **inside the same store transaction as the business write**, so the write and its event are saved together or not at all. A PostgreSQL store will call `writeOutboxEvent(tx, envelope)` (`@cs/db`) in that transaction.
+
+### When each event is emitted
+| Event | Emitted by | Not emitted when |
+|---|---|---|
+| `crm.ticket.created` | `POST /tickets`; each ticket loaded by the Migration Kit | — |
+| `crm.ticket.updated` | `PATCH /tickets/{id}` that changes at least one field (payload lists changed `status`, `priority`, `contactId`, `orderRef`) | the PATCH changes nothing |
+| `crm.ticket.status_changed` | PATCH that changes the status (`previousStatus` → `newStatus`) | same-status PATCH |
+| `crm.ticket.priority_changed` | PATCH that changes the priority | same priority |
+| `crm.ticket.note_added` | `POST /notes`, `POST /tickets/{id}/notes`, an initial note on create, a first note on import | — |
+| `crm.ticket.import_batch_loaded` | batch loader finishing as `completed` or `failed` (counts + `completedAt`) | a batch halted by the 10% rule (it can still resume) |
+
+### Envelope mapping
+`event_id` = `id` (UUID, one per mutation) · `event_type` = `eventType` · `schema_version` = `version` (1) · `occurred_at` = `timestamp` · `correlation_id` = `correlationId` (request `x-correlation-id`, else a generated `crm3-<uuid>`; the batch id for imports).
+
+### Privacy
+Ticket `subject` and note `noteText` are **optional** in the contract and the CRM-3 producer never sends them; contact email/name are never in events. Consumers read free text through the CRM-3 API.
+
+### Duplicate delivery
+Event ids are unique (the outbox rejects a repeated id, like `platform.outbox.event_id UNIQUE`). An import replay or a no-op edit emits nothing. Consumers must dedupe on `id` (e.g. `platform.consumed_events`).
+
+### Audit trail
+`Crm3AuditService` (`src/services/audit.ts`) writes append-only rows through the shared `@cs/core` `AuditService` (PLT-10) after each committed write: `ticket.created`, `ticket.updated`, `note.added`, `ticket.imported`, `load.requested`, `load.finished`. Each row has actor, target, correlation id, batch id where relevant, and a change set `{ field: { from, to } }`. Free-text fields (subject, note text, customer email/name) are recorded only as `'[changed]'`. An audit failure is logged without the payload and never undoes the committed write.

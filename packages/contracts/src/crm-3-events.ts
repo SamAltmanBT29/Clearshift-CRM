@@ -39,9 +39,11 @@ export const CRM3EventTypeSchema = z.enum([
 // 1. Event Payload Schemas
 // ---------------------------------------------------------------------------
 
+// Privacy: free text (ticket subject, note text) may contain customer details, so it is optional
+// in payloads and the CRM-3 producer omits it. Consumers read text through the CRM-3 API.
 export const TicketCreatedPayloadSchema = z.object({
   ticketId: z.string().uuid(),
-  subject: z.string().min(1),
+  subject: z.string().min(1).optional(),
   status: CRM3TicketStatusSchema,
   priority: CRM3TicketPrioritySchema,
   contactId: z.string().uuid(),
@@ -83,7 +85,7 @@ export const TicketNoteAddedPayloadSchema = z.object({
   noteId: z.string().uuid(),
   ticketId: z.string().uuid(),
   authorId: z.string().min(1),
-  noteText: z.string().min(1),
+  noteText: z.string().min(1).optional(),
   createdAt: z.string().datetime(),
 });
 export type TicketNoteAddedPayload = z.infer<typeof TicketNoteAddedPayloadSchema>;
