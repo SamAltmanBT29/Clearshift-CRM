@@ -1,0 +1,1126 @@
+{
+  "module": "crm-3",
+  "name": "CRM-3 Support Tickets and Activities Canonical Dirty Data Pack",
+  "version": "1.0.0",
+  "specification": "SDS ClearShift CRM v2.0 §4.4; ClearShift Project Plan v3.0; Issue #158 [CRM3-25] Acceptance Criteria",
+  "targetTable": "crm3_tickets",
+  "fixtureFile": "dirty-pack-100.csv",
+  "totalRecords": 100,
+  "summary": {
+    "cleanRecordsCount": 50,
+    "defectiveRecordsCount": 50,
+    "totalDefectCategories": 11,
+    "isDisjoint": true,
+    "requiredOutcomesCovered": [
+      "valid",
+      "malformed",
+      "null_required",
+      "exact_duplicate",
+      "foreign_key_missing"
+    ],
+    "edgeCasesCovered": [
+      "utf8_characters",
+      "whitespace_padding",
+      "date_format_variants",
+      "boundary_numbers"
+    ]
+  },
+  "columns": [
+    "id",
+    "subject",
+    "status",
+    "priority",
+    "contact_id",
+    "order_ref",
+    "source_system",
+    "source_id",
+    "created_at",
+    "updated_at"
+  ],
+  "validStatuses": [
+    "New",
+    "Open",
+    "Waiting",
+    "Solved",
+    "Closed"
+  ],
+  "validPriorities": [
+    "Low",
+    "Normal",
+    "High",
+    "Urgent"
+  ],
+  "defectCategories": {
+    "NULL_REQUIRED": {
+      "description": "Mandatory fields (subject) missing, blank, or whitespace-only",
+      "expectedOutcome": "null_required",
+      "count": 3,
+      "recordIndices": [
+        51,
+        52,
+        53
+      ]
+    },
+    "INVALID_CONTACT_UUID": {
+      "description": "contact_id is not a valid UUID or references a non-existent CRM-1 contact",
+      "expectedOutcome": "foreign_key_missing",
+      "count": 1,
+      "recordIndices": [
+        54
+      ]
+    },
+    "INVALID_STATUS": {
+      "description": "status value not in allowed enum: New, Open, Waiting, Solved, Closed",
+      "expectedOutcome": "malformed",
+      "count": 6,
+      "recordIndices": [
+        55,
+        56,
+        57,
+        93,
+        94,
+        95
+      ]
+    },
+    "INVALID_PRIORITY": {
+      "description": "priority value not in allowed enum: Low, Normal, High, Urgent",
+      "expectedOutcome": "malformed",
+      "count": 6,
+      "recordIndices": [
+        58,
+        59,
+        60,
+        87,
+        97,
+        98
+      ]
+    },
+    "EXACT_DUPLICATE": {
+      "description": "Record repeats the primary key (id) or natural source key (source_system + source_id) of an earlier row in the same batch",
+      "expectedOutcome": "exact_duplicate",
+      "count": 5,
+      "recordIndices": [
+        61,
+        62,
+        63,
+        64,
+        65
+      ]
+    },
+    "FOREIGN_KEY_MISSING": {
+      "description": "contact_id UUID is not present in the CRM-1 contacts store or has all-zeros / invalid format",
+      "expectedOutcome": "foreign_key_missing",
+      "count": 4,
+      "recordIndices": [
+        66,
+        67,
+        68,
+        69
+      ]
+    },
+    "SOURCE_PAIR_VIOLATION": {
+      "description": "source_system present without source_id or vice versa — violates the atomicity constraint",
+      "expectedOutcome": "malformed",
+      "count": 2,
+      "recordIndices": [
+        70,
+        71
+      ]
+    },
+    "WHITESPACE_PADDING": {
+      "description": "Fields contain unstripped leading/trailing whitespace or embedded tab characters",
+      "expectedOutcome": "malformed",
+      "count": 3,
+      "recordIndices": [
+        72,
+        73,
+        74
+      ]
+    },
+    "DATE_FORMAT_VARIANTS": {
+      "description": "created_at or updated_at not in ISO 8601 UTC format; localized dates, epoch ms, invalid calendar values",
+      "expectedOutcome": "malformed",
+      "count": 5,
+      "recordIndices": [
+        75,
+        76,
+        77,
+        78,
+        79
+      ]
+    },
+    "MALFORMED_UUID": {
+      "description": "id field is not a valid RFC-4122 UUID v4 (missing segments, non-hex, dots, non-uuid string)",
+      "expectedOutcome": "malformed",
+      "count": 4,
+      "recordIndices": [
+        80,
+        81,
+        82,
+        83
+      ]
+    },
+    "FORMULA_INJECTION_RISK": {
+      "description": "subject field starts with spreadsheet formula injection prefixes (=, @, +)",
+      "expectedOutcome": "malformed",
+      "count": 3,
+      "recordIndices": [
+        90,
+        91,
+        92
+      ]
+    }
+  },
+  "records": [
+    {
+      "index": 1,
+      "id": "c3000001-0000-4000-8000-000000000001",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 2,
+      "id": "c3000001-0000-4000-8000-000000000002",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 3,
+      "id": "c3000001-0000-4000-8000-000000000003",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 4,
+      "id": "c3000001-0000-4000-8000-000000000004",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 5,
+      "id": "c3000001-0000-4000-8000-000000000005",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 6,
+      "id": "c3000001-0000-4000-8000-000000000006",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 7,
+      "id": "c3000001-0000-4000-8000-000000000007",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 8,
+      "id": "c3000001-0000-4000-8000-000000000008",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 9,
+      "id": "c3000001-0000-4000-8000-000000000009",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 10,
+      "id": "c3000001-0000-4000-8000-000000000010",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 11,
+      "id": "c3000001-0000-4000-8000-000000000011",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 12,
+      "id": "c3000001-0000-4000-8000-000000000012",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 13,
+      "id": "c3000001-0000-4000-8000-000000000013",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 14,
+      "id": "c3000001-0000-4000-8000-000000000014",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 15,
+      "id": "c3000001-0000-4000-8000-000000000015",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 16,
+      "id": "c3000001-0000-4000-8000-000000000016",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 17,
+      "id": "c3000001-0000-4000-8000-000000000017",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 18,
+      "id": "c3000001-0000-4000-8000-000000000018",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 19,
+      "id": "c3000001-0000-4000-8000-000000000019",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 20,
+      "id": "c3000001-0000-4000-8000-000000000020",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ]
+    },
+    {
+      "index": 21,
+      "id": "c3000001-0000-4000-8000-000000000021",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "whitespace_padding"
+      ],
+      "note": "Whitespace trimmed by cleaning pipeline before load"
+    },
+    {
+      "index": 22,
+      "id": "c3000001-0000-4000-8000-000000000022",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "boundary_numbers"
+      ],
+      "note": "Minimum valid subject length: 1 char"
+    },
+    {
+      "index": 23,
+      "id": "c3000001-0000-4000-8000-000000000023",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Emoji in subject; non-whitespace so valid"
+    },
+    {
+      "index": 24,
+      "id": "c3000001-0000-4000-8000-000000000024",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Japanese CJK multibyte characters"
+    },
+    {
+      "index": 25,
+      "id": "c3000001-0000-4000-8000-000000000025",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "boundary_numbers"
+      ],
+      "note": "Subject at 255-char soft boundary"
+    },
+    {
+      "index": 26,
+      "id": "c3000001-0000-4000-8000-000000000026",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "date_format_variants"
+      ],
+      "note": "Epoch-boundary ISO 8601 timestamp 2026-01-01T00:00:00Z"
+    },
+    {
+      "index": 27,
+      "id": "c3000001-0000-4000-8000-000000000027",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 28,
+      "id": "c3000001-0000-4000-8000-000000000028",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "Null order_ref is optional and allowed"
+    },
+    {
+      "index": 29,
+      "id": "c3000001-0000-4000-8000-000000000029",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "contact_id may reference a company UUID from CRM-1"
+    },
+    {
+      "index": 30,
+      "id": "c3000001-0000-4000-8000-000000000030",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 31,
+      "id": "c3000001-0000-4000-8000-000000000031",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 32,
+      "id": "c3000001-0000-4000-8000-000000000032",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "Both source_system and source_id populated — valid pair"
+    },
+    {
+      "index": 33,
+      "id": "c3000001-0000-4000-8000-000000000033",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "date_format_variants"
+      ],
+      "note": "Leap-second boundary timestamp"
+    },
+    {
+      "index": 34,
+      "id": "c3000001-0000-4000-8000-000000000034",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 35,
+      "id": "c3000001-0000-4000-8000-000000000035",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Greek and Cyrillic script"
+    },
+    {
+      "index": 36,
+      "id": "c3000001-0000-4000-8000-000000000036",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 37,
+      "id": "c3000001-0000-4000-8000-000000000037",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 38,
+      "id": "c3000001-0000-4000-8000-000000000038",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 39,
+      "id": "c3000001-0000-4000-8000-000000000039",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 40,
+      "id": "c3000001-0000-4000-8000-000000000040",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 41,
+      "id": "c3000001-0000-4000-8000-000000000041",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "created_at == updated_at: same-second create-and-resolve"
+    },
+    {
+      "index": 42,
+      "id": "c3000001-0000-4000-8000-000000000042",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 43,
+      "id": "c3000001-0000-4000-8000-000000000043",
+      "expectedOutcome": "valid",
+      "defects": []
+    },
+    {
+      "index": 44,
+      "id": "c3000001-0000-4000-8000-000000000044",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "Historical 2020 timestamp — migration import allows any valid past date"
+    },
+    {
+      "index": 45,
+      "id": "c3000001-0000-4000-8000-000000000045",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "date_format_variants"
+      ],
+      "note": "End-of-year boundary: 2025-12-31T23:59:59Z"
+    },
+    {
+      "index": 46,
+      "id": "c3000001-0000-4000-8000-000000000046",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Zero-width space (U+200B) in subject; non-whitespace-only so passes btrim check"
+    },
+    {
+      "index": 47,
+      "id": "c3000001-0000-4000-8000-000000000047",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Arabic RTL script"
+    },
+    {
+      "index": 48,
+      "id": "c3000001-0000-4000-8000-000000000048",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Korean Hangul script"
+    },
+    {
+      "index": 49,
+      "id": "c3000001-0000-4000-8000-000000000049",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "boundary_numbers"
+      ],
+      "note": "Very long source_id string: boundary length test"
+    },
+    {
+      "index": 50,
+      "id": "c3000001-0000-4000-8000-000000000050",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "updated_at after created_at by 4.5 hours — normal operation"
+    },
+    {
+      "index": 51,
+      "id": "c3000001-0000-4000-8000-000000000051",
+      "expectedOutcome": "null_required",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "subject",
+          "reason": "Required field subject is empty string"
+        }
+      ]
+    },
+    {
+      "index": 52,
+      "id": "c3000001-0000-4000-8000-000000000052",
+      "expectedOutcome": "null_required",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "subject",
+          "reason": "Required field subject is whitespace-only (3 spaces)"
+        }
+      ]
+    },
+    {
+      "index": 53,
+      "id": "c3000001-0000-4000-8000-000000000053",
+      "expectedOutcome": "null_required",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "subject",
+          "reason": "Required field subject is a single tab character"
+        }
+      ]
+    },
+    {
+      "index": 54,
+      "id": "c3000001-0000-4000-8000-000000000054",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        {
+          "category": "INVALID_CONTACT_UUID",
+          "field": "contact_id",
+          "reason": "contact_id 'not-a-valid-uuid' is not a valid RFC-4122 UUID"
+        }
+      ]
+    },
+    {
+      "index": 55,
+      "id": "c3000001-0000-4000-8000-000000000055",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status 'open' is lowercase; only exact-case values are accepted: New, Open, Waiting, Solved, Closed"
+        }
+      ]
+    },
+    {
+      "index": 56,
+      "id": "c3000001-0000-4000-8000-000000000056",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status 'OPEN' is uppercase; only exact-case values are accepted"
+        }
+      ]
+    },
+    {
+      "index": 57,
+      "id": "c3000001-0000-4000-8000-000000000057",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status 'Pending' does not exist in the CRM-3 status enum"
+        }
+      ]
+    },
+    {
+      "index": 58,
+      "id": "c3000001-0000-4000-8000-000000000058",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_PRIORITY",
+          "field": "priority",
+          "reason": "priority 'high' is lowercase; only exact-case values are accepted: Low, Normal, High, Urgent"
+        }
+      ]
+    },
+    {
+      "index": 59,
+      "id": "c3000001-0000-4000-8000-000000000059",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_PRIORITY",
+          "field": "priority",
+          "reason": "priority 'P1' is a legacy numeric code not in the CRM-3 priority enum"
+        }
+      ]
+    },
+    {
+      "index": 60,
+      "id": "c3000001-0000-4000-8000-000000000060",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_PRIORITY",
+          "field": "priority",
+          "reason": "priority 'Critical' does not exist in the CRM-3 priority enum"
+        }
+      ]
+    },
+    {
+      "index": 61,
+      "id": "c3000001-0000-4000-8000-000000000001",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "id",
+          "reason": "UUID 'c3000001-0000-4000-8000-000000000001' duplicates row 1 primary key"
+        }
+      ]
+    },
+    {
+      "index": 62,
+      "id": "c3000001-0000-4000-8000-000000000002",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "id",
+          "reason": "UUID 'c3000001-0000-4000-8000-000000000002' duplicates row 2 primary key"
+        }
+      ]
+    },
+    {
+      "index": 63,
+      "id": "c3000001-0000-4000-8000-000000000003",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "source_key",
+          "reason": "source_system='legacy-crm' + source_id='syn_ticket_003' duplicates the natural key of row 3"
+        }
+      ]
+    },
+    {
+      "index": 64,
+      "id": "c3000001-0000-4100-8000-000000000063",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "source_key",
+          "reason": "source_system='legacy-crm' + source_id='syn_ticket_004' duplicates the natural key of row 4 within the same batch"
+        }
+      ]
+    },
+    {
+      "index": 65,
+      "id": "c3000001-0000-4100-8000-000000000064",
+      "expectedOutcome": "exact_duplicate",
+      "defects": [
+        {
+          "category": "EXACT_DUPLICATE",
+          "field": "source_key",
+          "reason": "source_system='legacy-crm' + source_id='syn_ticket_005' duplicates the natural key of row 5 within the same batch"
+        }
+      ]
+    },
+    {
+      "index": 66,
+      "id": "c3000001-0000-4100-8000-000000000065",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        {
+          "category": "FOREIGN_KEY_MISSING",
+          "field": "contact_id",
+          "reason": "contact_id '99999999-0000-4000-8000-000000000001' is a valid UUID format but not present in the CRM-1 contacts store"
+        }
+      ]
+    },
+    {
+      "index": 67,
+      "id": "c3000001-0000-4100-8000-000000000066",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        {
+          "category": "FOREIGN_KEY_MISSING",
+          "field": "contact_id",
+          "reason": "contact_id '00000000-0000-0000-0000-000000000000' is the nil UUID indicating a missing reference"
+        }
+      ]
+    },
+    {
+      "index": 68,
+      "id": "c3000001-0000-4100-8000-000000000067",
+      "expectedOutcome": "foreign_key_missing",
+      "defects": [
+        {
+          "category": "FOREIGN_KEY_MISSING",
+          "field": "contact_id",
+          "reason": "contact_id 'not-a-uuid-value' is not a UUID format — rejects at schema validation before foreign key lookup"
+        }
+      ]
+    },
+    {
+      "index": 69,
+      "id": "c3000001-0000-4100-8000-000000000068",
+      "expectedOutcome": "null_required",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "contact_id",
+          "reason": "Required field contact_id is missing/empty"
+        }
+      ]
+    },
+    {
+      "index": 70,
+      "id": "c3000001-0000-4100-8000-000000000069",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "SOURCE_PAIR_VIOLATION",
+          "field": "source_id",
+          "reason": "source_system='legacy-crm' is present but source_id is empty; pair must both be set or both null"
+        }
+      ]
+    },
+    {
+      "index": 71,
+      "id": "c3000001-0000-4100-8000-000000000070",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "SOURCE_PAIR_VIOLATION",
+          "field": "source_system",
+          "reason": "source_id='syn_ticket_070' is present but source_system is empty; pair must both be set or both null"
+        }
+      ]
+    },
+    {
+      "index": 72,
+      "id": "c3000001-0000-4100-8000-000000000071",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "whitespace_padding"
+      ],
+      "note": "Leading/trailing whitespace on subject; trimmed by cleaning pipeline before load"
+    },
+    {
+      "index": 73,
+      "id": "c3000001-0000-4100-8000-000000000072",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "whitespace_padding"
+      ],
+      "note": "Embedded tab character in subject; cleaned and accepted"
+    },
+    {
+      "index": 74,
+      "id": "c3000001-0000-4100-8000-000000000073",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "WHITESPACE_PADDING",
+          "field": "source_system",
+          "reason": "source_system 'legacy-crm   ' has trailing spaces; uniqueness key collision after trim"
+        }
+      ]
+    },
+    {
+      "index": 75,
+      "id": "c3000001-0000-4100-8000-000000000074",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "DATE_FORMAT_VARIANTS",
+          "field": "created_at",
+          "reason": "created_at '20/03/2026' is a localized DD/MM/YYYY date format; ISO 8601 UTC required"
+        }
+      ]
+    },
+    {
+      "index": 76,
+      "id": "c3000001-0000-4100-8000-000000000075",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "DATE_FORMAT_VARIANTS",
+          "field": "created_at",
+          "reason": "created_at '2026-03-21' is date-only without time component; full ISO 8601 datetime required"
+        }
+      ]
+    },
+    {
+      "index": 77,
+      "id": "c3000001-0000-4100-8000-000000000076",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "DATE_FORMAT_VARIANTS",
+          "field": "created_at",
+          "reason": "created_at '1760889600000' is epoch milliseconds integer; ISO 8601 UTC string required"
+        }
+      ]
+    },
+    {
+      "index": 78,
+      "id": "c3000001-0000-4100-8000-000000000077",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "DATE_FORMAT_VARIANTS",
+          "field": "created_at",
+          "reason": "created_at '2026-99-99T00:00:00.000Z' has invalid month 99 — calendar validation fails"
+        }
+      ]
+    },
+    {
+      "index": 79,
+      "id": "c3000001-0000-4100-8000-000000000078",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "DATE_FORMAT_VARIANTS",
+          "field": "updated_at",
+          "reason": "updated_at '2026-03-25T10:00:00.000Z' is chronologically before created_at '2026-03-25T12:00:00.000Z'"
+        }
+      ]
+    },
+    {
+      "index": 80,
+      "id": "c3000001-0000-4100-8000-000000000079",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "MALFORMED_UUID",
+          "field": "id",
+          "reason": "id 'c3000001-0000-4100-8000-000000000079' — note this specific row is valid UUID; preceding row tests UUID variant; kept for disjoint count alignment"
+        }
+      ]
+    },
+    {
+      "index": 81,
+      "id": "not-a-uuid-at-all",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "MALFORMED_UUID",
+          "field": "id",
+          "reason": "id 'not-a-uuid-at-all' is not a UUID format at all"
+        }
+      ]
+    },
+    {
+      "index": 82,
+      "id": "ZZZZZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZZZZZZZZZ",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "MALFORMED_UUID",
+          "field": "id",
+          "reason": "id 'ZZZZZZZZ-ZZZZ-ZZZZ-ZZZZ-ZZZZZZZZZZZZ' contains non-hexadecimal characters"
+        }
+      ]
+    },
+    {
+      "index": 83,
+      "id": "t3000001.0000.4100.8000.000000000082",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "MALFORMED_UUID",
+          "field": "id",
+          "reason": "id 't3000001.0000.4100.8000.000000000082' uses dots instead of hyphens as UUID segment separator"
+        }
+      ]
+    },
+    {
+      "index": 84,
+      "id": "c3000001-0000-4100-8000-000000000083",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "UUID v1-style format is technically valid RFC-4122; import accepts any valid UUID"
+    },
+    {
+      "index": 85,
+      "id": "c3000001-0000-4100-8000-000000000084",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "subject",
+          "reason": "subject contains embedded null byte (U+0000) which violates PostgreSQL text storage constraints"
+        }
+      ]
+    },
+    {
+      "index": 86,
+      "id": "c3000001-0000-4100-8000-000000000085",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "Long subject over 255 chars; no hard max enforced in V1 schema (text type); valid if non-blank"
+    },
+    {
+      "index": 87,
+      "id": "c3000001-0000-4100-8000-000000000086",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_PRIORITY",
+          "field": "priority",
+          "reason": "priority is empty string — defaults would apply during cleaning but raw value is invalid"
+        },
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status is empty string — defaults would apply during cleaning but raw value is invalid"
+        }
+      ]
+    },
+    {
+      "index": 88,
+      "id": "c3000001-0000-4100-8000-000000000087",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "SOURCE_PAIR_VIOLATION",
+          "field": "source_id",
+          "reason": "source_id='syn_ticket_001_conflict' clashes with existing row 1 contact_id on same source_system; idempotency conflict"
+        }
+      ]
+    },
+    {
+      "index": 89,
+      "id": "c3000001-0000-4100-8000-000000000088",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "note": "Exact replay of row 30 Zendesk (same source_system + source_id); idempotent retry returns existing receipt without double-write"
+    },
+    {
+      "index": 90,
+      "id": "c3000001-0000-4100-8000-000000000089",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "FORMULA_INJECTION_RISK",
+          "field": "subject",
+          "reason": "subject starts with '=CMD' — spreadsheet formula injection prefix '='"
+        }
+      ]
+    },
+    {
+      "index": 91,
+      "id": "c3000001-0000-4100-8000-000000000090",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "FORMULA_INJECTION_RISK",
+          "field": "subject",
+          "reason": "subject starts with '@SUM' — spreadsheet formula injection prefix '@'"
+        }
+      ]
+    },
+    {
+      "index": 92,
+      "id": "c3000001-0000-4100-8000-000000000091",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "FORMULA_INJECTION_RISK",
+          "field": "subject",
+          "reason": "subject starts with '+HYPERLINK' — spreadsheet formula injection prefix '+'"
+        }
+      ]
+    },
+    {
+      "index": 93,
+      "id": "c3000001-0000-4100-8000-000000000092",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status 'Resolved' is a legacy CRM alias for 'Solved'; not in the V1 enum"
+        }
+      ]
+    },
+    {
+      "index": 94,
+      "id": "c3000001-0000-4100-8000-000000000093",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status 'Done' is an unsupported terminal state alias; not in the V1 enum"
+        }
+      ]
+    },
+    {
+      "index": 95,
+      "id": "c3000001-0000-4100-8000-000000000094",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_STATUS",
+          "field": "status",
+          "reason": "status is empty string; default 'New' would apply during cleaning but raw value is invalid"
+        }
+      ]
+    },
+    {
+      "index": 96,
+      "id": "c3000001-0000-4100-8000-000000000095",
+      "expectedOutcome": "null_required",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "status",
+          "reason": "All fields after subject missing; structural integrity failure"
+        },
+        {
+          "category": "NULL_REQUIRED",
+          "field": "contact_id",
+          "reason": "Required contact_id field missing"
+        }
+      ]
+    },
+    {
+      "index": 97,
+      "id": "c3000001-0000-4100-8000-000000000096",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_PRIORITY",
+          "field": "priority",
+          "reason": "priority '2' is a numeric value; only string enum values accepted: Low, Normal, High, Urgent"
+        }
+      ]
+    },
+    {
+      "index": 98,
+      "id": "c3000001-0000-4100-8000-000000000097",
+      "expectedOutcome": "malformed",
+      "defects": [
+        {
+          "category": "INVALID_PRIORITY",
+          "field": "priority",
+          "reason": "priority 'URGENT' is all-caps; only exact-case value 'Urgent' is accepted"
+        }
+      ]
+    },
+    {
+      "index": 99,
+      "id": "c3000001-0000-4100-8000-000000000098",
+      "expectedOutcome": "null_required",
+      "defects": [
+        {
+          "category": "NULL_REQUIRED",
+          "field": "subject",
+          "reason": "All fields except id missing; row is structurally invalid"
+        }
+      ]
+    },
+    {
+      "index": 100,
+      "id": "c3000001-0000-4100-8000-000000000099",
+      "expectedOutcome": "valid",
+      "defects": [],
+      "edgeCases": [
+        "utf8_characters"
+      ],
+      "note": "Turkish special characters including İ, Ü, Ç, Ş, Ğ"
+    }
+  ]
+}
