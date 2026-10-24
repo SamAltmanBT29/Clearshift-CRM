@@ -15,3 +15,4 @@ export * from './components/SearchInput.js';
 export * from './components/ActiveFilterPills.js';
 export * from './components/FacetedFilterSidebar.js';
 export * from './components/FilterToolbar.js';
+export * from './pages/DuplicateReviewPage.js';

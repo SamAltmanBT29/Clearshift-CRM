@@ -40,6 +40,9 @@ export const CRM4_ENDPOINT_CAPABILITIES: Record<Crm4EndpointKey, CapabilityType>
 
   MAPPINGS_READ: Capabilities.MODULE_READ,
   MAPPINGS_EXECUTE: Capabilities.MODULE_WRITE,
+
+  DUPLICATES_DETECT: Capabilities.MODULE_READ,
+  DUPLICATES_RESOLVE: Capabilities.MODULE_WRITE,
 };
 
 /**

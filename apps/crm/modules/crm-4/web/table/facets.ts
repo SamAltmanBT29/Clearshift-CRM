@@ -112,3 +112,31 @@ export const CRM4_CONSENTS_FACETS: FilterFacet[] = [
     ],
   },
 ];
+
+/**
+ * Standard CRM-4 Duplicate Candidates Filter Facets ([CRM4-12])
+ */
+export const CRM4_DUPLICATES_FACETS: FilterFacet[] = [
+  {
+    id: 'entity',
+    label: 'Target Entity',
+    paramKey: 'entity',
+    options: [
+      { value: '', label: 'All Entities' },
+      { value: 'list', label: 'Marketing List' },
+      { value: 'campaign', label: 'Campaign' },
+      { value: 'member', label: 'Campaign Member' },
+      { value: 'consent', label: 'Consent Record' },
+    ],
+  },
+  {
+    id: 'status',
+    label: 'Review Status',
+    paramKey: 'status',
+    options: [
+      { value: '', label: 'All Statuses' },
+      { value: 'held_for_review', label: 'Held for Human Review' },
+      { value: 'resolved', label: 'Resolved' },
+    ],
+  },
+];

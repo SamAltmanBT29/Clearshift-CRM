@@ -21,6 +21,20 @@ import {
   assertValidConsentStatusTransition,
   assertContactExists,
 } from '../domain/relationships.js';
+import {
+  type Crm4DuplicateCandidate,
+  type Crm4DuplicateAuditLogEntry,
+  type Crm4DetectDuplicatesInput,
+  type Crm4ResolveDuplicateInput,
+  type DuplicateEvaluationResult,
+  buildListExactKey,
+  buildListBusinessKey,
+  buildCampaignExactKey,
+  buildMemberExactKey,
+  buildConsentExactKey,
+  evaluateListDuplicate,
+  evaluateCampaignDuplicate,
+} from '@clearshift/contracts';
 
 export interface ImportReceipt {
   id: string;
@@ -45,6 +59,8 @@ export class Crm4Service {
   private members: Map<string, CRM4Member> = new Map();
   private consents: Map<string, CRM4Consent> = new Map(); // Keyed by contactId
   private receipts: Map<string, ImportReceipt> = new Map(); // Keyed by idempotencyKey
+  private duplicateCandidates: Map<string, Crm4DuplicateCandidate> = new Map();
+  private duplicateAuditLogs: Crm4DuplicateAuditLogEntry[] = [];
   private contactResolver?: ReferenceResolver | undefined;
 
   constructor(options?: { contactResolver?: ReferenceResolver | undefined }) {
@@ -655,6 +671,144 @@ export class Crm4Service {
     }
 
     return rows.join('\n');
+  }
+
+  // =========================================================================
+  // Deterministic Duplicate Key Policy & Human Review ([CRM4-12] / Issue #165)
+  // =========================================================================
+
+  public async detectDuplicates(input: Crm4DetectDuplicatesInput): Promise<{
+    candidates: Crm4DuplicateCandidate[];
+    totalDuplicates: number;
+    heldForReviewCount: number;
+  }> {
+    const keyMap = new Map<string, string[]>();
+
+    for (const record of input.records) {
+      let normKey = record.keyValue.trim().toLowerCase();
+      if (input.keyType === 'list_name') {
+        normKey = buildListBusinessKey(record.keyValue);
+      }
+      const existing = keyMap.get(normKey) || [];
+      existing.push(record.id);
+      keyMap.set(normKey, existing);
+    }
+
+    const detectedCandidates: Crm4DuplicateCandidate[] = [];
+
+    for (const [normKey, recordIds] of keyMap.entries()) {
+      if (recordIds.length > 1) {
+        const candidate: Crm4DuplicateCandidate = {
+          id: randomUUID(),
+          batchId: input.batchId,
+          module: 'crm-4',
+          entity: input.entity,
+          keyType: input.keyType,
+          normalizedKey: normKey,
+          recordIds,
+          status: 'held_for_review', // Strictly held for human review in V1 (zero auto-merge)
+          detectedAt: new Date(),
+          metadata: {
+            detectedCount: recordIds.length,
+          },
+        };
+        this.duplicateCandidates.set(candidate.id, candidate);
+        detectedCandidates.push(candidate);
+      }
+    }
+
+    return {
+      candidates: detectedCandidates,
+      totalDuplicates: detectedCandidates.length,
+      heldForReviewCount: detectedCandidates.length,
+    };
+  }
+
+  public async getDuplicateCandidates(params: {
+    entity?: string | undefined;
+    status?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  } = {}): Promise<{
+    items: Crm4DuplicateCandidate[];
+    pagination: { page: number; pageSize: number; totalCount: number; totalPages: number };
+  }> {
+    let all = Array.from(this.duplicateCandidates.values());
+
+    if (params.entity) {
+      all = all.filter((c) => c.entity === params.entity);
+    }
+    if (params.status) {
+      all = all.filter((c) => c.status === params.status);
+    }
+
+    const page = Math.max(1, params.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize || 25));
+    const totalCount = all.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const startIndex = (page - 1) * pageSize;
+    const items = all.slice(startIndex, startIndex + pageSize);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+      },
+    };
+  }
+
+  public async resolveDuplicate(input: Crm4ResolveDuplicateInput): Promise<Crm4DuplicateAuditLogEntry> {
+    const candidate = this.duplicateCandidates.get(input.candidateId);
+    if (!candidate) {
+      throw new AppError('NOT_FOUND', `Duplicate candidate '${input.candidateId}' not found`, 404);
+    }
+
+    if (candidate.status === 'resolved') {
+      throw new AppError('CONFLICT', `Duplicate candidate '${input.candidateId}' has already been resolved`, 409);
+    }
+
+    if (!candidate.recordIds.includes(input.keptId)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Kept entity ID '${input.keptId}' does not belong to duplicate candidate recordIds: [${candidate.recordIds.join(', ')}]`,
+        400
+      );
+    }
+
+    if (!candidate.recordIds.includes(input.mergedId)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Merged entity ID '${input.mergedId}' does not belong to duplicate candidate recordIds: [${candidate.recordIds.join(', ')}]`,
+        400
+      );
+    }
+
+    candidate.status = 'resolved';
+
+    const auditEntry: Crm4DuplicateAuditLogEntry = {
+      id: randomUUID(),
+      candidateId: candidate.id,
+      decision: input.decision,
+      actorId: input.actorId,
+      timestamp: new Date(),
+      keptId: input.keptId,
+      mergedId: input.mergedId,
+      reason: input.reason,
+      keyType: candidate.keyType,
+      normalizedKey: candidate.normalizedKey,
+      entity: candidate.entity,
+      metadata: input.metadata,
+    };
+
+    this.duplicateAuditLogs.push(auditEntry);
+    return auditEntry;
+  }
+
+  public getDuplicateAuditLogs(): Crm4DuplicateAuditLogEntry[] {
+    return [...this.duplicateAuditLogs];
   }
 }
 
