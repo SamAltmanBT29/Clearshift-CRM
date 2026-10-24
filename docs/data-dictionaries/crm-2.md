@@ -53,7 +53,10 @@ Indexes support case-insensitive name search, contact lookup, stage filtering an
 
 Indexes support deal and quote-date lookups.
 
-### 1.4 `crm2.crm2_quote_lines`
+### 1.4 `crm2.crm2_quote_lines` (V2 Out-of-Scope)
+
+> [!NOTE]
+> **V2 Scope Traceability:** Per SDS ClearShift CRM v2.0 §5.3 ("Data model changes V2") and requirement `FR-CRM2-11`, quote line items belong to V2. This table is preserved in the database migration for forward compatibility, but is out-of-scope for ClearShift V1 core operational releases.
 
 | Field | Type | Nullability | Meaning | Constraints |
 |---|---|---|---|---|
@@ -117,11 +120,11 @@ Indexes support deal and quote-date lookups.
 |---|---|---|---|---|---|
 | `GET` | `/stages` | Returns the 6 fixed pipeline stages in order | None | `{ items: Stage[] }` | 500 |
 | `GET` | `/deals` | Paginated deals list with search and stage filter | None | `{ items: Deal[], pagination: PaginationMeta }` | 400, 403, 500 |
-| `GET` | `/deals/{id}` | Get single deal detail by ID | None | `Deal` | 404, 500 |
+| `GET` | `/deals/{id}` | Get single deal detail by ID | None | `Deal` | 400, 404, 500 |
 | `POST` | `/deals` | Create a new sales opportunity | `CreateDealInput` | `Deal` (201 Created) | 400, 403, 422, 500 |
 | `PATCH` | `/deals/{id}` | Update existing opportunity fields | `UpdateDealInput` | `Deal` (200 OK) | 400, 404, 422, 500 |
 | `GET` | `/quotes` | List quotes (filter by `deal_id`) | None | `{ items: Quote[], pagination: PaginationMeta }` | 400, 500 |
-| `GET` | `/quotes/{id}` | Get single quote by ID | None | `Quote` | 404, 500 |
+| `GET` | `/quotes/{id}` | Get single quote by ID | None | `Quote` | 400, 404, 500 |
 | `POST` | `/quotes` | Create a simple quote linked to a deal | `CreateQuoteInput` | `Quote` (201 Created) | 400, 404, 409, 422, 500 |
 | `PATCH` | `/quotes/{id}` | Update quote details | `UpdateQuoteInput` | `Quote` (200 OK) | 400, 404, 409, 422, 500 |
 | `POST` | `/import` | Ingest migration row with atomic durable receipt | `Crm2ImportRow` | `Crm2ImportResult` (201 Created / 200 OK) | 400, 403, 409, 422, 500 |
@@ -479,14 +482,11 @@ All collection views, data tables, and page controllers across CRM-2 evaluate pr
 ### 15.3 Automated Verification Suites (CRM2-19)
 - `apps/crm/modules/crm-2/tests/web/ui-states.test.ts`: Automated test suite (48 tests) covering all 4 presentation states, error sanitization security masking, HTML controller state rendering, and page-level integration across `DealsListPage`, `QuotesListPage`, `PipelineOverviewPage`, `DataTable`, and `DealsTable`.
 
-
-
-
 ---
 
-## 14. Create Form with Field-Level Validation (CRM2-20 / Issue #133)
+## 16. Create Form with Field-Level Validation (CRM2-20 / Issue #133)
 
-### 14.1 Zod Form Schema & Invariants (`CreateDealFormSchema`)
+### 16.1 Zod Form Schema & Invariants (`CreateDealFormSchema`)
 The entity creation workflow enforces strict client-side validation using Zod:
 - **Required Fields**:
   - `name`: 1–255 characters, non-empty after trimming.
@@ -501,11 +501,11 @@ The entity creation workflow enforces strict client-side validation using Zod:
 - **Decimal Range Validation**:
   - `probability`: Bounded decimal strictly between `0.00` and `1.00`.
 
-### 14.2 Inflight Request Double-Submit Prevention
+### 16.2 Inflight Request Double-Submit Prevention
 - When form submission is initiated, the submit button is immediately disabled (`disabled={inFlight}`) with `aria-busy="true"`.
 - Button label transitions to "Creating Deal..." alongside an animated spinner (`.cs-spinner-sm`), completely preventing double submission or race conditions.
 
-### 14.3 Server Error Mapping Protocol (`parseServerErrorToFieldErrors`)
+### 16.3 Server Error Mapping Protocol (`parseServerErrorToFieldErrors`)
 - Conforms to ClearShift HTTP 400 standard error envelope:
   ```json
   {
@@ -521,7 +521,7 @@ The entity creation workflow enforces strict client-side validation using Zod:
 - Errors map directly to individual input fields with `.cs-input-error`, `aria-invalid="true"`, and accessible field error text.
 - Top-level `FormValidationSummary` banner renders accessible summary with `role="alert"` and `aria-live="polite"`.
 
-### 14.4 Modal Lifecycle & Table Cache Synchronization
+### 16.4 Modal Lifecycle & Table Cache Synchronization
 - **CreateDealModal (`CreateDealModal.tsx`)**:
   - WAI-ARIA accessible modal dialog (`role="dialog"`, `aria-modal="true"`).
   - Supports keyboard `Escape` dismissal, backdrop overlay click, and document body scroll locking.
@@ -535,3 +535,68 @@ The entity creation workflow enforces strict client-side validation using Zod:
 
 ### 14.5 Automated Verification Suites (CRM2-20)
 - `apps/crm/modules/crm-2/tests/web/create-form.test.ts`: 40 comprehensive tests verifying Zod schema rules, client-side validation helpers, server 400 error mapping, FormValidationSummary accessibility, ConfirmationToast lifecycle, CreateDealModal behavior, DataTableController cache methods, double-submit button disabling, and DealsListPage integration.
+
+---
+
+## 15. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix
+
+In compliance with SDS ClearShift CRM v2.0 §7.2, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
+
+| Endpoint | HTTP Method | Allowed Roles | Description |
+|---|---|---|---|
+| `/health` | `GET` | (public) | Health check and version verification. |
+| `/stages` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve 6 canonical pipeline stages in seed order. |
+| `/deals` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Search and filter deals by stage with bounded pagination (default 10, max 100). |
+| `/deals/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve single deal by UUID. |
+| `/deals` | `POST` | `editor`, `migration_runner`, `admin` | Create a deal record. Validates stage, decimal value, and optional contact link. Generates audit event. |
+| `/deals/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update deal fields. Validates allowable stage transition. Generates audit event. |
+| `/quotes` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Search and filter quotes with bounded pagination. |
+| `/quotes/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve single quote by UUID. |
+| `/quotes` | `POST` | `editor`, `migration_runner`, `admin` | Create a quote record. Enforces unique quote number and decimal amount. Generates audit event. |
+| `/quotes/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update quote record. Generates audit event. |
+| `/import` | `POST` | `migration_runner`, `admin` | Target adapter row ingest with durable idempotency receipt. Generates audit event. |
+| `/import/row` | `POST` | `migration_runner`, `admin` | Single row ingest alias. Generates audit event. |
+| `/import/batch` | `POST` | `migration_runner`, `admin` | Batch rows ingest. Generates audit event. |
+| `/batches/execute-load` | `POST` | `migration_runner`, `admin` | Chunked batch load execution with fault-tolerance and retry limits. Generates audit event. |
+| `/import/receipts` | `GET` | `viewer`, `analyst`, `admin` | Query committed import receipts. |
+| `/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | Query batch execution report. |
+| `/duplicates/detect` | `POST` | `analyst`, `migration_runner`, `admin` | Detect duplicate candidates by exact key. Generates audit event. |
+| `/duplicates/held` | `GET` | `viewer`, `analyst`, `editor`, `admin` | Query duplicate review queue held for human review. |
+| `/duplicates/resolve` | `POST` | `editor`, `analyst`, `admin` | Record human merge/reject decision with audit trail. Generates audit event. |
+| `/duplicates/audit` | `GET` | `viewer`, `analyst`, `admin` | Query duplicate resolution audit logs. |
+
+---
+
+## 16. Sensitive Fields & Masking Policy
+
+Field-level restrictions are enforced on the server before JSON serialization and export:
+1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
+2. **Salary Information**: Numeric compensation values masked as `XX,XXX` or converted to `"salary hidden"`.
+3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
+5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
+
+---
+
+## 17. Audit Trail Specification
+
+All domain mutations, migration executions, and privileged actions produce append-only audit records containing:
+* `actor`: Authenticated User UUID (`sub`) and role set.
+* `action`: Action verb (`crm2.deal.created`, `crm2.deal.updated`, `crm2.quote.created`, `crm2.quote.updated`, `crm2.import.row_loaded`, `crm2.batch.execute_load`, `DUPLICATE_MERGE`, etc.).
+* `timestamp`: ISO-8601 UTC timestamp.
+* `entity`: Affected entity name (`deal`, `quote`, `crm2_import`, `crm2_batch`, `crm2_duplicates`).
+* `entity_id`: Primary record UUID.
+* `batch_id`: Migration Batch UUID when correlated.
+* `result`: Outcome status (`success`, `failure`, `rejected`, `halted`).
+* `diff_redacted`: Contextual payload with sensitive fields pre-redacted (no raw rows, tokens, or plaintext credentials).
+
+---
+
+## 18. Defect Traceability & Resolutions (DEF-CRM2-01..03)
+
+| Defect ID | Severity | Root Cause | Resolution | Verification |
+|---|---|---|---|---|
+| `DEF-CRM2-01` | Medium | Non-UUID parameter on `GET /deals/{id}` and `GET /quotes/{id}` returned HTTP 400 `BAD_REQUEST`, but OpenAPI spec and data dictionary previously listed 404 only. | OpenAPI contract (`crm-2.yaml`) and Data Dictionary updated to document HTTP 400 for malformed UUID format. Implementation and contract now aligned. | `BD-08`, `BD-09` in `boundary-and-idempotency.test.ts` assert 400 `BAD_REQUEST`. |
+| `DEF-CRM2-02` | High (P1) | `DecimalStringSchema` used unconstrained integer digits (`^\d+`), permitting values > 12 integer digits (e.g. `1000000000000.00`) to pass Zod validation and trigger PostgreSQL `NUMERIC(14,2)` overflow (SQLSTATE 22003) -> 500 error. | Constrained `DecimalStringSchema` to max 12 integer digits (`^\d{1,12}(\.\d{1,4})?$`), rejecting oversized numbers at API validation boundary with HTTP 400 `VALIDATION_ERROR`. | `BD-01`, `BD-02` in `boundary-and-idempotency.test.ts` and test 5 in `api-postgres-integration.test.ts`. |
+| `DEF-CRM2-03` | High (P1) | Whitespace-only deal names (e.g. `'   '`) passed `z.string().min(1)` and hit the DB constraint `check (btrim(name) <> '')` (SQLSTATE 23514) -> 500 error. | Added `.trim()` before `.min(1)` in `CreateDealInputSchema`, `QuoteSchema`, and `CreateQuoteInputSchema`, rejecting blank and whitespace-only text with HTTP 400 `VALIDATION_ERROR`. | `dirty-data-pack.test.ts` (conservation 75/17/8/0/0) and test 4 in `api-postgres-integration.test.ts`. |
+

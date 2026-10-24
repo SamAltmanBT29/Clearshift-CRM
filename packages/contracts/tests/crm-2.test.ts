@@ -19,6 +19,8 @@ import {
   Crm2BatchExecutionStatusSchema,
   Crm2ExecuteBatchLoadInputSchema,
   Crm2BatchExecutionReportSchema,
+  CRM2AuditEventSchema,
+  CRM2ErrorEnvelopeSchema,
 } from '../src/crm-2.js';
 
 const crm2OpenApi = readFileSync(new URL('../openapi/crm-2.yaml', import.meta.url), 'utf8');
@@ -203,4 +205,58 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
       ).toBe(false);
     });
   });
+
+  describe('Security & Audit Schemas and OpenAPI Specifications (CRM2-09)', () => {
+    it('validates CRM2AuditEventSchema with required fields and redaction structures', () => {
+      const validEvent = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        actor: 'synthetic-user-1',
+        action: 'crm2.deal.created',
+        entity: 'deal',
+        entityId: '123e4567-e89b-12d3-a456-426614174001',
+        batchId: 'batch-001',
+        result: 'success',
+        diffRedacted: { name: 'Deal 1', value: '50000.00' },
+        metadata: { source: 'api' },
+        createdAt: new Date(),
+      };
+
+      const parsed = CRM2AuditEventSchema.safeParse(validEvent);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.action).toBe('crm2.deal.created');
+        expect(parsed.data.result).toBe('success');
+      }
+
+      // Rejects invalid outcome
+      expect(
+        CRM2AuditEventSchema.safeParse({ ...validEvent, result: 'unknown_result' }).success
+      ).toBe(false);
+    });
+
+    it('validates CRM2ErrorEnvelopeSchema format', () => {
+      const envelope = {
+        code: 'UNAUTHORIZED',
+        message: 'Missing or invalid Authorization header',
+        details: [],
+        correlation_id: 'corr-12345',
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Missing or invalid Authorization header',
+        },
+      };
+
+      const parsed = CRM2ErrorEnvelopeSchema.safeParse(envelope);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('documents bearerAuth security and reusable error responses in OpenAPI', () => {
+      expect(crm2OpenApi).toContain('bearerAuth:');
+      expect(crm2OpenApi).toContain('UnauthorizedError:');
+      expect(crm2OpenApi).toContain('ForbiddenError:');
+      expect(crm2OpenApi).toContain('CRM2AuditEvent:');
+      expect(crm2OpenApi).toContain('security:');
+    });
+  });
 });
+

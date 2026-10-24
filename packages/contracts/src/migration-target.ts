@@ -1439,3 +1439,42 @@ export interface MigrationTargetAdapter<TRow = unknown> {
   >;
 }
 
+// ============================================================================
+// KIT-13: Transactional Event Envelope & Outbox Producer Re-exports
+// ============================================================================
+
+export {
+  MigrationKitEventTypes,
+  type MigrationKitEventType,
+  MigrationKitEventTypeSchema,
+  FORBIDDEN_PAYLOAD_KEY_PATTERNS,
+  SecretsOrRawRowsForbiddenError,
+  assertNoSecretsOrRawRows,
+  KitBatchExtractedPayloadSchema,
+  type KitBatchExtractedPayload,
+  KitBatchProfiledPayloadSchema,
+  type KitBatchProfiledPayload,
+  KitBatchCleanedPayloadSchema,
+  type KitBatchCleanedPayload,
+  KitBatchMappedPayloadSchema,
+  type KitBatchMappedPayload,
+  KitBatchLoadedPayloadSchema,
+  type KitBatchLoadedPayload,
+  KitBatchValidatedPayloadSchema,
+  type KitBatchValidatedPayload,
+  KitBatchFailedPayloadSchema,
+  type KitBatchFailedPayload,
+  KitContactMergedPayloadSchema,
+  type KitContactMergedPayload,
+  createBatchExtractedEnvelope,
+  createBatchProfiledEnvelope,
+  createBatchCleanedEnvelope,
+  createBatchMappedEnvelope,
+  createBatchLoadedEnvelope,
+  createBatchValidatedEnvelope,
+  createBatchFailedEnvelope,
+  createContactMergedEnvelope,
+} from './events.js';
+
+
+

@@ -91,7 +91,7 @@ export function redactSensitiveObject<T>(input: T): T {
 export function maskSensitiveLog(message: string): string {
   if (!message) return '';
   let sanitized = message.replace(TOKEN_REGEX, '[REDACTED_TOKEN]');
-  sanitized = sanitized.replace(/(?:password|secret|token|credential)\s*[:=]\s*["']?[^"',\s]+["']?/gi, '$1=[REDACTED]');
+  sanitized = sanitized.replace(/(password|secret|token|credential)\s*[:=]\s*["']?[^"',\s]+["']?/gi, '$1=[REDACTED]');
   // Match explicit 16-digit card / bank groupings (e.g. 1234-5678-9012-3456 or 1234 5678 9012 3456)
   sanitized = sanitized.replace(/\b(?:\d{4}[ -]){3}(\d{4})\b/g, (_match, last4) => `XXXX-XXXX-${last4}`);
   sanitized = sanitized.replace(/\b(?:salary|compensation|remuneration)\b\s*[:=]\s*["']?\d+[\d,.]*["']?/gi, 'salary: XX,XXX');

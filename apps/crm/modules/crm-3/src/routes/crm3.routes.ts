@@ -160,7 +160,10 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
             orderRef: created.orderRef,
           },
         });
-        return reply.status(201).send(created);
+        return reply
+          .status(201)
+          .header('Location', `/api/v1/crm-tickets/tickets/${created.id}`)
+          .send(created);
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
           return reply.status(err.statusCode || 400).send({

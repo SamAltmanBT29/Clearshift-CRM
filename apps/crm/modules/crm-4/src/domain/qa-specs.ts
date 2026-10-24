@@ -980,6 +980,17 @@ export const CRM4_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'CRM-4 Module Contract, Regression and Browser Test Suite (#182 / [CRM4-29])',
     verificationEvidence: 'Full synthetic lifecycle execution across marketing lists, campaign history, member membership, and consent states; repeated read idempotency; OpenAPI and Zod schema conformance; reference resolver queries; and simulated browser user journeys in Chrome/Firefox.',
   },
+  {
+    reqId: 'FR-CRM4-30',
+    requirement: 'Module reconciliation proof and Gate G4 evidence pack: mathematical conservation proof (source = loaded + rejected + merged + skipped, unaccounted = 0), relational link integrity across marketing lists, campaigns, members, and consents, durable import receipt completeness, and Gate G4 acceptance pack sign-off documentation.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.5, §4.7, §4.12 & Issue #183 [CRM4-30]',
+    category: 'Migration',
+    testType: 'regression',
+    testFile: 'apps/crm/modules/crm-4/tests/domain/reconciliation-acceptance.test.ts',
+    testSuite: 'CRM-4 Reconciliation Proof & Gate G4 Acceptance Audit Suite (#183 / [CRM4-30])',
+    verificationEvidence: 'Mathematical reconciliation proves 100% conservation balance sheet (unaccounted = 0); relational link integrity verified across campaigns/lists/members/consents; durable import receipt completeness verified with idempotency keys; Gate G4 acceptance pack signed.',
+  },
 ];
 
 // ---------------------------------------------------------------------------

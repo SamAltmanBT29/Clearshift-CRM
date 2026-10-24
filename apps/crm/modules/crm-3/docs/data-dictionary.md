@@ -124,6 +124,7 @@ CRM-3 registers 5 primary sub-views under the common ClearShift layout shell:
 * **Keyboard Navigation:** Tab controls support `ArrowLeft`, `ArrowRight` (with cyclic wrap-around), `Home`, and `End` navigation for full keyboard-driven operation.
 * **Title Synchronization:** Dynamically sets `document.title` to `ClearShift | CRM-3 - <View Title>`.
 
+<<<<<<< HEAD
 ## 5. Ticket Status Transitions & Relationship Integrity (CRM3-06 / #31)
 
 ### Status transition map (user edits via `PATCH /tickets/{id}`)
@@ -256,3 +257,12 @@ Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/r
 - `Crm3AuditService` records an immutable audit trail capturing `actor`, `action`, `entity`, `entityId`, `batchId`, `result`, `diffRedacted`, and `metadata`.
 - Diff and metadata are automatically passed through `redactSensitiveObject()` to prevent storing raw credentials or unmasked PII.
 - Raw rows, tokens, and plaintext passwords are never copied into the audit log.
+
+---
+
+## 10. Change Record & Formal Gate Sign-off
+
+| Version | Date | Author / Role | Description / Justification |
+|---|---|---|---|
+| `1.0.0` | 2026-10-24 | Integration Lead / CRM-3 Group | Baseline release for CRM-3 contracts, OpenAPI 3.1, domain events taxonomy, deterministic mock server, and security policy integration (Issues #147, #34). |
+
