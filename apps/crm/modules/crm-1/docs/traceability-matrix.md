@@ -77,12 +77,13 @@ This Requirement-to-Test Traceability Matrix maps 100% of the functional require
 | **`FR-CRM1-13-04`** | Committed rows and receipts remain durable; batch state transitions to `STOPPED_EXCESSIVE_FAILURES` without rollback saga or destructive uncommitted data loss. | **Must** | Issue #106 [CRM1-13] / KIT-12 | Domain / Service | Integration | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`Crm1Service.executeBatchLoad` | **VERIFIED (Green)** |
 | **`FR-CRM1-13-05`** | Batch execution endpoints `POST /batches/execute-load` and `GET /batches/:batchId/report` enforced by RBAC (`KIT_RUN`, `KIT_READ`) and BatchLoaderPage operator UI. | **Must** | Issue #106 [CRM1-13] / KIT-12 | API / Web | Contract / Web | `apps/crm/modules/crm-1/tests/api/batch-loader.test.ts`<br>`apps/crm/modules/crm-1/tests/web/batch-loader-page.test.ts` | **VERIFIED (Green)** |
 | **`FR-CRM1-26`** | Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment. | **Must** | SDS ClearShift CRM v2.0 §4.2, §4.11, §4.12 & Issue #119 [CRM1-26] | Migration | Unit | `apps/crm/modules/crm-1/tests/kit/profiler.test.ts`<br>`CRM-1 Profiling Configuration & Manifest Assertions` | **VERIFIED (Green)** |
+| **`FR-CRM1-29`** | Module contract, regression and browser test suite: OpenAPI 3.1.0 conformance, multi-browser simulated journeys, and zero flaky tests. | **Must** | Issue #122 [CRM1-29] / SDS §4.1, §4.2, §7.1 | API / Web / QA | Contract / Regression | `apps/crm/modules/crm-1/tests/api/module-contract-regression.test.ts`<br>`apps/crm/modules/crm-1/tests/contracts/openapi.test.ts`<br>`apps/crm/modules/crm-1/tests/web/browser-journey.test.tsx` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-1 automated test suite comprises 27 test files:
+The CRM-1 automated test suite comprises 30 test files:
 
 ```
 apps/crm/modules/crm-1/tests/
@@ -91,8 +92,11 @@ apps/crm/modules/crm-1/tests/
 │   ├── duplicates.test.ts                   (18 tests) — POST /duplicates/detect (422 autoMerge), GET /held, POST /resolve, GET /audit (Issue #105 / [CRM1-12])
 │   ├── list.test.ts                         (46 tests) — Server-side paged list/read contracts & search
 │   ├── mapping-routes.test.ts               (10 tests) — Mapping templates, dry-run validation & batch map
+│   ├── module-contract-regression.test.ts   (15 tests) — Comprehensive regression & contract conformance suite (Issue #122 / [CRM1-29])
 │   ├── mutations.test.ts                    ( 3 tests) — Validated contact/company/lead CRUD & 422 errors
 │   └── routes.test.ts                       ( 4 tests) — Route registration & Fastify plugin mounting
+├── contracts/
+│   └── openapi.test.ts                      (13 tests) — OpenAPI 3.1.0 schema conformance & Zod alignment (Issue #122 / [CRM1-29])
 ├── db/
 │   └── schema.test.ts                       ( 4 tests) — PostgreSQL 18 schema check constraints & FKs
 ├── domain/
@@ -117,6 +121,7 @@ apps/crm/modules/crm-1/tests/
 │   └── crm1-mutation.service.test.ts        ( 2 tests) — Atomic target + receipt commit in 1 transaction
 └── web/
     ├── batch-loader-page.test.ts            ( 3 tests) — BatchLoaderPage component, status badge, route definition (Issue #106 / [CRM1-13])
+    ├── browser-journey.test.tsx             (13 tests) — Multi-browser Chrome/Firefox user journeys across core entities (Issue #122 / [CRM1-29])
     ├── cleaning-audit-page.test.ts          ( 3 tests) — Cleaning audit page frontend component and columns
     ├── data-table.test.ts                   (21 tests) — Paginated data table and column layout
     ├── mapping-templates-page.test.ts       ( 4 tests) — Mapping templates page component & route
@@ -128,7 +133,7 @@ apps/crm/modules/crm-1/tests/
     ├── LeadForm.test.tsx                    ( 7 tests) — LeadForm create/edit, status transition validation (Issue #10 / [CRM1-05])
     └── DetailPages.test.tsx                 ( 4 tests) — Contact, Company, Lead, Import batch detail pages & back links (Issue #10 / [CRM1-05])
 -----------------------------------------------------------------------------------------------------------
-Total Automated Test Cases: 492 tests (100% Green, 0 Failures)
+Total Automated Test Cases: 533 tests (100% Green, 0 Failures)
 ```
 
 ---
