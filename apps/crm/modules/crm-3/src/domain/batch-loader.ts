@@ -36,6 +36,8 @@ export interface Crm3BatchLoadInput {
   maxRetries?: number;
   failureThreshold?: number;
   minAttemptedRows?: number;
+  /** Who started the load (audit actor); defaults to 'kit-import'. */
+  actorId?: string;
 }
 
 export interface Crm3BatchLoaderOptions {
@@ -104,6 +106,7 @@ const LoadInputSchema = z.object({
   maxRetries: z.number().int().min(0).max(5).optional(),
   failureThreshold: z.number().min(0).max(1).optional(),
   minAttemptedRows: z.number().int().min(1).optional(),
+  actorId: z.string().trim().min(1).optional(),
 });
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -145,7 +148,8 @@ export async function executeCrm3BatchLoad(
 
   const { batchId } = input;
   service.ensureImportBatch(batchId, input.sourceSystem ?? CRM3_DEFAULT_SOURCE_SYSTEM);
-  service.updateImportBatch(batchId, { status: 'processing', completedAt: null });
+  const batchContext = { actorId: input.actorId ?? 'kit-import', correlationId: batchId };
+  service.updateImportBatch(batchId, { status: 'processing', completedAt: null }, batchContext);
 
   const committedReceipts: BatchCommittedReceipt[] = [];
   const failedRows: FailedRow[] = [];
@@ -232,7 +236,7 @@ export async function executeCrm3BatchLoad(
     loadedCount: service.listImportReceipts(batchId).filter((r) => r.entity === 'ticket').length,
     rejectedCount: failedRows.length,
     completedAt: batchStatus === 'stopped_excessive_failures' ? null : executedAt.toISOString(),
-  });
+  }, batchContext);
 
   const counts = {
     source: input.rows.length,

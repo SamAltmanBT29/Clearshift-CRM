@@ -18,6 +18,14 @@ import {
   CRM3TicketPatchSchema,
   CRM3TicketListQuerySchema,
   CRM3NoteListQuerySchema,
+  createTicketCreatedEvent,
+  createTicketUpdatedEvent,
+  createTicketStatusChangedEvent,
+  createTicketPriorityChangedEvent,
+  createTicketNoteAddedEvent,
+  createTicketImportBatchLoadedEvent,
+  type TicketUpdatedPayload,
+  type EventEnvelope,
 } from '@clearshift/contracts';
 import type { z } from 'zod';
 import { TicketNotFoundError, DomainValidationError } from '../domain/errors.js';
@@ -26,6 +34,7 @@ import {
   assertValidContactReference,
   assertTicketExists,
 } from '../domain/relationships.js';
+import { Crm3AuditService, CRM3_AUDIT_ACTIONS, type Crm3AuditEntry } from './audit.js';
 import {
   InMemoryCrm3Store,
   type Crm3Store,
@@ -38,6 +47,8 @@ export interface Crm3ServiceOptions {
   contactResolver?: ReferenceResolver;
   /** Data-access implementation; defaults to InMemoryCrm3Store. */
   store?: Crm3Store;
+  /** Audit trail; defaults to Crm3AuditService over an in-memory @cs/core repository. */
+  auditService?: Crm3AuditService;
   /**
    * Test hook called inside the atomic import commit after the ticket and note are staged and
    * before receipts are recorded. Throwing from it simulates a failed receipt write.
@@ -60,6 +71,12 @@ export interface Crm3TicketImportCommand {
   orderRef: string | null;
   noteText: string | null;
   noteAuthorId: string;
+}
+
+/** Who made a change and which request it belongs to (for audit rows and event correlation). */
+export interface Crm3MutationContext {
+  actorId?: string | undefined;
+  correlationId?: string | undefined;
 }
 
 export type Crm3TicketImportCommit =
@@ -155,12 +172,14 @@ function parseOrThrow<S extends z.ZodTypeAny>(schema: S, input: unknown, message
  */
 export class Crm3Service {
   private readonly store: Crm3Store;
+  private readonly auditService: Crm3AuditService;
   private contactResolver: ReferenceResolver;
   private ticketLocks = new Map<string, Promise<void>>();
   private onBeforeImportReceiptCommit: (() => void) | undefined;
 
   constructor(options: Crm3ServiceOptions = {}) {
     this.store = options.store ?? new InMemoryCrm3Store();
+    this.auditService = options.auditService ?? new Crm3AuditService();
     this.contactResolver = options.contactResolver ?? new DefaultSyntheticContactResolver();
     this.onBeforeImportReceiptCommit = options.onBeforeImportReceiptCommit;
     this.seedSyntheticData();
@@ -176,6 +195,10 @@ export class Crm3Service {
 
   public getStore(): Crm3Store {
     return this.store;
+  }
+
+  public getAuditService(): Crm3AuditService {
+    return this.auditService;
   }
 
   public resetStore(): void {
@@ -283,7 +306,8 @@ export class Crm3Service {
    */
   public async createTicket(
     input: CRM3TicketCreate,
-    authorId = 'system'
+    authorId = 'system',
+    context: Crm3MutationContext = {}
   ): Promise<CRM3TicketRead> {
     const data = parseOrThrow(CRM3TicketCreateSchema, input, 'Invalid ticket input');
 
@@ -303,17 +327,31 @@ export class Crm3Service {
       updatedAt: now,
     };
 
+    const correlationId = this.correlationIdFor(context);
+    let initialNote: CRM3Note | null = null;
     this.store.transaction(() => {
       this.store.insertTicket(newTicket);
+      this.store.appendOutboxEvent(this.ticketCreatedEvent(newTicket, correlationId));
       if (data.note) {
-        this.store.insertNote({
+        initialNote = {
           id: randomUUID(),
           ticketId: newTicket.id,
           authorId: authorId.trim() || 'system',
           noteText: data.note,
           createdAt: now,
-        });
+        };
+        this.store.insertNote(initialNote);
+        this.store.appendOutboxEvent(this.noteAddedEvent(initialNote, correlationId));
       }
+    });
+
+    await this.recordAudit({
+      actor: context.actorId ?? authorId,
+      action: CRM3_AUDIT_ACTIONS.TICKET_CREATED,
+      targetEntity: 'ticket',
+      targetId: newTicket.id,
+      correlationId,
+      metadata: { status: newTicket.status, priority: newTicket.priority, hasInitialNote: initialNote !== null },
     });
 
     return this.enrichTicketWithContact(newTicket);
@@ -324,12 +362,20 @@ export class Crm3Service {
    * Edits to the same ticket are serialized, and every rule (enumerations, status transition,
    * contact reference) is checked against the latest stored state before anything is written.
    */
-  public async updateTicket(id: string, patch: CRM3TicketPatch): Promise<CRM3TicketRead> {
+  public async updateTicket(
+    id: string,
+    patch: CRM3TicketPatch,
+    context: Crm3MutationContext = {}
+  ): Promise<CRM3TicketRead> {
     const data = parseOrThrow(CRM3TicketPatchSchema, patch, 'Invalid ticket update input');
-    return this.withTicketLock(id, () => this.applyTicketPatch(id, data));
+    return this.withTicketLock(id, () => this.applyTicketPatch(id, data, context));
   }
 
-  private async applyTicketPatch(id: string, patch: CRM3TicketPatch): Promise<CRM3TicketRead> {
+  private async applyTicketPatch(
+    id: string,
+    patch: CRM3TicketPatch,
+    context: Crm3MutationContext
+  ): Promise<CRM3TicketRead> {
     const current = this.store.getTicket(id);
     if (!current) {
       throw new TicketNotFoundError(id);
@@ -356,7 +402,30 @@ export class Crm3Service {
       updatedAt: new Date().toISOString(),
     };
 
-    this.store.updateTicket(updated);
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const field of ['subject', 'status', 'priority', 'contactId', 'orderRef'] as const) {
+      if (updated[field] !== current[field]) {
+        changes[field] = { from: current[field], to: updated[field] };
+      }
+    }
+
+    const correlationId = this.correlationIdFor(context);
+    this.store.transaction(() => {
+      this.store.updateTicket(updated);
+      for (const event of this.ticketChangeEvents(current, updated, Object.keys(changes), correlationId)) {
+        this.store.appendOutboxEvent(event);
+      }
+    });
+
+    await this.recordAudit({
+      actor: context.actorId ?? 'system',
+      action: CRM3_AUDIT_ACTIONS.TICKET_UPDATED,
+      targetEntity: 'ticket',
+      targetId: id,
+      correlationId,
+      changes,
+    });
+
     return this.enrichTicketWithContact(updated);
   }
 
@@ -388,7 +457,8 @@ export class Crm3Service {
   public async addNote(
     ticketId: string,
     noteText: string,
-    authorId: string
+    authorId: string,
+    context: Crm3MutationContext = {}
   ): Promise<CRM3Note> {
     await assertTicketExists(ticketId, (id) => this.ticketExists(id));
 
@@ -406,7 +476,21 @@ export class Crm3Service {
       createdAt: new Date().toISOString(),
     };
 
-    this.store.insertNote(note);
+    const correlationId = this.correlationIdFor(context);
+    this.store.transaction(() => {
+      this.store.insertNote(note);
+      this.store.appendOutboxEvent(this.noteAddedEvent(note, correlationId));
+    });
+
+    await this.recordAudit({
+      actor: context.actorId ?? note.authorId,
+      action: CRM3_AUDIT_ACTIONS.NOTE_ADDED,
+      targetEntity: 'note',
+      targetId: note.id,
+      correlationId,
+      metadata: { ticketId },
+    });
+
     return note;
   }
 
@@ -457,7 +541,7 @@ export class Crm3Service {
       return { kind: 'duplicate_source_key', existingTicketId: duplicate.id };
     }
 
-    return this.store.transaction(() => {
+    const commit: Crm3TicketImportCommit = this.store.transaction(() => {
       const now = new Date().toISOString();
       this.ensureImportBatch(command.batchId, command.sourceSystem, now);
 
@@ -474,6 +558,7 @@ export class Crm3Service {
         updatedAt: now,
       };
       this.store.insertTicket(ticket);
+      this.store.appendOutboxEvent(this.ticketCreatedEvent(ticket, command.batchId));
 
       const receipts: Crm3StoredImportReceipt[] = [
         {
@@ -499,6 +584,7 @@ export class Crm3Service {
           createdAt: now,
         };
         this.store.insertNote(note);
+        this.store.appendOutboxEvent(this.noteAddedEvent(note, command.batchId));
         receipts.push({
           id: randomUUID(),
           batchId: command.batchId,
@@ -520,6 +606,19 @@ export class Crm3Service {
 
       return { kind: 'created' as const, ticket, receipts };
     });
+
+    if (commit.kind === 'created') {
+      void this.recordAudit({
+        actor: command.noteAuthorId,
+        action: CRM3_AUDIT_ACTIONS.TICKET_IMPORTED,
+        targetEntity: 'ticket',
+        targetId: commit.ticket.id,
+        correlationId: command.batchId,
+        batchId: command.batchId,
+        metadata: { sourceRow: command.sourceRow, sourceSystem: command.sourceSystem },
+      });
+    }
+    return commit;
   }
 
   /**
@@ -550,7 +649,8 @@ export class Crm3Service {
    */
   public updateImportBatch(
     batchId: string,
-    patch: Partial<Pick<CRM3ImportBatch, 'status' | 'loadedCount' | 'rejectedCount' | 'completedAt'>>
+    patch: Partial<Pick<CRM3ImportBatch, 'status' | 'loadedCount' | 'rejectedCount' | 'completedAt'>>,
+    context: Crm3MutationContext = {}
   ): CRM3ImportBatch {
     const current = this.store.getImportBatch(batchId);
     if (!current) {
@@ -559,7 +659,46 @@ export class Crm3Service {
       ], 404);
     }
     const updated: CRM3ImportBatch = { ...current, ...patch, updatedAt: new Date().toISOString() };
-    this.store.updateImportBatch(updated);
+    const correlationId = context.correlationId ?? batchId;
+    const finished =
+      (updated.status === 'completed' || updated.status === 'failed') && updated.completedAt !== null;
+
+    this.store.transaction(() => {
+      this.store.updateImportBatch(updated);
+      if (finished && updated.completedAt) {
+        this.store.appendOutboxEvent(
+          createTicketImportBatchLoadedEvent({
+            aggregateId: batchId,
+            correlationId,
+            payload: {
+              batchId,
+              sourceSystem: updated.sourceSystem,
+              loadedCount: updated.loadedCount,
+              rejectedCount: updated.rejectedCount,
+              completedAt: updated.completedAt,
+            },
+          })
+        );
+      }
+    });
+
+    if (patch.status !== undefined) {
+      void this.recordAudit({
+        actor: context.actorId ?? 'kit-import',
+        action:
+          patch.status === 'processing' ? CRM3_AUDIT_ACTIONS.LOAD_REQUESTED : CRM3_AUDIT_ACTIONS.LOAD_FINISHED,
+        targetEntity: 'import_batch',
+        targetId: batchId,
+        correlationId,
+        batchId,
+        result: updated.status === 'failed' ? 'failure' : 'success',
+        metadata: {
+          status: updated.status,
+          loadedCount: updated.loadedCount,
+          rejectedCount: updated.rejectedCount,
+        },
+      });
+    }
     return updated;
   }
 
@@ -587,6 +726,110 @@ export class Crm3Service {
       priority: ticket.priority,
       contactId: ticket.contactId,
     };
+  }
+
+  private correlationIdFor(context: Crm3MutationContext): string {
+    return context.correlationId?.trim() || `crm3-${randomUUID()}`;
+  }
+
+  /**
+   * Writes an audit row after the business write has committed. A failing audit sink must not
+   * undo or fail the committed write, so errors are reported without the payload.
+   */
+  private async recordAudit(entry: Crm3AuditEntry): Promise<void> {
+    try {
+      await this.auditService.record(entry);
+    } catch (error) {
+      console.error(
+        `[crm-3] audit write failed for ${entry.action} ${entry.targetEntity}:${entry.targetId ?? '-'}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /** crm.ticket.created without free text (subject is optional in the contract, by design). */
+  private ticketCreatedEvent(ticket: CRM3Ticket, correlationId: string) {
+    return createTicketCreatedEvent({
+      aggregateId: ticket.id,
+      correlationId,
+      payload: {
+        ticketId: ticket.id,
+        status: ticket.status,
+        priority: ticket.priority,
+        contactId: ticket.contactId,
+        orderRef: ticket.orderRef,
+        sourceSystem: ticket.sourceSystem,
+        sourceId: ticket.sourceId,
+        createdAt: ticket.createdAt,
+      },
+    });
+  }
+
+  /** crm.ticket.note_added without the note text. */
+  private noteAddedEvent(note: CRM3Note, correlationId: string) {
+    return createTicketNoteAddedEvent({
+      aggregateId: note.id,
+      correlationId,
+      payload: {
+        noteId: note.id,
+        ticketId: note.ticketId,
+        authorId: note.authorId,
+        createdAt: note.createdAt,
+      },
+    });
+  }
+
+  /**
+   * Events for a ticket edit: crm.ticket.updated when any field changed (subject is reported as
+   * changed only through the audit trail, never as text), plus status_changed / priority_changed.
+   * An edit that changes nothing emits nothing.
+   */
+  private ticketChangeEvents(
+    before: CRM3Ticket,
+    after: CRM3Ticket,
+    changedFields: string[],
+    correlationId: string
+  ) {
+    if (changedFields.length === 0) return [];
+    const payload: TicketUpdatedPayload = { ticketId: after.id, updatedAt: after.updatedAt };
+    if (changedFields.includes('status')) payload.status = after.status;
+    if (changedFields.includes('priority')) payload.priority = after.priority;
+    if (changedFields.includes('contactId')) payload.contactId = after.contactId;
+    if (changedFields.includes('orderRef')) payload.orderRef = after.orderRef;
+
+    const events: EventEnvelope[] = [
+      createTicketUpdatedEvent({ aggregateId: after.id, correlationId, payload }),
+    ];
+    if (changedFields.includes('status')) {
+      events.push(
+        createTicketStatusChangedEvent({
+          aggregateId: after.id,
+          correlationId,
+          payload: {
+            ticketId: after.id,
+            previousStatus: before.status,
+            newStatus: after.status,
+            updatedAt: after.updatedAt,
+          },
+        })
+      );
+    }
+    if (changedFields.includes('priority')) {
+      events.push(
+        createTicketPriorityChangedEvent({
+          aggregateId: after.id,
+          correlationId,
+          payload: {
+            ticketId: after.id,
+            previousPriority: before.priority,
+            newPriority: after.priority,
+            updatedAt: after.updatedAt,
+          },
+        })
+      );
+    }
+    return events;
   }
 
   /**
