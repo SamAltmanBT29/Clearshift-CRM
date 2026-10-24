@@ -179,6 +179,9 @@ export const DealSchema = z.object({
   name: z.string().min(1, 'Deal name is required').max(255),
   contact_id: z.string().uuid().nullable(),
   contact_name: z.string().nullable().optional(),
+  contact_email: z.string().nullable().optional(),
+  contact_phone: z.string().nullable().optional(),
+  probability: z.number().min(0).max(1).nullable().optional(),
   value: DecimalStringSchema,
   currency: CurrencyCodeSchema,
   stage_id: z.string().uuid(),
@@ -198,6 +201,9 @@ export type Deal = z.infer<typeof DealSchema>;
 export const CreateDealInputSchema = z.object({
   name: z.string().min(1, 'Deal name is required').max(255),
   contact_id: z.string().uuid('Invalid Contact UUID').nullable().optional(),
+  contact_email: z.string().nullable().optional(),
+  contact_phone: z.string().nullable().optional(),
+  probability: z.number().min(0).max(1).nullable().optional(),
   value: DecimalStringSchema,
   currency: CurrencyCodeSchema.default('USD'),
   stage_name: Crm2StageNameSchema.default('New'),
@@ -393,6 +399,18 @@ export const DealsQuerySchema = z
       .optional(),
     search: z.string().optional(),
     stage: Crm2StageNameSchema.optional(),
+    is_orphan: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .transform((val) => {
+        if (typeof val === 'string') {
+          return val.toLowerCase() === 'true';
+        }
+        return val;
+      }),
+    source_system: z.string().optional(),
+    sort: z.string().optional(),
+    order: z.enum(['asc', 'desc']).optional(),
   })
   .transform((data) => {
     const size = data.pageSize ?? data.limit ?? 10;
@@ -402,6 +420,10 @@ export const DealsQuerySchema = z
       limit: size,
       ...(data.search !== undefined ? { search: data.search } : {}),
       ...(data.stage !== undefined ? { stage: data.stage } : {}),
+      ...(data.is_orphan !== undefined ? { is_orphan: data.is_orphan } : {}),
+      ...(data.source_system !== undefined ? { source_system: data.source_system } : {}),
+      ...(data.sort !== undefined ? { sort: data.sort } : {}),
+      ...(data.order !== undefined ? { order: data.order } : {}),
     };
   });
 export type DealsQuery = z.infer<typeof DealsQuerySchema>;
@@ -453,6 +475,8 @@ export const QuotesQuerySchema = z
       .min(1, { message: 'limit must be >= 1' })
       .max(100, { message: 'limit cannot exceed 100' })
       .optional(),
+    sort: z.string().optional(),
+    order: z.enum(['asc', 'desc']).optional(),
   })
   .transform((data) => {
     const size = data.pageSize ?? data.limit ?? 10;
@@ -461,6 +485,8 @@ export const QuotesQuerySchema = z
       pageSize: size,
       limit: size,
       ...(data.deal_id !== undefined ? { deal_id: data.deal_id } : {}),
+      ...(data.sort !== undefined ? { sort: data.sort } : {}),
+      ...(data.order !== undefined ? { order: data.order } : {}),
     };
   });
 export type QuotesQuery = z.infer<typeof QuotesQuerySchema>;

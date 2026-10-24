@@ -16,14 +16,17 @@ import {
   type PaginatedRejectsResponse,
   type ReconciliationReport,
   type CreateRunInput,
+  type UpdateRunInput,
   MigrationRunSchema,
   PaginatedRunsResponseSchema,
   ScoresResponseSchema,
   PaginatedRejectsResponseSchema,
   ReconciliationReportSchema,
   CreateRunInputSchema,
+  UpdateRunInputSchema,
   CRM5_API_PREFIX,
 } from '@clearshift/contracts';
+import type { BatchSummary } from '../../../src/domain/relationships.js';
 
 // ---------------------------------------------------------------------------
 // 1. Error Type
@@ -41,6 +44,13 @@ export class Crm5ApiError extends Error {
 
   get isPermissionDenied(): boolean {
     return this.statusCode === 403 || this.code === 'FORBIDDEN';
+  }
+}
+
+export class Crm5PermissionError extends Crm5ApiError {
+  constructor(message = 'Access denied: insufficient permissions to access CRM-5 migration control', details?: unknown) {
+    super(403, 'FORBIDDEN', message, details);
+    this.name = 'Crm5PermissionError';
   }
 }
 
@@ -294,3 +304,136 @@ export async function createRun(
 
   return parsed.data;
 }
+
+/**
+ * GET /api/v1/crm-control/runs/:id
+ * Fetches a single migration run projection by ID.
+ */
+export async function getRunById(
+  runId: string,
+  options: RequestOptions = {}
+): Promise<MigrationRun> {
+  const endpoint = `${API_BASE}/runs/${encodeURIComponent(runId)}`;
+  const raw = await request<unknown>(endpoint, { method: 'GET', ...options });
+
+  const parsed = MigrationRunSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Crm5ApiError(
+      502,
+      'CONTRACT_VALIDATION_ERROR',
+      'Server returned invalid run projection schema',
+      parsed.error.flatten()
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * PATCH /api/v1/crm-control/runs/:id
+ * Updates allowlisted fields on a migration run projection with concurrency checking.
+ */
+export async function updateRun(
+  runId: string,
+  input: UpdateRunInput,
+  options: RequestOptions = {}
+): Promise<MigrationRun> {
+  const validatedInput = UpdateRunInputSchema.parse(input);
+  const endpoint = `${API_BASE}/runs/${encodeURIComponent(runId)}`;
+
+  const raw = await request<unknown>(endpoint, {
+    method: 'PATCH',
+    body: JSON.stringify(validatedInput),
+    ...options,
+  });
+
+  const parsed = MigrationRunSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Crm5ApiError(
+      502,
+      'CONTRACT_VALIDATION_ERROR',
+      'Server returned invalid updated run schema',
+      parsed.error.flatten()
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * GET /api/v1/crm-control/batches/:batch
+ * Fetches aggregated batch summary across runs, scores, rejects, and reconciliation.
+ */
+export async function getBatchSummary(
+  batchId: string,
+  options: RequestOptions = {}
+): Promise<BatchSummary> {
+  const endpoint = `${API_BASE}/batches/${encodeURIComponent(batchId)}`;
+  const raw = await request<BatchSummary>(endpoint, { method: 'GET', ...options });
+  return raw;
+}
+
+export const postRun = createRun;
+export const patchRun = updateRun;
+
+export async function transitionRunStatus(
+  id: string,
+  status: MigrationRun['status'],
+  options: RequestOptions = {}
+): Promise<MigrationRun> {
+  return updateRun(id, { status }, options);
+}
+
+export const getMigrationRuns = getRuns;
+export const getQualityScores = getScores;
+export const getMigrationRejects = getRejects;
+
+export class Crm5ApiClient {
+  constructor(
+    public readonly baseUrl: string = API_BASE,
+    private readonly fetchFn?: typeof fetch,
+    private readonly getAuthToken?: () => string | null
+  ) {}
+
+  public async getRuns(query: Partial<RunsQuery> = {}, options: RequestOptions = {}): Promise<PaginatedRunsResponse> {
+    return getRuns(query, options);
+  }
+
+  public async getRunById(runId: string, options: RequestOptions = {}): Promise<MigrationRun> {
+    return getRunById(runId, options);
+  }
+
+  public async postRun(input: CreateRunInput, options: RequestOptions = {}): Promise<MigrationRun> {
+    return createRun(input, options);
+  }
+
+  public async patchRun(runId: string, input: UpdateRunInput, options: RequestOptions = {}): Promise<MigrationRun> {
+    return updateRun(runId, input, options);
+  }
+
+  public async transitionRunStatus(
+    runId: string,
+    status: MigrationRun['status'],
+    options: RequestOptions = {}
+  ): Promise<MigrationRun> {
+    return transitionRunStatus(runId, status, options);
+  }
+
+  public async getBatchSummary(batchId: string, options: RequestOptions = {}): Promise<BatchSummary> {
+    return getBatchSummary(batchId, options);
+  }
+
+  public async getScores(query: Partial<ScoresQuery> = {}, options: RequestOptions = {}): Promise<ScoresResponse> {
+    return getScores(query, options);
+  }
+
+  public async getRejects(query: Partial<RejectsQuery> = {}, options: RequestOptions = {}): Promise<PaginatedRejectsResponse> {
+    return getRejects(query, options);
+  }
+
+  public async getReconciliation(batchId: string, options: RequestOptions = {}): Promise<ReconciliationReport> {
+    return getReconciliation(batchId, options);
+  }
+}
+
+export const crm5Api = new Crm5ApiClient();

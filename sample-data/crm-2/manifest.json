@@ -1,0 +1,1194 @@
+{
+  "schemaVersion": 1,
+  "module": "crm-2",
+  "totalRecords": 100,
+  "cleanRecordsCount": 75,
+  "defectiveRecordsCount": 25,
+  "conservationEquation": {
+    "source": 100,
+    "loaded": 75,
+    "rejected": 17,
+    "merged": 8,
+    "skipped": 0,
+    "unaccounted": 0,
+    "isBalanced": true
+  },
+  "defectCategories": {
+    "EXACT_DEAL_DUPLICATE": {
+      "count": 4
+    },
+    "EXACT_QUOTE_NUMBER_MATCH": {
+      "count": 4
+    },
+    "NEGATIVE_VALUE": {
+      "count": 3
+    },
+    "INVALID_CURRENCY": {
+      "count": 3
+    },
+    "EMPTY_MANDATORY_FIELD": {
+      "count": 3
+    },
+    "INVALID_STAGE": {
+      "count": 3
+    },
+    "INVALID_DATE_FORMAT": {
+      "count": 3
+    },
+    "PARENT_DEAL_NOT_FOUND": {
+      "count": 2
+    }
+  },
+  "records": [
+    {
+      "sourceRow": 1,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0001",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "acme cloud infrastructure expansion#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000001",
+      "defects": []
+    },
+    {
+      "sourceRow": 2,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0002",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "apex enterprise saas subscription#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000002",
+      "defects": []
+    },
+    {
+      "sourceRow": 3,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0003",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "beacon data platform migration#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000003",
+      "defects": []
+    },
+    {
+      "sourceRow": 4,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0004",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "catalyst cybersecurity defense suite#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000004",
+      "defects": []
+    },
+    {
+      "sourceRow": 5,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0005",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "crestview analytics dashboard rollout#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000005",
+      "defects": []
+    },
+    {
+      "sourceRow": 6,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0006",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "delta global multi-region network#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000006",
+      "defects": []
+    },
+    {
+      "sourceRow": 7,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0007",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "echo digital transformation program#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000007",
+      "defects": []
+    },
+    {
+      "sourceRow": 8,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0008",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "horizon core ledger modernization#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000008",
+      "defects": []
+    },
+    {
+      "sourceRow": 9,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0009",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "ironclad ai integration framework#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000009",
+      "defects": []
+    },
+    {
+      "sourceRow": 10,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0010",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "'=cmd('calc')!a1 enterprise cloud migration#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000010",
+      "defects": []
+    },
+    {
+      "sourceRow": 11,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0011",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "meridian cloud infrastructure expansion#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000011",
+      "defects": []
+    },
+    {
+      "sourceRow": 12,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0012",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "nexus enterprise saas subscription#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000012",
+      "defects": []
+    },
+    {
+      "sourceRow": 13,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0013",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "omni data platform migration#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000013",
+      "defects": []
+    },
+    {
+      "sourceRow": 14,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0014",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "pinnacle cybersecurity defense suite#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000014",
+      "defects": []
+    },
+    {
+      "sourceRow": 15,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0015",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "quantum analytics dashboard rollout#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000015",
+      "defects": []
+    },
+    {
+      "sourceRow": 16,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0016",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "radiant global multi-region network#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000016",
+      "defects": []
+    },
+    {
+      "sourceRow": 17,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0017",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "starlight digital transformation program#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000017",
+      "defects": []
+    },
+    {
+      "sourceRow": 18,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0018",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "summit core ledger modernization#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000018",
+      "defects": []
+    },
+    {
+      "sourceRow": 19,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0019",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "titan ai integration framework#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000019",
+      "defects": []
+    },
+    {
+      "sourceRow": 20,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0020",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "vanguard automated devops pipeline#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000020",
+      "defects": []
+    },
+    {
+      "sourceRow": 21,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0021",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "vertex cloud infrastructure expansion#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000021",
+      "defects": []
+    },
+    {
+      "sourceRow": 22,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0022",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "zephyr enterprise saas subscription#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000022",
+      "defects": []
+    },
+    {
+      "sourceRow": 23,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0023",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "münchen data platform migration#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000023",
+      "defects": []
+    },
+    {
+      "sourceRow": 24,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0024",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "são paulo cybersecurity defense suite#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000024",
+      "defects": []
+    },
+    {
+      "sourceRow": 25,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0025",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "zürich analytics dashboard rollout#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000025",
+      "defects": []
+    },
+    {
+      "sourceRow": 26,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0026",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "tokyo global multi-region network#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000026",
+      "defects": []
+    },
+    {
+      "sourceRow": 27,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0027",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "singapore digital transformation program#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000027",
+      "defects": []
+    },
+    {
+      "sourceRow": 28,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0028",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "london core ledger modernization#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000028",
+      "defects": []
+    },
+    {
+      "sourceRow": 29,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0029",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "acme ai integration framework#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000029",
+      "defects": []
+    },
+    {
+      "sourceRow": 30,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0030",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "apex automated devops pipeline#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000030",
+      "defects": []
+    },
+    {
+      "sourceRow": 31,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0031",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "beacon cloud infrastructure expansion#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000031",
+      "defects": []
+    },
+    {
+      "sourceRow": 32,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0032",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "catalyst enterprise saas subscription#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000032",
+      "defects": []
+    },
+    {
+      "sourceRow": 33,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0033",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "crestview data platform migration#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000033",
+      "defects": []
+    },
+    {
+      "sourceRow": 34,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0034",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "delta cybersecurity defense suite#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000034",
+      "defects": []
+    },
+    {
+      "sourceRow": 35,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0035",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "echo analytics dashboard rollout#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000035",
+      "defects": []
+    },
+    {
+      "sourceRow": 36,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0036",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "horizon global multi-region network#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000036",
+      "defects": []
+    },
+    {
+      "sourceRow": 37,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0037",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "ironclad digital transformation program#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000037",
+      "defects": []
+    },
+    {
+      "sourceRow": 38,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0038",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "lumina core ledger modernization#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000038",
+      "defects": []
+    },
+    {
+      "sourceRow": 39,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0039",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "meridian ai integration framework#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000039",
+      "defects": []
+    },
+    {
+      "sourceRow": 40,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0040",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "nexus automated devops pipeline#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000040",
+      "defects": []
+    },
+    {
+      "sourceRow": 41,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0041",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "omni cloud infrastructure expansion#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000041",
+      "defects": []
+    },
+    {
+      "sourceRow": 42,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0042",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "pinnacle enterprise saas subscription#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000042",
+      "defects": []
+    },
+    {
+      "sourceRow": 43,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0043",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "quantum data platform migration#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000043",
+      "defects": []
+    },
+    {
+      "sourceRow": 44,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0044",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "radiant cybersecurity defense suite#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000044",
+      "defects": []
+    },
+    {
+      "sourceRow": 45,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0045",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "starlight analytics dashboard rollout#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000045",
+      "defects": []
+    },
+    {
+      "sourceRow": 46,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0046",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "summit global multi-region network#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000046",
+      "defects": []
+    },
+    {
+      "sourceRow": 47,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0047",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "titan digital transformation program#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000047",
+      "defects": []
+    },
+    {
+      "sourceRow": 48,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0048",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "vanguard core ledger modernization#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000048",
+      "defects": []
+    },
+    {
+      "sourceRow": 49,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0049",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "vertex ai integration framework#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000049",
+      "defects": []
+    },
+    {
+      "sourceRow": 50,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0050",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "zephyr automated devops pipeline#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000050",
+      "defects": []
+    },
+    {
+      "sourceRow": 51,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0051",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "münchen cloud infrastructure expansion#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000051",
+      "defects": []
+    },
+    {
+      "sourceRow": 52,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0052",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "são paulo enterprise saas subscription#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000052",
+      "defects": []
+    },
+    {
+      "sourceRow": 53,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0053",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "zürich data platform migration#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000053",
+      "defects": []
+    },
+    {
+      "sourceRow": 54,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0054",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "tokyo cybersecurity defense suite#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000054",
+      "defects": []
+    },
+    {
+      "sourceRow": 55,
+      "entityType": "deal",
+      "sourceId": "deal_legacy_0055",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "singapore analytics dashboard rollout#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000055",
+      "defects": []
+    },
+    {
+      "sourceRow": 56,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0056",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "london inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 57,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0057",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "acme inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 58,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0058",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "apex inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 59,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0059",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "beacon inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 60,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0060",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "catalyst inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 61,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0061",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "crestview inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 62,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0062",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "delta inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 63,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0063",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "echo inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 64,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0064",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "horizon inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 65,
+      "entityType": "deal",
+      "sourceId": "deal_orphan_0065",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "ironclad inbound opportunity#new#orphan",
+      "defects": []
+    },
+    {
+      "sourceRow": 66,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0066",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0066",
+      "defects": []
+    },
+    {
+      "sourceRow": 67,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0067",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0067",
+      "defects": []
+    },
+    {
+      "sourceRow": 68,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0068",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0068",
+      "defects": []
+    },
+    {
+      "sourceRow": 69,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0069",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0069",
+      "defects": []
+    },
+    {
+      "sourceRow": 70,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0070",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0070",
+      "defects": []
+    },
+    {
+      "sourceRow": 71,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0071",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0071",
+      "defects": []
+    },
+    {
+      "sourceRow": 72,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0072",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0072",
+      "defects": []
+    },
+    {
+      "sourceRow": 73,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0073",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0073",
+      "defects": []
+    },
+    {
+      "sourceRow": 74,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0074",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0074",
+      "defects": []
+    },
+    {
+      "sourceRow": 75,
+      "entityType": "quote",
+      "sourceId": "quote_legacy_0075",
+      "expectedOutcome": "loaded",
+      "category": "golden_baseline",
+      "reasonCode": null,
+      "businessKey": "Q-2026-0075",
+      "defects": []
+    },
+    {
+      "sourceRow": 76,
+      "entityType": "deal",
+      "sourceId": "deal_dup_001_a",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_DEAL_DUPLICATE",
+      "businessKey": "global logistics erp upgrade#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000076",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EXACT_DEAL_DUPLICATE",
+          "message": "Exact duplicate deal candidate matching normalized name, stage, and contact"
+        }
+      ]
+    },
+    {
+      "sourceRow": 77,
+      "entityType": "deal",
+      "sourceId": "deal_dup_001_b",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_DEAL_DUPLICATE",
+      "businessKey": "global logistics erp upgrade#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000076",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EXACT_DEAL_DUPLICATE",
+          "message": "Exact duplicate deal candidate matching normalized name, stage, and contact"
+        }
+      ]
+    },
+    {
+      "sourceRow": 78,
+      "entityType": "deal",
+      "sourceId": "deal_dup_002_a",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_DEAL_DUPLICATE",
+      "businessKey": "nordic telecom cloud core#qualified#orphan",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EXACT_DEAL_DUPLICATE",
+          "message": "Exact duplicate orphan deal candidate"
+        }
+      ]
+    },
+    {
+      "sourceRow": 79,
+      "entityType": "deal",
+      "sourceId": "deal_dup_002_b",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_DEAL_DUPLICATE",
+      "businessKey": "nordic telecom cloud core#qualified#orphan",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EXACT_DEAL_DUPLICATE",
+          "message": "Exact duplicate orphan deal candidate"
+        }
+      ]
+    },
+    {
+      "sourceRow": 80,
+      "entityType": "quote",
+      "sourceId": "quote_dup_001_a",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+      "businessKey": "Q-2026-0880",
+      "defects": [
+        {
+          "field": "quote_number",
+          "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+          "message": "Duplicate quote number matching Q-2026-0880"
+        }
+      ]
+    },
+    {
+      "sourceRow": 81,
+      "entityType": "quote",
+      "sourceId": "quote_dup_001_b",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+      "businessKey": "Q-2026-0880",
+      "defects": [
+        {
+          "field": "quote_number",
+          "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+          "message": "Duplicate quote number matching Q-2026-0880 after normalization"
+        }
+      ]
+    },
+    {
+      "sourceRow": 82,
+      "entityType": "quote",
+      "sourceId": "quote_dup_002_a",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+      "businessKey": "Q-2026-0881",
+      "defects": [
+        {
+          "field": "quote_number",
+          "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+          "message": "Duplicate quote number matching Q-2026-0881"
+        }
+      ]
+    },
+    {
+      "sourceRow": 83,
+      "entityType": "quote",
+      "sourceId": "quote_dup_002_b",
+      "expectedOutcome": "merged",
+      "category": "exact_duplicate",
+      "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+      "businessKey": "Q-2026-0881",
+      "defects": [
+        {
+          "field": "quote_number",
+          "reasonCode": "EXACT_QUOTE_NUMBER_MATCH",
+          "message": "Duplicate quote number matching Q-2026-0881"
+        }
+      ]
+    },
+    {
+      "sourceRow": 84,
+      "entityType": "deal",
+      "sourceId": "deal_neg_001",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "NEGATIVE_VALUE",
+      "businessKey": "corrupted legacy contract a#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000084",
+      "defects": [
+        {
+          "field": "value",
+          "reasonCode": "NEGATIVE_VALUE",
+          "message": "Deal monetary value must be a non-negative decimal quantity"
+        }
+      ]
+    },
+    {
+      "sourceRow": 85,
+      "entityType": "deal",
+      "sourceId": "deal_neg_002",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "NEGATIVE_VALUE",
+      "businessKey": "corrupted legacy contract b#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000085",
+      "defects": [
+        {
+          "field": "value",
+          "reasonCode": "NEGATIVE_VALUE",
+          "message": "Deal monetary value must be a non-negative decimal quantity"
+        }
+      ]
+    },
+    {
+      "sourceRow": 86,
+      "entityType": "deal",
+      "sourceId": "deal_neg_003",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "NEGATIVE_VALUE",
+      "businessKey": "corrupted legacy contract c#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000086",
+      "defects": [
+        {
+          "field": "value",
+          "reasonCode": "NEGATIVE_VALUE",
+          "message": "Deal monetary value must be a non-negative decimal quantity"
+        }
+      ]
+    },
+    {
+      "sourceRow": 87,
+      "entityType": "deal",
+      "sourceId": "deal_curr_001",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "INVALID_CURRENCY",
+      "businessKey": "european distributor expansion#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000087",
+      "defects": [
+        {
+          "field": "currency",
+          "reasonCode": "INVALID_CURRENCY",
+          "message": "Currency must be an ISO 4217 three-letter uppercase code"
+        }
+      ]
+    },
+    {
+      "sourceRow": 88,
+      "entityType": "deal",
+      "sourceId": "deal_curr_002",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "INVALID_CURRENCY",
+      "businessKey": "north american fleet renewal#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000088",
+      "defects": [
+        {
+          "field": "currency",
+          "reasonCode": "INVALID_CURRENCY",
+          "message": "Currency must be an ISO 4217 three-letter uppercase code"
+        }
+      ]
+    },
+    {
+      "sourceRow": 89,
+      "entityType": "deal",
+      "sourceId": "deal_curr_003",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "INVALID_CURRENCY",
+      "businessKey": "asian logistics hub buildout#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000089",
+      "defects": [
+        {
+          "field": "currency",
+          "reasonCode": "INVALID_CURRENCY",
+          "message": "Currency must be an ISO 4217 three-letter uppercase code"
+        }
+      ]
+    },
+    {
+      "sourceRow": 90,
+      "entityType": "deal",
+      "sourceId": "deal_name_001",
+      "expectedOutcome": "rejected",
+      "category": "missing_required",
+      "reasonCode": "EMPTY_MANDATORY_FIELD",
+      "businessKey": "empty_name#new#a1b2c3d4-e5f6-7a8b-9c0d-000000000090",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EMPTY_MANDATORY_FIELD",
+          "message": "Mandatory deal name is required and cannot be blank"
+        }
+      ]
+    },
+    {
+      "sourceRow": 91,
+      "entityType": "deal",
+      "sourceId": "deal_name_002",
+      "expectedOutcome": "rejected",
+      "category": "missing_required",
+      "reasonCode": "EMPTY_MANDATORY_FIELD",
+      "businessKey": "#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000091",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EMPTY_MANDATORY_FIELD",
+          "message": "Mandatory deal name is required and cannot be blank"
+        }
+      ]
+    },
+    {
+      "sourceRow": 92,
+      "entityType": "deal",
+      "sourceId": "deal_name_003",
+      "expectedOutcome": "rejected",
+      "category": "missing_required",
+      "reasonCode": "EMPTY_MANDATORY_FIELD",
+      "businessKey": "#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000092",
+      "defects": [
+        {
+          "field": "name",
+          "reasonCode": "EMPTY_MANDATORY_FIELD",
+          "message": "Mandatory deal name is required and cannot be blank"
+        }
+      ]
+    },
+    {
+      "sourceRow": 93,
+      "entityType": "deal",
+      "sourceId": "deal_stage_001",
+      "expectedOutcome": "rejected",
+      "category": "lifecycle_violation",
+      "reasonCode": "INVALID_STAGE",
+      "businessKey": "government infrastructure deal#draft#a1b2c3d4-e5f6-7a8b-9c0d-000000000093",
+      "defects": [
+        {
+          "field": "stage_name",
+          "reasonCode": "INVALID_STAGE",
+          "message": "Specified pipeline stage does not exist in standard stage allowlist"
+        }
+      ]
+    },
+    {
+      "sourceRow": 94,
+      "entityType": "deal",
+      "sourceId": "deal_stage_002",
+      "expectedOutcome": "rejected",
+      "category": "lifecycle_violation",
+      "reasonCode": "INVALID_STAGE",
+      "businessKey": "healthcare compliance system#in review#a1b2c3d4-e5f6-7a8b-9c0d-000000000094",
+      "defects": [
+        {
+          "field": "stage_name",
+          "reasonCode": "INVALID_STAGE",
+          "message": "Specified pipeline stage does not exist in standard stage allowlist"
+        }
+      ]
+    },
+    {
+      "sourceRow": 95,
+      "entityType": "deal",
+      "sourceId": "deal_stage_003",
+      "expectedOutcome": "rejected",
+      "category": "lifecycle_violation",
+      "reasonCode": "INVALID_STAGE",
+      "businessKey": "retail omnichannel rollout#cancelled#a1b2c3d4-e5f6-7a8b-9c0d-000000000095",
+      "defects": [
+        {
+          "field": "stage_name",
+          "reasonCode": "INVALID_STAGE",
+          "message": "Specified pipeline stage does not exist in standard stage allowlist"
+        }
+      ]
+    },
+    {
+      "sourceRow": 96,
+      "entityType": "deal",
+      "sourceId": "deal_date_001",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "INVALID_DATE_FORMAT",
+      "businessKey": "supply chain optimization#proposal#a1b2c3d4-e5f6-7a8b-9c0d-000000000096",
+      "defects": [
+        {
+          "field": "close_date",
+          "reasonCode": "INVALID_DATE_FORMAT",
+          "message": "Close date must conform to ISO 8601 format (YYYY-MM-DD)"
+        }
+      ]
+    },
+    {
+      "sourceRow": 97,
+      "entityType": "deal",
+      "sourceId": "deal_date_002",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "INVALID_DATE_FORMAT",
+      "businessKey": "renewable energy integration#qualified#a1b2c3d4-e5f6-7a8b-9c0d-000000000097",
+      "defects": [
+        {
+          "field": "close_date",
+          "reasonCode": "INVALID_DATE_FORMAT",
+          "message": "Close date must conform to ISO 8601 format (YYYY-MM-DD)"
+        }
+      ]
+    },
+    {
+      "sourceRow": 98,
+      "entityType": "deal",
+      "sourceId": "deal_date_003",
+      "expectedOutcome": "rejected",
+      "category": "malformed_syntax",
+      "reasonCode": "INVALID_DATE_FORMAT",
+      "businessKey": "smart warehouse iot deployment#negotiation#a1b2c3d4-e5f6-7a8b-9c0d-000000000098",
+      "defects": [
+        {
+          "field": "close_date",
+          "reasonCode": "INVALID_DATE_FORMAT",
+          "message": "Close date must conform to ISO 8601 format (YYYY-MM-DD)"
+        }
+      ]
+    },
+    {
+      "sourceRow": 99,
+      "entityType": "quote",
+      "sourceId": "quote_orphan_001",
+      "expectedOutcome": "rejected",
+      "category": "referential_orphan",
+      "reasonCode": "PARENT_DEAL_NOT_FOUND",
+      "businessKey": "Q-2026-9991",
+      "defects": [
+        {
+          "field": "deal_id",
+          "reasonCode": "PARENT_DEAL_NOT_FOUND",
+          "message": "Referenced parent deal does not exist in target database"
+        }
+      ]
+    },
+    {
+      "sourceRow": 100,
+      "entityType": "quote",
+      "sourceId": "quote_orphan_002",
+      "expectedOutcome": "rejected",
+      "category": "referential_orphan",
+      "reasonCode": "PARENT_DEAL_NOT_FOUND",
+      "businessKey": "Q-2026-9992",
+      "defects": [
+        {
+          "field": "deal_id",
+          "reasonCode": "PARENT_DEAL_NOT_FOUND",
+          "message": "Referenced parent deal does not exist in target database"
+        }
+      ]
+    }
+  ]
+}

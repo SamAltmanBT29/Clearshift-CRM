@@ -21,8 +21,19 @@ import {
   CRM1LeadSchema,
   CRM1ListQuerySchema,
   CRM1ListResponseSchema,
-  CRM1ImportRowSchema
-} from "@clearshift/contracts/crm-1";
+  CRM1ImportRowSchema,
+  Crm1DetectDuplicatesInputSchema,
+  Crm1ResolveDuplicateInputSchema,
+  Crm1ExecuteBatchLoadInputSchema,
+} from "@clearshift/contracts";
+import {
+  DuplicateReviewQueue,
+  detectExactDuplicates,
+} from "../domain/duplicate-policy.js";
+import {
+  executeCrm1ChunkedBatchLoad,
+  type Crm1BatchExecutionReport,
+} from "../domain/batch-loader.js";
 import { AppError } from "@cs/kernel";
 import { getDatabase } from "@cs/db";
 import {
@@ -662,6 +673,149 @@ export function createCrm1Routes(db: NodePgDatabase = getDatabase()): FastifyPlu
         pageSize: query.pageSize,
         total: totals[0]?.total ?? 0
       });
+    });
+
+    // -------------------------------------------------------------------------
+    // 6. Duplicates & Human Review Endpoints (CRM1-12)
+    // -------------------------------------------------------------------------
+
+    const duplicateQueue = new DuplicateReviewQueue();
+
+    fastify.post("/duplicates/detect", {
+      preHandler: endpointPreHandlers(fastify, "DUPLICATES_DETECT")
+    }, async (request) => {
+      const parsed = Crm1DetectDuplicatesInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError("BAD_REQUEST", "Invalid duplicate detection request", 400, parsed.error.issues);
+      }
+      if (parsed.data.autoMerge) {
+        throw new AppError(
+          "AUTO_MERGE_FORBIDDEN",
+          "Automatic fuzzy or unreviewed merging is forbidden in V1. Duplicate candidates must be held for authorized human review.",
+          422
+        );
+      }
+      const result = detectExactDuplicates(parsed.data.records, parsed.data.keyType, {
+        batchId: parsed.data.batchId,
+        entity: parsed.data.entity,
+        autoMerge: parsed.data.autoMerge,
+      });
+      duplicateQueue.addCandidates(result.duplicateCandidates);
+      return result;
+    });
+
+    fastify.get("/duplicates/held", {
+      preHandler: endpointPreHandlers(fastify, "DUPLICATES_HELD")
+    }, async (request) => {
+      const query = request.query as { batchId?: string; keyType?: string; entity?: string };
+      const items = duplicateQueue.listHeld(query);
+      return { items, total: items.length };
+    });
+
+    fastify.post("/duplicates/resolve", {
+      preHandler: endpointPreHandlers(fastify, "DUPLICATES_RESOLVE")
+    }, async (request) => {
+      const parsed = Crm1ResolveDuplicateInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError("BAD_REQUEST", "Invalid duplicate resolution input", 400, parsed.error.issues);
+      }
+      try {
+        return duplicateQueue.resolve(parsed.data);
+      } catch (err: any) {
+        if (err.name === "DuplicateCandidateNotFoundError" || err.statusCode === 404) {
+          throw new AppError("NOT_FOUND", err.message, 404);
+        }
+        if (err.name === "DomainValidationError" || err.statusCode === 400) {
+          throw new AppError("BAD_REQUEST", err.message, 400);
+        }
+        throw err;
+      }
+    });
+
+    fastify.get("/duplicates/audit", {
+      preHandler: endpointPreHandlers(fastify, "DUPLICATES_AUDIT")
+    }, async (request) => {
+      const query = request.query as {
+        candidateId?: string;
+        actorId?: string;
+        entity?: string;
+        page?: string | number;
+        pageSize?: string | number;
+      };
+      const page = query.page ? Number(query.page) : 1;
+      const pageSize = query.pageSize ? Number(query.pageSize) : 20;
+      return duplicateQueue.getAuditLogs({
+        candidateId: query.candidateId,
+        actorId: query.actorId,
+        entity: query.entity,
+        page,
+        pageSize,
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // 7. Chunked Batch Loading & Idempotent Retry Endpoints (CRM1-13)
+    // -------------------------------------------------------------------------
+
+    const batchReports = new Map<string, Crm1BatchExecutionReport>();
+
+    const handleExecuteBatchLoad = async (request: any, reply: any) => {
+      const parsed = Crm1ExecuteBatchLoadInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        throw new AppError("BAD_REQUEST", "Invalid batch load input", 400);
+      }
+      try {
+        const report = await executeCrm1ChunkedBatchLoad(parsed.data);
+        batchReports.set(report.batchId, report);
+        return report;
+      } catch (err: any) {
+        if (err?.code === "STOPPED_EXCESSIVE_FAILURES" || err?.statusCode === 422) {
+          throw new AppError("STOPPED_EXCESSIVE_FAILURES", err.message, 422);
+        }
+        throw err;
+      }
+    };
+
+    fastify.post("/batches/execute-load", {
+      preHandler: endpointPreHandlers(fastify, "BATCH_EXECUTE_LOAD")
+    }, handleExecuteBatchLoad);
+
+    fastify.get("/batches/:batchId/report", {
+      preHandler: endpointPreHandlers(fastify, "BATCH_REPORT_READ")
+    }, async (request) => {
+      const { batchId } = request.params as { batchId: string };
+      const report = batchReports.get(batchId);
+      if (!report) {
+        throw new AppError("NOT_FOUND", `Batch report for batch '${batchId}' not found`, 404);
+      }
+      return report;
+    });
+
+    fastify.post("/import/batch", {
+      preHandler: endpointPreHandlers(fastify, "BATCH_EXECUTE_LOAD")
+    }, async (request, reply) => {
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      if (Array.isArray(body["records"])) {
+        return handleExecuteBatchLoad(request, reply);
+      }
+      const rawRows = body["rows"] ?? body["records"];
+      if (!Array.isArray(rawRows)) {
+        throw new AppError("BAD_REQUEST", "Missing or invalid rows array in batch import payload", 400);
+      }
+      const batchId = (body["batchId"] ?? body["batch_id"] ?? `batch-crm1-${Date.now()}`) as string;
+      const records = rawRows.map((r, idx) => ({
+        sourceRow: (r as any).sourceRow ?? (r as any).source_row ?? idx + 1,
+        idempotencyKey: (r as any).idempotencyKey ?? (r as any).idempotency_key ?? `${batchId}-row-${idx + 1}`,
+        data: (r as any).data ?? r,
+      }));
+      (request as any).body = {
+        batchId,
+        module: "crm-1",
+        step: "load",
+        chunkSize: Number(body["chunkSize"] ?? body["chunk_size"] ?? 500),
+        records,
+      };
+      return handleExecuteBatchLoad(request, reply);
     });
   };
 }

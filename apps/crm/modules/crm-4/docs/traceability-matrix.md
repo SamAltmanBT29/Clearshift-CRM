@@ -40,19 +40,47 @@ This Requirement-to-Test Traceability Matrix maps 100% of functional requirement
 | **`MIG-CRM4-01`** | Target domain mutation and migration import receipt commit together in one local database transaction. | **Must** | KIT-08 & Decision C4 | Migration | Integration | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
 | **`MIG-CRM4-02`** | Row conservation balance sheet: `source = loaded + rejected + merged + skipped` (`unaccounted = 0`). | **Must** | ClearShift Core Rules | Migration | Unit | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
 | **`MIG-CRM4-03`** | Bounded batching (500 rows) and stop migration when failures exceed 10% of attempted rows. | **Must** | ClearShift Core Rules & SDS §4.11 | Migration | Unit | `apps/crm/modules/crm-4/tests/domain/qa-g1-design.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM4-26`** | Module profiling configuration: column statistics, duplicate counts, non-destructive execution, and scorecard manifest alignment. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #179 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/profiler.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM4-27`** | Module cleaning configuration: standard cleaners, field-level change audit trail, structured rejections, and row conservation. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #180 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/cleaner.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM4-28`** | Mapping and value translation configuration: canonical/legacy mapping templates, deterministic type coercion, enum allowlists/translations, dry-run guards, and BR-CRM4-01 monotonic opt-out rule. | **Must** | SDS CRM v2.0 §4.5, §4.7 & Issue #181 | Migration | Unit | `apps/crm/modules/crm-4/tests/kit/mapping.test.ts` | **VERIFIED (Green)** |
+| **`FR-CRM4-29`** | Module contract, regression and browser test suite: comprehensive end-to-end API lifecycle, deterministic deduplication and immutability invariants, repeated read payload stability, Zod/OpenAPI contract conformance, cross-module reference resolution, and browser journeys across core entities. | **Must** | SDS CRM v2.0 §4.5, §7.1 & Issue #182 | API / Web | Regression | `apps/crm/modules/crm-4/tests/api/module-contract-regression.test.ts`<br>`apps/crm/modules/crm-4/tests/web/browser-journey.test.tsx` | **VERIFIED (Green)** |
 
 ---
 
 ## 3. Test Suite Registry & Test Counts
 
-The CRM-4 test suite comprises executing test files verifying schema, security, domain invariants, and web APIs:
+The CRM-4 test suite comprises 21 executing test files verifying schema, security, domain invariants, API contracts, and browser journeys (372 automated tests):
 
 ```
 apps/crm/modules/crm-4/tests/
+├── api/
+│   ├── list.test.ts                     (27 tests) — Marketing list endpoints and queries
+│   ├── mapping-routes.test.ts           (10 tests) — Mapping templates, validate & map endpoints
+│   ├── module-contract-regression.test.ts (12 tests) — Comprehensive regression & contract conformance suite
+│   ├── mutations.test.ts                (22 tests) — Lifecycle mutations and idempotency
+│   └── routes.test.ts                   (24 tests) — Route authentication and error envelopes
+├── contracts/
+│   └── openapi.test.ts                  (9 tests)  — OpenAPI 3.1.0 schema conformance & Zod alignment
+├── db/
+│   └── schema.test.ts                   (5 tests)  — Database schema definitions & foreign key constraints
 ├── domain/
-│   └── qa-g1-design.test.ts             — Data dictionary, ERD, and conservation equations (Gate G1)
+│   ├── duplicates.test.ts               (15 tests) — Deterministic deduplication exact-key evaluation
+│   ├── invariants.test.ts               (15 tests) — BR-CRM4-01 monotonic opt-out & lifecycle invariants
+│   ├── qa-g1-design.test.ts             (28 tests) — Data dictionary, ERD, and conservation equations (Gate G1)
+│   └── relationships.test.ts            (24 tests) — Entity relationships & cross-module link constraints
+├── fixtures/
+│   └── dirty-pack.test.ts               (22 tests) — Canonical 100-row dirty data pack & manifest
+├── kit/
+│   ├── cleaner.test.ts                  (22 tests) — Standard cleaners, field-level audit & row rejections
+│   ├── mapping.test.ts                  (20 tests) — Mapping templates, type coercions & dry-run guards
+│   ├── profiler.test.ts                 (21 tests) — Profiling stats, duplicate detection & manifest comparison
+│   └── target-adapter.test.ts           (13 tests) — Target domain mutation & durable receipts
 ├── security/
 │   └── authorization.test.ts            (46 tests) — EdDSA auth, RBAC capability matrix, tenant isolation
+├── services/
+│   └── crm4-mapping.service.test.ts     (5 tests)  — Mapping service unit tests
 └── web/
-    └── routes.test.ts                   — API route contracts, Zod validations, CRUD handling
+    ├── browser-journey.test.tsx         (12 tests) — Multi-browser Chrome/Firefox user journeys across core entities
+    ├── mapping-templates-page.test.ts   (4 tests)  — Migration mapping UI rendering & interactions
+    └── routes.test.ts                   (16 tests) — Navigation routes, breadcrumbs & title formatting
 ```
