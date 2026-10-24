@@ -14,8 +14,12 @@ export * from "./domain/dirty-data-pack-generator.js";
 export * from "./domain/batch-loader.js";
 export * from "./migration/target-adapter.js";
 export * from "./services/crm2.service.js";
+export * from "./services/audit.js";
 export * from "./policies/roles.js";
+export * from "./policies/masking.js";
+export * from "./policies/index.js";
 export * from "./plugins/auth.js";
+export * from "./interface/authz.js";
 export * from "./migration/target-adapter.js";
 export * from "./app.js";
 
