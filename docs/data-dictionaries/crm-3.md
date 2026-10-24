@@ -231,3 +231,28 @@ Source of truth: `CRM3_ENDPOINT_ROLES` in `apps/crm/modules/crm-3/src/policies/r
 | Otherwise | `COMPLETED` | `completed` | set |
 
 `loaded_count` = ticket receipts in the batch; `rejected_count` = failed rows in the latest run.
+
+---
+
+## 9. Security, Sensitive-Field Masking & Audit Logging (CRM3-09 / #34)
+
+### Authentication & Account Integrity
+- Asymmetric-signed EdDSA JWT access tokens from ClearShift Hub (`@cs/identity`) verified on every API request.
+- Tokens from disabled accounts (`disabled: true` or `status: "disabled"`) are rejected immediately with HTTP `401 Unauthorized` (`User account is disabled`).
+- Expired tokens, missing authorization headers, invalid issuers, or foreign audiences fail closed with HTTP `401 Unauthorized`.
+
+### Multi-Tenant Boundary & Field Protection
+- Token tenant (`tenant_id`, `tenantId`, `org_id`) is strictly validated against `x-tenant-id` request headers. Cross-tenant calls are rejected with HTTP `403 Forbidden` (`Multi-tenant boundary violation`).
+- Note author is resolved from `request.user.sub`; attempts to create a note with a conflicting `authorId` fail with HTTP `403 Forbidden` (`AUTHOR_MISMATCH`).
+- Immutable system fields (`id`, `createdAt`, `updatedAt`, `sourceSystem`, `sourceId`) cannot be modified via PATCH requests.
+
+### Field-Level Sensitive Data Masking
+- **Bank details**: Masked to `XXXX-XXXX-7890` (preserving only the terminal 4 digits).
+- **Salary details**: Masked to `XX,XXX` or `"salary hidden"`.
+- **CSV export formula defense**: Any field prefixed with `=, +, -, @, \t, \r` is prepended with `'` to prevent DDE/formula injection.
+- **Log sanitization**: `maskSensitiveLog()` strips tokens, passwords, card/bank numbers, and salary from logs.
+
+### Append-Only Audit Trail
+- `Crm3AuditService` records an immutable audit trail capturing `actor`, `action`, `entity`, `entityId`, `batchId`, `result`, `diffRedacted`, and `metadata`.
+- Diff and metadata are automatically passed through `redactSensitiveObject()` to prevent storing raw credentials or unmasked PII.
+- Raw rows, tokens, and plaintext passwords are never copied into the audit log.
