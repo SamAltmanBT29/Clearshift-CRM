@@ -75,11 +75,11 @@ source_row,entity_type,source_system,source_id,name,value,currency,stage_name,cl
 74,quote,salesforce_quotes,quote_legacy_0074,,220000.00,GBP,,2026-10-23,,Q-2026-0074,d1000000-0000-4000-8000-000000000009,Formal binding quote for deal deal_legacy_0009. Valid 30 calendar days.
 75,quote,salesforce_quotes,quote_legacy_0075,,249000.00,USD,,2026-10-23,,Q-2026-0075,d1000000-0000-4000-8000-000000000010,Formal binding quote for deal deal_legacy_0010. Valid 30 calendar days.
 76,deal,pipedrive_legacy,deal_dup_001_a,Global Logistics ERP Upgrade,95000.00,USD,Proposal,2026-11-30,a1b2c3d4-e5f6-7a8b-9c0d-000000000076,,,Duplicate Deal Candidate 1A
-77,deal,pipedrive_legacy,deal_dup_001_b,"  Global Logistics ERP Upgrade  ",95000.00,USD,Proposal,2026-11-30,a1b2c3d4-e5f6-7a8b-9c0d-000000000076,,,Duplicate Deal Candidate 1B
+77,deal,pipedrive_legacy,deal_dup_001_b,  Global Logistics ERP Upgrade  ,95000.00,USD,Proposal,2026-11-30,a1b2c3d4-e5f6-7a8b-9c0d-000000000076,,,Duplicate Deal Candidate 1B
 78,deal,pipedrive_legacy,deal_dup_002_a,Nordic Telecom Cloud Core,135000.00,EUR,Qualified,2026-12-15,,,,Duplicate Deal Candidate 2A (Orphan)
 79,deal,pipedrive_legacy,deal_dup_002_b,nordic telecom cloud core,135000.00,EUR,Qualified,2026-12-15,,,,Duplicate Deal Candidate 2B (Orphan)
 80,quote,salesforce_quotes,quote_dup_001_a,,50000.00,USD,,2026-10-23,,Q-2026-0880,d1000000-0000-4000-8000-000000000001,Exact Quote Duplicate Candidate 1A
-81,quote,salesforce_quotes,quote_dup_001_b,,50000.00,USD,,2026-10-23,,"  q-2026-0880  ",d1000000-0000-4000-8000-000000000001,Exact Quote Duplicate Candidate 1B
+81,quote,salesforce_quotes,quote_dup_001_b,,50000.00,USD,,2026-10-23,,  q-2026-0880  ,d1000000-0000-4000-8000-000000000001,Exact Quote Duplicate Candidate 1B
 82,quote,salesforce_quotes,quote_dup_002_a,,82000.00,EUR,,2026-10-23,,Q-2026-0881,d1000000-0000-4000-8000-000000000002,Exact Quote Duplicate Candidate 2A
 83,quote,salesforce_quotes,quote_dup_002_b,,82000.00,EUR,,2026-10-23,,Q-2026-0881,d1000000-0000-4000-8000-000000000002,Exact Quote Duplicate Candidate 2B
 84,deal,pipedrive_legacy,deal_neg_001,Corrupted Legacy Contract A,-1500.00,USD,New,2026-11-20,a1b2c3d4-e5f6-7a8b-9c0d-000000000084,,,Seeded negative value defect
@@ -89,8 +89,8 @@ source_row,entity_type,source_system,source_id,name,value,currency,stage_name,cl
 88,deal,pipedrive_legacy,deal_curr_002,North American Fleet Renewal,75000.00,US,Proposal,2026-12-10,a1b2c3d4-e5f6-7a8b-9c0d-000000000088,,,Seeded invalid currency defect
 89,deal,pipedrive_legacy,deal_curr_003,Asian Logistics Hub Buildout,120000.00,$$$,Negotiation,2026-12-15,a1b2c3d4-e5f6-7a8b-9c0d-000000000089,,,Seeded invalid currency defect
 90,deal,pipedrive_legacy,deal_name_001,,15000.00,USD,New,2026-11-20,a1b2c3d4-e5f6-7a8b-9c0d-000000000090,,,Seeded empty deal name
-91,deal,pipedrive_legacy,deal_name_002,"   ",22000.00,USD,Qualified,2026-11-22,a1b2c3d4-e5f6-7a8b-9c0d-000000000091,,,Seeded whitespace deal name
-92,deal,pipedrive_legacy,deal_name_003,"		",35000.00,EUR,Proposal,2026-11-25,a1b2c3d4-e5f6-7a8b-9c0d-000000000092,,,Seeded whitespace deal name
+91,deal,pipedrive_legacy,deal_name_002,   ,22000.00,USD,Qualified,2026-11-22,a1b2c3d4-e5f6-7a8b-9c0d-000000000091,,,Seeded whitespace deal name
+92,deal,pipedrive_legacy,deal_name_003,		,35000.00,EUR,Proposal,2026-11-25,a1b2c3d4-e5f6-7a8b-9c0d-000000000092,,,Seeded whitespace deal name
 93,deal,pipedrive_legacy,deal_stage_001,Government Infrastructure Deal,180000.00,USD,Draft,2026-12-01,a1b2c3d4-e5f6-7a8b-9c0d-000000000093,,,Seeded invalid stage defect
 94,deal,pipedrive_legacy,deal_stage_002,Healthcare Compliance System,90000.00,USD,In Review,2026-12-05,a1b2c3d4-e5f6-7a8b-9c0d-000000000094,,,Seeded invalid stage defect
 95,deal,pipedrive_legacy,deal_stage_003,Retail Omnichannel Rollout,64000.00,GBP,Cancelled,2026-12-10,a1b2c3d4-e5f6-7a8b-9c0d-000000000095,,,Seeded invalid stage defect
