@@ -422,6 +422,92 @@ paths:
         "404":
           $ref: "#/components/responses/NotFoundError"
 
+  /api/v1/crm-marketing/mappings/templates:
+    get:
+      operationId: listMappingTemplates
+      tags: [CRM-4]
+      summary: List versioned mapping templates
+      description: Retrieve all registered mapping templates and enum translation dictionaries. Allowed roles - viewer, editor, analyst, admin.
+      parameters:
+        - name: entity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [crm4_lists, crm4_campaigns, crm4_members, crm4_consents]
+      responses:
+        "200":
+          description: Registered mapping templates with checksums.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/crm-marketing/mappings/templates/{id}:
+    get:
+      operationId: getMappingTemplate
+      tags: [CRM-4]
+      summary: Get mapping template details
+      description: Retrieve mapping template configuration and SHA-256 checksum. Allowed roles - viewer, editor, analyst, admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Template configuration and checksum.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/crm-marketing/mappings/validate:
+    post:
+      operationId: validateMappingDryRun
+      tags: [CRM-4]
+      summary: Validate dry-run mapping readiness
+      description: Validate that source columns satisfy mandatory target attributes. Allowed roles - editor, admin.
+      responses:
+        "200":
+          description: Mapping dry run readiness confirmed.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/crm-marketing/mappings/map:
+    post:
+      operationId: processBatchMapping
+      tags: [CRM-4]
+      summary: Execute batch mapping
+      description: Pure deterministic row mapping with type coercion and enum translation. Allowed roles - editor, admin.
+      responses:
+        "200":
+          description: Batch mapping results.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
 components:
   securitySchemes:
     bearerAuth:

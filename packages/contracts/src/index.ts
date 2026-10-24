@@ -10,6 +10,8 @@ export * from './crm-5.js';
 export * from './crm-5-events.js';
 export * from './crm-5-mock.js';
 export * from './crm-3.js';
+export * from './crm-3-events.js';
+export * from './crm-3-mock.js';
 export * from './crm-1.js';
 export * from './crm-1-events.js';
 export * from './crm-1-duplicates.js';

@@ -75,7 +75,10 @@ Commercial proposals generated for deals.
 
 ---
 
-### 2.4 `crm2.crm2_quote_lines` (Quote Line Items)
+### 2.4 `crm2.crm2_quote_lines` (Quote Line Items — V2 Out-of-Scope)
+
+> [!NOTE]
+> **V2 Scope Traceability:** Per SDS ClearShift CRM v2.0 §5.3 ("Data model changes V2") and requirement `FR-CRM2-11`, granular quote line items belong to V2. This table is defined in the database schema for forward-compatible schema evolution, but is explicitly out-of-scope for ClearShift V1 core runtime operations and Gate G4 release gating.
 
 Granular product or service line items associated with a quote.
 
@@ -370,3 +373,58 @@ The entity creation workflow enforces strict client-side validation using Zod:
 
 ### 6.5 Automated Verification Suites (CRM2-20)
 - `apps/crm/modules/crm-2/tests/web/create-form.test.ts`: 40 comprehensive tests verifying Zod schema rules, client-side validation helpers, server 400 error mapping, FormValidationSummary accessibility, ConfirmationToast lifecycle, CreateDealModal behavior, DataTableController cache methods, double-submit button disabling, and DealsListPage integration.
+
+
+---
+
+## 7. Public API Endpoints (`/api/v1/crm-deals`) & Authorization Matrix
+
+In compliance with SDS ClearShift CRM v2.0 §7.2, endpoints strictly enforce authenticated identity roles (`viewer`, `editor`, `analyst`, `admin`, `migration_runner`) validated via `@cs/identity` asymmetric JWTs (EdDSA). Unauthenticated or expired requests yield HTTP 401; unauthorized roles yield HTTP 403.
+
+| Endpoint | HTTP Method | Allowed Roles | Description |
+|---|---|---|---|
+| `/health` | `GET` | (public) | Health check and version verification. |
+| `/stages` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve 6 canonical pipeline stages in seed order. |
+| `/deals` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Search and filter deals by stage with bounded pagination (default 10, max 100). |
+| `/deals/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve single deal by UUID. |
+| `/deals` | `POST` | `editor`, `migration_runner`, `admin` | Create a deal record. Validates stage, decimal value, and optional contact link. Generates audit event. |
+| `/deals/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update deal fields. Validates allowable stage transition. Generates audit event. |
+| `/quotes` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Search and filter quotes with bounded pagination. |
+| `/quotes/:id` | `GET` | `viewer`, `editor`, `analyst`, `admin` | Retrieve single quote by UUID. |
+| `/quotes` | `POST` | `editor`, `migration_runner`, `admin` | Create a quote record. Enforces unique quote number and decimal amount. Generates audit event. |
+| `/quotes/:id` | `PATCH` | `editor`, `migration_runner`, `admin` | Update quote record. Generates audit event. |
+| `/import` | `POST` | `migration_runner`, `admin` | Target adapter row ingest with durable idempotency receipt. Generates audit event. |
+| `/import/row` | `POST` | `migration_runner`, `admin` | Single row ingest alias. Generates audit event. |
+| `/import/batch` | `POST` | `migration_runner`, `admin` | Batch rows ingest. Generates audit event. |
+| `/batches/execute-load` | `POST` | `migration_runner`, `admin` | Chunked batch load execution with fault-tolerance and retry limits. Generates audit event. |
+| `/import/receipts` | `GET` | `viewer`, `analyst`, `admin` | Query committed import receipts. |
+| `/batches/:batchId/report` | `GET` | `viewer`, `analyst`, `admin` | Query batch execution report. |
+| `/duplicates/detect` | `POST` | `analyst`, `migration_runner`, `admin` | Detect duplicate candidates by exact key. Generates audit event. |
+| `/duplicates/held` | `GET` | `viewer`, `analyst`, `editor`, `admin` | Query duplicate review queue held for human review. |
+| `/duplicates/resolve` | `POST` | `editor`, `analyst`, `admin` | Record human merge/reject decision with audit trail. Generates audit event. |
+| `/duplicates/audit` | `GET` | `viewer`, `analyst`, `admin` | Query duplicate resolution audit logs. |
+
+---
+
+## 8. Sensitive Fields & Masking Policy
+
+Field-level restrictions are enforced on the server before JSON serialization and export:
+1. **Bank Details**: Masked as `XXXX-XXXX-7890` (preserving only the terminal 4 digits). Shorter values masked completely as `XXXX`.
+2. **Salary Information**: Numeric compensation values masked as `XX,XXX` or converted to `"salary hidden"`.
+3. **Credentials & Secrets**: Tokens, passwords, and bearer headers are stripped or redacted (`[REDACTED]`).
+4. **CSV Formula Injection**: Values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` are escaped with a leading single quote (`'`).
+5. **Log Redaction**: System logs and error traces mask account numbers, authorization headers, and raw PII.
+
+---
+
+## 9. Audit Trail Specification
+
+All domain mutations, migration executions, and privileged actions produce append-only audit records containing:
+* `actor`: Authenticated User UUID (`sub`) and role set.
+* `action`: Action verb (`crm2.deal.created`, `crm2.deal.updated`, `crm2.quote.created`, `crm2.quote.updated`, `crm2.import.row_loaded`, `crm2.batch.execute_load`, `DUPLICATE_MERGE`, etc.).
+* `timestamp`: ISO-8601 UTC timestamp.
+* `entity`: Affected entity name (`deal`, `quote`, `crm2_import`, `crm2_batch`, `crm2_duplicates`).
+* `entity_id`: Primary record UUID.
+* `batch_id`: Migration Batch UUID when correlated.
+* `result`: Outcome status (`success`, `failure`, `rejected`, `halted`).
+* `diff_redacted`: Contextual payload with sensitive fields pre-redacted (no raw rows, tokens, or plaintext credentials).

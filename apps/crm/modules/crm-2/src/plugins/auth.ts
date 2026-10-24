@@ -2,7 +2,7 @@ import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
 import * as jose from 'jose';
 import { AppError } from '@cs/kernel';
-import { verifyAccessToken, type HubTokenClaims, type RoleType } from '@cs/identity';
+import { verifyAccessToken, Roles, type HubTokenClaims, type RoleType } from '@cs/identity';
 import { isRoleAllowed } from '../policies/roles.js';
 
 export interface AuthenticatedUser extends HubTokenClaims {
@@ -10,6 +10,8 @@ export interface AuthenticatedUser extends HubTokenClaims {
   tenant_id?: string | undefined;
   tenantId?: string | undefined;
   org_id?: string | undefined;
+  organizationId?: string | undefined;
+  employee_id?: string | undefined;
 }
 
 /**
@@ -49,6 +51,12 @@ const crm2AuthPluginAsync: FastifyPluginAsync = async (fastify) => {
         if (typeof decoded['org_id'] === 'string') {
           claims.org_id = decoded['org_id'];
         }
+        if (typeof decoded['organizationId'] === 'string') {
+          claims.organizationId = decoded['organizationId'];
+        }
+        if (typeof decoded['employee_id'] === 'string' && !claims.employee_id) {
+          claims.employee_id = decoded['employee_id'];
+        }
       }
       request.user = claims;
     } catch (err: any) {
@@ -70,7 +78,69 @@ export const crm2AuthPlugin = fp(crm2AuthPluginAsync, {
 });
 
 /**
- * Creates a route preHandler that enforces endpoint-level role permissions based on the SDS matrix.
+ * Object-level guard: Enforces multi-tenant isolation.
+ * Prevents cross-tenant queries, mutations, or header-token tenant mismatches.
+ */
+export function assertTenantIsolation(
+  user: AuthenticatedUser,
+  resourceTenantId?: string | undefined,
+  request?: FastifyRequest | undefined
+): void {
+  // 1. Verify header tenant vs claim tenant consistency
+  const tokenTenant = user.tenant_id || user.tenantId || user.org_id || user.organizationId;
+  if (request) {
+    const headerTenant =
+      (request.headers['x-tenant-id'] as string | undefined) ||
+      (request.headers['x-organization-id'] as string | undefined) ||
+      (request.headers['x-org-id'] as string | undefined);
+    if (tokenTenant && headerTenant && tokenTenant !== headerTenant) {
+      throw new AppError(
+        'FORBIDDEN',
+        `Multi-tenant boundary violation: token tenant '${tokenTenant}' does not match request tenant header '${headerTenant}'`,
+        403
+      );
+    }
+  }
+
+  // 2. If resource is tagged with a tenant and caller has tenant context, ensure exact match
+  if (tokenTenant && resourceTenantId && tokenTenant !== resourceTenantId) {
+    throw new AppError(
+      'FORBIDDEN',
+      `Access denied: cross-tenant record mutation forbidden (caller: '${tokenTenant}', resource: '${resourceTenantId}')`,
+      403
+    );
+  }
+}
+
+/**
+ * Object-level guard: Enforces record ownership and prevents unauthorized cross-user mutations.
+ * Administrators have universal override authority.
+ */
+export function assertRecordOwnership(
+  user: AuthenticatedUser,
+  resourceOwnerId?: string | undefined
+): void {
+  // Admin role possesses universal override
+  if (user.roles && user.roles.includes(Roles.ADMIN)) {
+    return;
+  }
+
+  // If resource has an explicit owner and caller is not that owner, deny
+  if (resourceOwnerId) {
+    const callerId = user.employee_id || user.sub;
+    if (callerId && callerId !== resourceOwnerId) {
+      throw new AppError(
+        'FORBIDDEN',
+        `Access denied: unauthorized cross-user mutation for record owned by '${resourceOwnerId}'`,
+        403
+      );
+    }
+  }
+}
+
+/**
+ * Creates a route preHandler that enforces endpoint-level role permissions based on the SDS matrix
+ * and checks multi-tenant boundary consistency.
  */
 export function requireRoles(allowedRoles: readonly RoleType[]) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
@@ -97,15 +167,7 @@ export function requireRoles(allowedRoles: readonly RoleType[]) {
     }
 
     // Check multi-tenant consistency between token and request headers
-    const tokenTenant = user.tenant_id || user.tenantId || user.org_id;
-    const headerTenant = request.headers['x-tenant-id'] as string | undefined;
-    if (tokenTenant && headerTenant && tokenTenant !== headerTenant) {
-      throw new AppError(
-        'FORBIDDEN',
-        `Multi-tenant boundary violation: token tenant '${tokenTenant}' does not match request tenant header '${headerTenant}'`,
-        403
-      );
-    }
+    assertTenantIsolation(user, undefined, request);
 
     if (!isRoleAllowed(user.roles, allowedRoles)) {
       throw new AppError(
