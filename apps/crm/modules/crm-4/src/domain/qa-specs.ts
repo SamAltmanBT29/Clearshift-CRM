@@ -969,6 +969,17 @@ export const CRM4_TRACEABILITY_MATRIX: TraceabilityEntry[] = [
     testSuite: 'CRM-4 Mapping Configuration & Dry-Run Guard (#181 / [CRM4-28])',
     verificationEvidence: 'mapRow, assertDryRunReady, and crm4MappingService enforce source-to-target field mapping, type coercion, enum translations, required target column enforcement, and monotonic opt-out invariant.',
   },
+  {
+    reqId: 'FR-CRM4-29',
+    requirement: 'Module contract, regression and browser test suite: comprehensive end-to-end API lifecycle, deterministic deduplication and immutability invariants, repeated read payload stability, Zod/OpenAPI contract conformance, cross-module reference resolution, and browser journeys across core entities.',
+    priority: 'Must',
+    sourceDoc: 'SDS ClearShift CRM v2.0 §4.5, §7.1 & Issue #182 [CRM4-29]',
+    category: 'API',
+    testType: 'regression',
+    testFile: 'apps/crm/modules/crm-4/tests/api/module-contract-regression.test.ts',
+    testSuite: 'CRM-4 Module Contract, Regression and Browser Test Suite (#182 / [CRM4-29])',
+    verificationEvidence: 'Full synthetic lifecycle execution across marketing lists, campaign history, member membership, and consent states; repeated read idempotency; OpenAPI and Zod schema conformance; reference resolver queries; and simulated browser user journeys in Chrome/Firefox.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
