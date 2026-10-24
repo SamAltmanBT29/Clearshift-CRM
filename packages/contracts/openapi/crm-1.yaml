@@ -532,6 +532,119 @@ paths:
           description: Durable import receipt.
         "404":
           $ref: "#/components/responses/NotFoundError"
+  /api/v1/crm-contacts/duplicates/detect:
+    post:
+      summary: Detect exact duplicate candidates
+      description: Deterministically groups records by normalized exact key. Auto-merge is strictly forbidden in V1.
+      operationId: detectCRM1Duplicates
+      tags: [CRM-1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectDuplicatesInput'
+      responses:
+        '200':
+          description: Detection results with unique records and held candidate groups
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '422':
+          description: Auto-merge forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/crm-contacts/duplicates/held:
+    get:
+      summary: List duplicate candidates held for human review
+      description: Returns duplicate groups held pending authorized human merge decision.
+      operationId: listCRM1HeldDuplicates
+      tags: [CRM-1]
+      parameters:
+        - name: batchId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: keyType
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ExactKeyType'
+        - name: entity
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of held candidates
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/crm-contacts/duplicates/resolve:
+    post:
+      summary: Record human merge decision
+      description: Records authorized merge or separation decision with immutable audit log.
+      operationId: resolveCRM1DuplicateCandidate
+      tags: [CRM-1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDuplicateInput'
+      responses:
+        '200':
+          description: Decision recorded and audit log entry created
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/v1/crm-contacts/duplicates/audit:
+    get:
+      summary: Query duplicate resolution audit logs
+      description: Returns paginated audit trail of human merge decisions.
+      operationId: getCRM1DuplicateAuditLogs
+      tags: [CRM-1]
+      parameters:
+        - name: candidateId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: entity
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated duplicate resolution audit logs
+          content:
+            application/json:
+              schema:
+                type: object
 components:
   parameters:
     PathId:
@@ -968,6 +1081,169 @@ components:
       properties:
         eventType: { type: string, const: "crm.import.batch_loaded" }
         aggregateType: { type: string, const: "ImportBatch" }
+    ExactKeyType:
+      type: string
+      enum:
+        - email
+        - phone_name
+        - tax_number
+        - tax_id
+        - phone
+        - sku
+        - composite
+        - source_key
+    RecordWithKey:
+      type: object
+      required:
+        - id
+        - keyValue
+      properties:
+        id:
+          type: string
+        keyValue:
+          type: string
+        payload:
+          type: object
+    DetectDuplicatesInput:
+      type: object
+      required:
+        - keyType
+        - records
+      properties:
+        batchId:
+          type: string
+        entity:
+          type: string
+          enum: [contact, company, lead]
+          default: contact
+        keyType:
+          $ref: '#/components/schemas/ExactKeyType'
+        autoMerge:
+          type: boolean
+          default: false
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordWithKey'
+    ResolveDuplicateInput:
+      type: object
+      required:
+        - candidateId
+        - decision
+        - actorId
+        - keptId
+        - mergedId
+        - reason
+      properties:
+        candidateId:
+          type: string
+        decision:
+          type: string
+          enum: [MERGE, REJECT_DUPLICATE, KEEP_SEPARATE]
+        actorId:
+          type: string
+        keptId:
+          type: string
+        mergedId:
+          type: string
+        reason:
+          type: string
+        metadata:
+          type: object
+    DuplicateCandidate:
+      type: object
+      required:
+        - id
+        - keyType
+        - normalizedKey
+        - recordIds
+        - status
+        - detectedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+        module:
+          type: string
+          default: crm-1
+        entity:
+          type: string
+          default: contact
+        keyType:
+          $ref: '#/components/schemas/ExactKeyType'
+        normalizedKey:
+          type: string
+        recordIds:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [unique, duplicate_candidate, held_for_review, resolved]
+        detectedAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+    DuplicateAuditLogEntry:
+      type: object
+      required:
+        - id
+        - candidateId
+        - decision
+        - actorId
+        - timestamp
+        - keptId
+        - mergedId
+        - reason
+        - keyType
+        - normalizedKey
+      properties:
+        id:
+          type: string
+          format: uuid
+        candidateId:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: [MERGE, REJECT_DUPLICATE, KEEP_SEPARATE]
+        actorId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        keptId:
+          type: string
+        mergedId:
+          type: string
+        reason:
+          type: string
+        keyType:
+          $ref: '#/components/schemas/ExactKeyType'
+        normalizedKey:
+          type: string
+        entity:
+          type: string
+          default: contact
+        metadata:
+          type: object
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
   securitySchemes:
     bearerAuth:
       type: http

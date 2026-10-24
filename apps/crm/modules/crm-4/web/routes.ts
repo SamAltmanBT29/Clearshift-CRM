@@ -77,13 +77,29 @@ export const CRM4_ROUTES: Record<string, Crm4RouteDefinition> = {
   },
 };
 
+export const CRM4_MAPPING_ROUTE: Crm4RouteDefinition = {
+  id: 'crm4-mappings',
+  path: 'mappings',
+  fullPath: `${CRM4_BASE_PATH}/mappings`,
+  title: 'Mapping Templates & Value Translations',
+  navLabel: 'Mapping Templates',
+  requiredCapability: Capabilities.MODULE_READ,
+  breadcrumbs: [
+    { label: 'ClearShift', href: '/' },
+    { label: 'CRM Modules', href: '/crm' },
+    { label: 'Marketing & Campaigns', href: CRM4_BASE_PATH },
+    { label: 'Mapping Templates' },
+  ],
+};
+
 export function getAllCrm4Routes(): Crm4RouteDefinition[] {
   return Object.values(CRM4_ROUTES);
 }
 
 export function findRouteByPath(path: string): Crm4RouteDefinition | undefined {
   const normalized = path.replace(/\/+$/, '');
-  return getAllCrm4Routes().find(
+  const all = [...getAllCrm4Routes(), CRM4_MAPPING_ROUTE];
+  return all.find(
     (r) => r.fullPath === normalized || `${CRM4_BASE_PATH}/${r.path}` === normalized
   );
 }
