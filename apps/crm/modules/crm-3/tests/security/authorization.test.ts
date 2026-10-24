@@ -1,12 +1,27 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { sign, type KeyObject } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { Roles, signAccessToken, getSigningKeys, type RoleType } from '@cs/identity';
+import { Roles, signAccessToken, getSigningKeys, defaultUserStore, type RoleType } from '@cs/identity';
 import { CRM3_API_PREFIX } from '@clearshift/contracts';
 import { buildApp } from '../../src/app.js';
 import { crm3Routes } from '../../src/routes/crm3.routes.js';
 import { Crm3Service } from '../../src/services/crm3.service.js';
-import { CRM3_ENDPOINT_ROLES, isRoleAllowed } from '../../src/policies/roles.js';
+import {
+  CRM3_ENDPOINT_ROLES,
+  isRoleAllowed,
+  assertTenantIsolation,
+  assertRecordOwnership,
+  assertNoImmutableFieldMutation,
+  type AuthenticatedUser,
+} from '../../src/policies/roles.js';
+import {
+  maskBankDetails,
+  maskSalary,
+  sanitizeCsvField,
+  maskSensitiveLog,
+  redactSensitiveObject,
+} from '../../src/policies/masking.js';
+import { crm3Audit } from '../../src/services/audit.js';
 
 const TICKET_ID = '30000000-0000-4000-8000-000000000001';
 const CONTACT_ID = '90000000-0000-4000-8000-000000000001';
@@ -113,6 +128,7 @@ describe('CRM-3 authorization policy (#148 / CRM3-15)', () => {
   });
 
   beforeEach(async () => {
+    crm3Audit.resetLedger();
     service = new Crm3Service();
     app = buildApp({ service, enforceAuth: true });
     await app.ready();
@@ -246,6 +262,50 @@ describe('CRM-3 authorization policy (#148 / CRM3-15)', () => {
       const body = base64url(JSON.stringify(validClaims()));
       await expect401(`Bearer ${head}.${body}.`);
     });
+
+    it('rejects a token with disabled: true claim', async () => {
+      await expect401(`Bearer ${await signRawToken(validClaims({ disabled: true }))}`);
+    });
+
+    it('rejects a token with status: "disabled" claim', async () => {
+      await expect401(`Bearer ${await signRawToken(validClaims({ status: 'disabled' }))}`);
+    });
+
+    it('rejects a token for a user whose store record is disabled', async () => {
+      const disabledToken = await signAccessToken('user-disabled-01', [Roles.VIEWER]);
+      await expect401(`Bearer ${disabledToken}`);
+    });
+  });
+
+  describe('multi-tenant boundary enforcement', () => {
+    it('rejects cross-tenant access with 403 when token tenant mismatches x-tenant-id header', async () => {
+      const token = await signRawToken(validClaims({ tenant_id: 'tenant-omega' }));
+      const response = await app.inject({
+        method: 'GET',
+        url: `${CRM3_API_PREFIX}/tickets`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'x-tenant-id': 'tenant-alpha',
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = response.json();
+      expect(body.code).toBe('FORBIDDEN');
+      expect(body.message).toContain('Multi-tenant boundary violation');
+    });
+
+    it('allows access when token tenant matches x-tenant-id header', async () => {
+      const token = await signRawToken(validClaims({ tenant_id: 'tenant-alpha' }));
+      const response = await app.inject({
+        method: 'GET',
+        url: `${CRM3_API_PREFIX}/tickets`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'x-tenant-id': 'tenant-alpha',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    });
   });
 
   describe('object-level guards', () => {
@@ -347,6 +407,249 @@ describe('CRM-3 authorization policy (#148 / CRM3-15)', () => {
       await bare.ready();
       const response = await bare.inject({ method: 'GET', url: `${CRM3_API_PREFIX}/tickets` });
       expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('sensitive-field protection & masking policy', () => {
+    describe('maskBankDetails', () => {
+      it('masks standard bank accounts/card numbers preserving terminal 4 digits', () => {
+        expect(maskBankDetails('1234567890123456')).toBe('XXXX-XXXX-3456');
+        expect(maskBankDetails('1111-2222-3333-7890')).toBe('XXXX-XXXX-7890');
+      });
+
+      it('returns XXXX-XXXX-XXXX when fewer than 4 digits are provided', () => {
+        expect(maskBankDetails('123')).toBe('XXXX-XXXX-XXXX');
+        expect(maskBankDetails('ab')).toBe('XXXX-XXXX-XXXX');
+      });
+
+      it('handles empty or missing inputs gracefully', () => {
+        expect(maskBankDetails('')).toBe('');
+      });
+    });
+
+    describe('maskSalary', () => {
+      it('masks numeric and string compensation to XX,XXX', () => {
+        expect(maskSalary(125000)).toBe('XX,XXX');
+        expect(maskSalary('85000')).toBe('XX,XXX');
+      });
+
+      it('returns "salary hidden" when salary value is null or undefined', () => {
+        expect(maskSalary(null)).toBe('salary hidden');
+        expect(maskSalary(undefined)).toBe('salary hidden');
+      });
+    });
+
+    describe('sanitizeCsvField', () => {
+      it('neutralizes formula injection characters (=, +, -, @, \\t, \\r)', () => {
+        expect(sanitizeCsvField('=SUM(A1:A10)')).toBe("'=SUM(A1:A10)");
+        expect(sanitizeCsvField('+12345')).toBe("'+12345");
+        expect(sanitizeCsvField('-CMD')).toBe("'-CMD");
+        expect(sanitizeCsvField('@HYPERLINK("http://evil.com")')).toBe("'@HYPERLINK(\"http://evil.com\")");
+        expect(sanitizeCsvField('\tTAB_VAL')).toBe("'\tTAB_VAL");
+        expect(sanitizeCsvField('\rCR_VAL')).toBe("'\rCR_VAL");
+      });
+
+      it('leaves benign text and numbers unmodified', () => {
+        expect(sanitizeCsvField('Clean ticket title')).toBe('Clean ticket title');
+        expect(sanitizeCsvField(42)).toBe('42');
+        expect(sanitizeCsvField(null)).toBe('');
+      });
+    });
+
+    describe('maskSensitiveLog', () => {
+      it('redacts tokens, credentials and passwords in log strings', () => {
+        const log = 'Bearer cs_9876543210abcdef9876543210abcdef credential: "secretpassword"';
+        const masked = maskSensitiveLog(log);
+        expect(masked).not.toContain('cs_9876543210abcdef9876543210abcdef');
+        expect(masked).not.toContain('secretpassword');
+        expect(masked).toContain('[REDACTED_TOKEN]');
+      });
+
+      it('masks 16-digit card/bank groupings and salary expressions', () => {
+        const log = 'User bank 1234-5678-9012-3456 with salary: 120000 updated';
+        const masked = maskSensitiveLog(log);
+        expect(masked).toContain('XXXX-XXXX-3456');
+        expect(masked).toContain('salary: XX,XXX');
+        expect(masked).not.toContain('1234-5678-9012-3456');
+        expect(masked).not.toContain('120000');
+      });
+    });
+
+    describe('redactSensitiveObject', () => {
+      it('recursively redacts credentials and masks bank/salary in objects', () => {
+        const raw = {
+          ticketId: TICKET_ID,
+          password: 'plain_password',
+          secret_key: 'supersecret',
+          bank_account: '9876543210987654',
+          employee: {
+            salary: 95000,
+            token: 'bearer sensitive-token',
+          },
+        };
+        const redacted = redactSensitiveObject(raw);
+        expect(redacted.ticketId).toBe(TICKET_ID);
+        expect(redacted.password).toBe('[REDACTED]');
+        expect(redacted.secret_key).toBe('[REDACTED]');
+        expect(redacted.bank_account).toBe('XXXX-XXXX-7654');
+        expect(redacted.employee.salary).toBe('XX,XXX');
+        expect(redacted.employee.token).toBe('[REDACTED]');
+      });
+    });
+  });
+
+  describe('append-only audit trail & safe logging', () => {
+    it('records an audit event on POST /tickets with safe diff', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `${CRM3_API_PREFIX}/tickets`,
+        headers: headersFor('editor'),
+        payload: {
+          subject: 'Audited Ticket Creation',
+          contactId: CONTACT_ID,
+          priority: 'High',
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      const created = response.json();
+
+      const events = crm3Audit.getAuditEvents({ entity: 'ticket', entityId: created.id });
+      expect(events).toHaveLength(1);
+      const event = events[0]!;
+      expect(event.actor).toBe('synthetic-editor');
+      expect(event.action).toBe('ticket.created');
+      expect(event.result).toBe('success');
+      expect(event.diffRedacted).toMatchObject({
+        subject: 'Audited Ticket Creation',
+        priority: 'High',
+      });
+      expect(event.createdAt instanceof Date).toBe(true);
+    });
+
+    it('records an audit event on PATCH /tickets/:id with diff', async () => {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `${CRM3_API_PREFIX}/tickets/${TICKET_ID}`,
+        headers: headersFor('editor'),
+        payload: { priority: 'Urgent' },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const events = crm3Audit.getAuditEvents({ entity: 'ticket', entityId: TICKET_ID, action: 'ticket.updated' });
+      expect(events.length).toBeGreaterThanOrEqual(1);
+      const event = events[events.length - 1]!;
+      expect(event.actor).toBe('synthetic-editor');
+      expect(event.diffRedacted).toEqual({ priority: 'Urgent' });
+    });
+
+    it('records an audit event on note creation with metadata', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `${CRM3_API_PREFIX}/notes`,
+        headers: headersFor('editor'),
+        payload: {
+          ticketId: TICKET_ID,
+          noteText: 'Audited support note',
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      const note = response.json();
+
+      const events = crm3Audit.getAuditEvents({ entity: 'note', entityId: note.id });
+      expect(events).toHaveLength(1);
+      const event = events[0]!;
+      expect(event.action).toBe('note.created');
+      expect(event.metadata).toEqual({ ticketId: TICKET_ID });
+    });
+
+    it('redacts sensitive fields when logged to audit trail', async () => {
+      const logged = await crm3Audit.logEvent({
+        actor: 'synthetic-editor',
+        action: 'import.processed',
+        entity: 'import_batch',
+        batchId: 'batch-001',
+        result: 'success',
+        diff: {
+          raw_password: 'super_secret_value',
+          bank_number: '1234567890123456',
+          salary: 100000,
+        },
+        metadata: {
+          secret_token: 'ghp_abc1234567890123456789012345678901234',
+        },
+      });
+
+      expect(logged.diffRedacted?.raw_password).toBe('[REDACTED]');
+      expect(logged.diffRedacted?.bank_number).toBe('XXXX-XXXX-3456');
+      expect(logged.diffRedacted?.salary).toBe('XX,XXX');
+      expect(logged.metadata?.secret_token).toBe('[REDACTED]');
+    });
+  });
+
+  describe('security policy helper invariants', () => {
+    it('assertTenantIsolation enforces tenant match and allows admin cross-tenant', () => {
+      const regularUser: AuthenticatedUser = {
+        sub: 'usr-1',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.EDITOR],
+        tenant_id: 'tenant-a',
+      };
+      const adminUser: AuthenticatedUser = {
+        sub: 'usr-admin',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.ADMIN],
+        tenant_id: 'tenant-a',
+      };
+
+      expect(() => assertTenantIsolation(regularUser, 'tenant-a')).not.toThrow();
+      expect(() => assertTenantIsolation(regularUser, 'tenant-b')).toThrow(/Multi-tenant boundary violation/);
+      expect(() => assertTenantIsolation(adminUser, 'tenant-b')).not.toThrow();
+    });
+
+    it('assertRecordOwnership restricts modifications to author or admin', () => {
+      const regularUser: AuthenticatedUser = {
+        sub: 'usr-author',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.EDITOR],
+      };
+      const otherUser: AuthenticatedUser = {
+        sub: 'usr-other',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.EDITOR],
+      };
+      const adminUser: AuthenticatedUser = {
+        sub: 'usr-admin',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.ADMIN],
+      };
+
+      expect(() => assertRecordOwnership(regularUser, 'usr-author')).not.toThrow();
+      expect(() => assertRecordOwnership(otherUser, 'usr-author')).toThrow(/unauthorized cross-user mutation/);
+      expect(() => assertRecordOwnership(adminUser, 'usr-author')).not.toThrow();
+    });
+
+    it('assertNoImmutableFieldMutation rejects protected fields from non-admin', () => {
+      const editorUser: AuthenticatedUser = {
+        sub: 'usr-editor',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.EDITOR],
+      };
+      const adminUser: AuthenticatedUser = {
+        sub: 'usr-admin',
+        iss: 'clearshift-hub',
+        aud: 'clearshift',
+        roles: [Roles.ADMIN],
+      };
+
+      expect(() => assertNoImmutableFieldMutation(editorUser, { subject: 'New Subject' })).not.toThrow();
+      expect(() => assertNoImmutableFieldMutation(editorUser, { id: '30000000-0000-4000-8000-000000000001' })).toThrow(/immutable field 'id'/);
+      expect(() => assertNoImmutableFieldMutation(adminUser, { id: '30000000-0000-4000-8000-000000000001' })).not.toThrow();
     });
   });
 });

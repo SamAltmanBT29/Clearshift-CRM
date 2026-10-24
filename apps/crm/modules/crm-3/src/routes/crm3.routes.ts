@@ -9,12 +9,14 @@ import {
 } from '@clearshift/contracts';
 import { AppError } from '@cs/kernel';
 import { crm3Service, Crm3Service } from '../services/crm3.service.js';
+import { crm3Audit, Crm3AuditService } from '../services/audit.js';
 import { requireRoles, resolveNoteAuthor } from '../plugins/auth.js';
 import { CRM3_ENDPOINT_ROLES } from '../policies/roles.js';
 
 export interface Crm3RoutesOptions {
-  service?: Crm3Service;
-  enforceAuth?: boolean;
+  service?: Crm3Service | undefined;
+  auditService?: Crm3AuditService | undefined;
+  enforceAuth?: boolean | undefined;
 }
 
 const UuidParamSchema = z.object({
@@ -56,6 +58,7 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
   opts
 ) => {
   const service = opts.service ?? crm3Service;
+  const auditService = opts.auditService ?? crm3Audit;
   const enforceAuth = opts.enforceAuth ?? true;
 
   // ---------------------------------------------------------------------------
@@ -143,6 +146,20 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
       try {
         const authorId = request.user?.sub || 'system';
         const created = await service.createTicket(parse.data, authorId);
+        await auditService.logEvent({
+          actor: authorId,
+          action: 'ticket.created',
+          entity: 'ticket',
+          entityId: created.id,
+          result: 'success',
+          diff: {
+            subject: created.subject,
+            status: created.status,
+            priority: created.priority,
+            contactId: created.contactId,
+            orderRef: created.orderRef,
+          },
+        });
         return reply
           .status(201)
           .header('Location', `/api/v1/crm-tickets/tickets/${created.id}`)
@@ -192,6 +209,14 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
 
       try {
         const updated = await service.updateTicket(paramResult.data.id, parse.data);
+        await auditService.logEvent({
+          actor: request.user?.sub || 'system',
+          action: 'ticket.updated',
+          entity: 'ticket',
+          entityId: paramResult.data.id,
+          result: 'success',
+          diff: parse.data as Record<string, unknown>,
+        });
         return reply.status(200).send(updated);
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
@@ -279,6 +304,14 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
           parse.data.noteText,
           authorId
         );
+        await auditService.logEvent({
+          actor: authorId,
+          action: 'note.created',
+          entity: 'note',
+          entityId: created.id,
+          result: 'success',
+          metadata: { ticketId: created.ticketId },
+        });
         return reply.status(201).send(created);
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
@@ -337,6 +370,14 @@ export const crm3Routes: FastifyPluginAsync<Crm3RoutesOptions> = async (
           parse.data.noteText,
           authorId
         );
+        await auditService.logEvent({
+          actor: authorId,
+          action: 'note.created',
+          entity: 'note',
+          entityId: created.id,
+          result: 'success',
+          metadata: { ticketId: created.ticketId },
+        });
         return reply.status(201).send(created);
       } catch (err: any) {
         if (err instanceof AppError || (err && err.statusCode)) {
