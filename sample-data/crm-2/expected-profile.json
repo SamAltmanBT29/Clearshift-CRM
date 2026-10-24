@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "rulesetVersion": 1,
+  "fixture": {
+    "file": "dirty-data-v1.csv",
+    "sha256": "2104fee6e602b780246375c0e27b5cdcb27f704f7b4f0e7750e933fddae3c36a",
+    "bytes": 17109,
+    "rows": 100
+  },
+  "outcomes": {
+    "loaded": 75,
+    "rejected": 17,
+    "merged": 8,
+    "skipped": 0
+  },
+  "byCategory": {
+    "golden_baseline": 75,
+    "exact_duplicate": 8,
+    "malformed_syntax": 9,
+    "missing_required": 3,
+    "lifecycle_violation": 3,
+    "referential_orphan": 2
+  },
+  "byReasonCode": {
+    "EXACT_DEAL_DUPLICATE": 4,
+    "EXACT_QUOTE_NUMBER_MATCH": 4,
+    "NEGATIVE_VALUE": 3,
+    "INVALID_CURRENCY": 3,
+    "EMPTY_MANDATORY_FIELD": 3,
+    "INVALID_STAGE": 3,
+    "INVALID_DATE_FORMAT": 3,
+    "PARENT_DEAL_NOT_FOUND": 2
+  },
+  "columns": {
+    "source_row": {
+      "inferredType": "integer",
+      "emptyCount": 0,
+      "invalidCount": 0
+    },
+    "entity_type": {
+      "inferredType": "string",
+      "emptyCount": 0,
+      "invalidCount": 0
+    },
+    "source_system": {
+      "inferredType": "string",
+      "emptyCount": 0,
+      "invalidCount": 0
+    },
+    "source_id": {
+      "inferredType": "string",
+      "emptyCount": 0,
+      "invalidCount": 0
+    },
+    "name": {
+      "inferredType": "string",
+      "emptyCount": 19,
+      "invalidCount": 3
+    },
+    "value": {
+      "inferredType": "decimal",
+      "emptyCount": 0,
+      "invalidCount": 3
+    },
+    "currency": {
+      "inferredType": "string",
+      "emptyCount": 0,
+      "invalidCount": 3
+    },
+    "stage_name": {
+      "inferredType": "string",
+      "emptyCount": 16,
+      "invalidCount": 3
+    },
+    "close_date": {
+      "inferredType": "date",
+      "emptyCount": 0,
+      "invalidCount": 3
+    },
+    "contact_id": {
+      "inferredType": "uuid",
+      "emptyCount": 28,
+      "invalidCount": 0
+    },
+    "quote_number": {
+      "inferredType": "string",
+      "emptyCount": 84,
+      "invalidCount": 0
+    },
+    "deal_id": {
+      "inferredType": "uuid",
+      "emptyCount": 84,
+      "invalidCount": 2
+    },
+    "note": {
+      "inferredType": "string",
+      "emptyCount": 0,
+      "invalidCount": 0
+    }
+  }
+}
