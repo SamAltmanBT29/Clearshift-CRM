@@ -1,3 +1,4 @@
+import { EventEnvelopeSchema, type EventEnvelope } from '@clearshift/contracts';
 import type {
   CRM3Ticket,
   CRM3Note,
@@ -62,6 +63,15 @@ export interface Crm3Store {
   insertImportReceipt(receipt: Crm3StoredImportReceipt): void;
 
   /**
+   * Appends a domain event to the transactional outbox. Called inside the same transaction as
+   * the business write (the PostgreSQL implementation uses writeOutboxEvent(tx, envelope)).
+   * Envelopes are validated and event ids are unique, like platform.outbox.event_id.
+   */
+  appendOutboxEvent(envelope: EventEnvelope): void;
+  /** Outbox rows in insertion order (bounded by limit, default 100). */
+  listOutboxEvents(limit?: number): EventEnvelope[];
+
+  /**
    * Runs fn as one all-or-nothing unit: if fn throws, every write made inside it is undone.
    * Nested calls join the outer transaction.
    */
@@ -76,7 +86,16 @@ interface StoreState {
   notes: CRM3Note[];
   importBatches: CRM3ImportBatch[];
   importReceipts: Crm3StoredImportReceipt[];
+  outbox: EventEnvelope[];
 }
+
+const emptyState = (): StoreState => ({
+  tickets: [],
+  notes: [],
+  importBatches: [],
+  importReceipts: [],
+  outbox: [],
+});
 
 const newestFirst = <T extends { createdAt: string; id: string }>(a: T, b: T): number => {
   const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -116,7 +135,7 @@ function checkViolation(field: string, message: string): DomainValidationError {
  * (updates replace the stored object), so a transaction can snapshot and restore by array copy.
  */
 export class InMemoryCrm3Store implements Crm3Store {
-  private state: StoreState = { tickets: [], notes: [], importBatches: [], importReceipts: [] };
+  private state: StoreState = emptyState();
   private transactionDepth = 0;
 
   listTickets(filter: Crm3TicketFilter, page: Crm3PageRequest): Crm3Page<CRM3Ticket> {
@@ -251,6 +270,20 @@ export class InMemoryCrm3Store implements Crm3Store {
     this.state.importReceipts = [...this.state.importReceipts, receipt];
   }
 
+  appendOutboxEvent(envelope: EventEnvelope): void {
+    EventEnvelopeSchema.parse(envelope);
+    if (this.state.outbox.some((e) => e.id === envelope.id)) {
+      throw new ConflictError(`Outbox event '${envelope.id}' already exists`, [
+        { field: 'eventId', message: 'Event id must be unique', code: 'duplicate_event_id' },
+      ]);
+    }
+    this.state.outbox = [...this.state.outbox, envelope];
+  }
+
+  listOutboxEvents(limit = CRM3_STORE_MAX_PAGE_SIZE): EventEnvelope[] {
+    return this.state.outbox.slice(-Math.min(Math.max(limit, 1), 10_000));
+  }
+
   transaction<T>(fn: () => T): T {
     if (this.transactionDepth > 0) {
       return fn();
@@ -268,7 +301,7 @@ export class InMemoryCrm3Store implements Crm3Store {
   }
 
   clear(): void {
-    this.state = { tickets: [], notes: [], importBatches: [], importReceipts: [] };
+    this.state = emptyState();
   }
 
   /** Mirrors the crm3_tickets CHECK and UNIQUE constraints. */
