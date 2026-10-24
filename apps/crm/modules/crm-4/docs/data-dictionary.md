@@ -1,11 +1,14 @@
 # CRM-4 Marketing Lists and Campaign History — Field-Level Data Dictionary
 
-**Document:** `apps/crm/modules/crm-4/docs/data-dictionary.md`
-**Module ID:** `CRM-4`
-**Module Name:** Marketing Lists and Campaign History (Group 4 — Role 4 Data / QA Lead)
-**Schema:** PostgreSQL 18.6 schema `crm4`
-**Target Milestone:** Gate G1 — Design Complete (Sprint 1)
-**Traceability:** Issue #177 `[CRM4-24]`, SDS ClearShift CRM v2.0 §4.5, §4.7, Master Architecture Baseline 1.0-A §4.2, PLT-03.
+**Document:** `apps/crm/modules/crm-4/docs/data-dictionary.md`  
+**Module ID:** `CRM-4`  
+**Module Name:** Marketing Lists and Campaign History (Group 4)  
+**Owning Team:** Team `crm-marketing` (Group 4)  
+**Schema Version:** 1.0.0  
+**Storage Engine:** PostgreSQL 18.6 with Drizzle ORM (schema `crm4`)  
+**Target Milestone:** Gate G4 Release Candidate (Weeks 7–8) / Gate G1 Design Complete  
+**Access Pattern:** Authenticated module API `/api/v1/crm-marketing` with EdDSA JWTs & RBAC. Zero direct cross-module SQL mutations.  
+**Traceability:** Issues #36 `[CRM4-01]`, #45 `[CRM4-10]`, #177 `[CRM4-24]`; ClearShift Project Plan v3.0 §7.4, §9; SDS ClearShift CRM v2.0 §4, §4.5, §4.7, §7.1; Master Architecture Baseline 1.0-A §4.2, PLT-03; V1: FR-CRM4-01..05; BR-CRM4-01.
 
 ---
 
@@ -20,6 +23,29 @@ All tables in this module reside in the dedicated PostgreSQL schema `crm4`. Mast
   - References to CRM-1 contacts (`contact_id` in `crm4_members` and `crm4_consents`) are stored as validated UUIDs; referential validity is asserted through CRM-1's public reference resolver API.
   - Cross-module contact screens query CRM-4's public projection (`/api/v1/crm-marketing/consents/:contact`) to display the current unsubscribe state.
 - **V1 Scope Limitation:** Campaign dispatch, email/SMS SMTP delivery, message queues, and realtime analytics are out of scope. Only campaign history and consent state are persisted.
+
+### Entity Relationship Overview
+
+```
+┌──────────────────────────────────────┐
+│             crm4_lists               │
+│ (Marketing Lists & Segmentation)     │
+└──────────────────┬───────────────────┘
+                   │
+         1:N       │ (list_id — IMMUTABLE)
+                   ▼
+┌──────────────────────────────────────┐       ┌──────────────────────────────────────┐
+│           crm4_campaigns             │       │            crm4_consents             │
+│   (Historical Campaign Headers)      │       │      (Contact Consent Registry)      │
+└──────────────────┬───────────────────┘       └──────────────────┬───────────────────┘
+                   │                                              │
+         1:N       │ (campaign_id)                                │ (action-time check)
+                   ▼                                              │
+┌──────────────────────────────────────┐                          │
+│            crm4_members              │ ◄────────────────────────┘
+│    (Campaign Participant Records)    │
+└──────────────────────────────────────┘
+```
 
 ---
 
@@ -43,15 +69,16 @@ Marketing segment lists grouping prospective or existing contacts for targeted c
 
 ### 2.2 `crm4.crm4_campaigns` (Marketing Campaigns)
 
-Recorded historical marketing campaigns linked to a parent marketing list.
+Historical record of executed marketing campaigns. Outbound delivery pipelines are strictly out of scope for V1.
 
 | Column Name | PostgreSQL Data Type | Nullable | Default | Constraints & Indexes | Business Rule & Validation Logic | Synthetic Example |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | **NO** | `gen_random_uuid()` | Primary Key | Immutable surrogate UUID primary key. | `44444444-2222-4444-8444-000000000001` |
-| `name` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(name)) > 0)` | Non-blank campaign title (max 255 chars). Trimmed upon ingress. | `Annual Developer Summit 2026` |
-| `campaign_date` | `DATE` | **NO** | *None* | `INDEX (campaign_date)` | Campaign execution or reference date formatted as ISO YYYY-MM-DD. | `2026-11-15` |
-| `list_id` | `UUID` | **NO** | *None* | `FK -> crm4_lists(id) ON DELETE RESTRICT`<br>`INDEX (list_id)`<br>**IMMUTABLE** | Linked marketing list; strictly immutable after campaign creation. Reassignment is blocked. | `44444444-1111-4444-8444-000000000001` |
-| `member_count` | `INTEGER` | **NO** | `0` | `CHECK (member_count >= 0)` | Count of recorded campaign participants; non-negative integer. | `45` |
+| `name` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(name)) > 0)`<br>`INDEX (lower(name))` | Campaign descriptive name (max 255 chars). Trimmed upon ingress. | `Q4 Product Launch Announcement` |
+| `list_id` | `UUID` | **NO** | *None* | `FK -> crm4_lists(id) ON DELETE RESTRICT`<br>`INDEX (list_id)` | Linked marketing list. Strictly **immutable** post-creation. Cannot re-target existing campaign. | `44444444-1111-4444-8444-000000000001` |
+| `status` | `TEXT` | **NO** | `'draft'` | `CHECK (status IN ('draft', 'scheduled', 'sent', 'cancelled'))` | Lifecycle state of campaign. | `sent` |
+| `sent_at` | `TIMESTAMPTZ` | YES | `NULL` | UTC Timestamp | Historical execution/dispatch timestamp. Required if status = 'sent'. | `2026-10-23T10:00:00.000Z` |
+| `total_recipients` | `INTEGER` | **NO** | `0` | `CHECK (total_recipients >= 0)` | Total recipients targeted in this historical campaign run. | `150` |
 | `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | UTC Timestamp | Record creation audit timestamp in UTC. Read-only. | `2026-10-23T10:00:00.000Z` |
 | `updated_at` | `TIMESTAMPTZ` | **NO** | `now()` | UTC Timestamp | Last mutation audit timestamp in UTC. Refreshed on update. | `2026-10-23T10:00:00.000Z` |
 
@@ -138,3 +165,18 @@ Detailed ledger recording all rejected rows during migration, with error codes a
 | `reason_code` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(reason_code)) > 0)` | Machine-readable rejection code (e.g. `MONOTONIC_OPT_OUT_VIOLATION`). | `INVALID_MEMBER_STATUS` |
 | `message` | `TEXT` | **NO** | *None* | `CHECK (length(btrim(message)) > 0)` | Human-readable explanation of rejection cause. | `Member status 'bounce' is not permitted. Valid: sent, opened, clicked.` |
 | `created_at` | `TIMESTAMPTZ` | **NO** | `now()` | UTC Timestamp | Rejection recording timestamp. | `2026-10-23T10:02:00.000Z` |
+
+---
+
+## 3. Business Invariants & Integrity Constraints
+
+1. **BR-CRM4-01 Monotonic Opt-Out Invariant**:
+   * An opt-out assertion (`status = 'unsubscribed'`) is permanent and monotonically non-decreasing.
+   * Neither standard updates, migration batch loads, nor bulk actions may revert a contact's consent to `'subscribed'`.
+   * Any update attempting this transition is rejected with `HTTP 409 Conflict`.
+2. **Campaign List Immutability**:
+   * A campaign's parent `list_id` cannot be modified after initial creation. Attempted mutations return `HTTP 403 Forbidden`.
+3. **Engagement Status Allowlist**:
+   * Member status is strictly confined to `'sent'`, `'opened'`, and `'clicked'`. Any other status string fails schema validation (`HTTP 400 Bad Request`).
+4. **Formula Injection Sanitization**:
+   * Any CSV exported from CRM-4 sanitizes fields starting with `=`, `+`, `-`, `@`, `\t`, or `\r` by prepending a single quote (`'`).

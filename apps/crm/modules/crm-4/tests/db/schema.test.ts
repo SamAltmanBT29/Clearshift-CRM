@@ -6,13 +6,16 @@ import {
   crm4Campaigns,
   crm4Members,
   crm4Consents,
+  crm4ImportBatches,
+  crm4ImportReceipts,
   crm4MarketingLists,
   crm4MarketingCampaigns,
   crm4CampaignMembers,
   crm4ContactConsents,
+  crm4ConsentRecords,
 } from '../../db/schema.js';
 
-describe('CRM-4 Relational Schema & Invariants (Issue #45 / [CRM4-10])', () => {
+describe('CRM-4 Relational Schema & Invariants (Issue #36 / [CRM4-01])', () => {
   describe('PostgreSQL Schema Definition', () => {
     it('is registered under the "crm4" PostgreSQL schema', () => {
       expect(crm4Schema).toBeDefined();
@@ -115,6 +118,27 @@ describe('CRM-4 Relational Schema & Invariants (Issue #45 / [CRM4-10])', () => {
 
       // Aliases
       expect(crm4ContactConsents).toBe(crm4Consents);
+      expect(crm4ConsentRecords).toBe(crm4Consents);
+    });
+  });
+
+  describe('5. crm4_import_batches & crm4_import_receipts Schema', () => {
+    it('defines correct table names and columns for migration kit integration', () => {
+      expect(getTableName(crm4ImportBatches)).toBe('crm4_import_batches');
+      const batchCols = getTableColumns(crm4ImportBatches);
+      expect(batchCols.id.primary).toBe(true);
+      expect(batchCols.sourceSystem.notNull).toBe(true);
+      expect(batchCols.status.notNull).toBe(true);
+      expect(batchCols.loadedCount.notNull).toBe(true);
+      expect(batchCols.rejectedCount.notNull).toBe(true);
+
+      expect(getTableName(crm4ImportReceipts)).toBe('crm4_import_receipts');
+      const receiptCols = getTableColumns(crm4ImportReceipts);
+      expect(receiptCols.id.primary).toBe(true);
+      expect(receiptCols.batchId.notNull).toBe(true);
+      expect(receiptCols.sourceRow.notNull).toBe(true);
+      expect(receiptCols.entity.notNull).toBe(true);
+      expect(receiptCols.idempotencyKey.notNull).toBe(true);
     });
   });
 });

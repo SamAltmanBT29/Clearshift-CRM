@@ -46,6 +46,9 @@ export const CRM1_ENDPOINT_CAPABILITIES: Record<Crm1EndpointKey, CapabilityType>
   DUPLICATES_HELD: Capabilities.MODULE_READ,
   DUPLICATES_RESOLVE: Capabilities.MODULE_WRITE,
   DUPLICATES_AUDIT: Capabilities.MODULE_READ,
+
+  BATCH_EXECUTE_LOAD: Capabilities.KIT_RUN,
+  BATCH_REPORT_READ: Capabilities.KIT_READ,
 };
 
 /**

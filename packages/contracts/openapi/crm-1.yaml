@@ -532,6 +532,61 @@ paths:
           description: Durable import receipt.
         "404":
           $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/crm-contacts/batches/execute-load:
+    post:
+      summary: Execute chunked batch load with bounded retries and stop threshold
+      description: Slices input into 500-row chunks, retries transient failures with exponential backoff while preserving idempotency keys, and stops immediately if failures exceed 10%.
+      operationId: executeCRM1BatchLoad
+      tags: [CRM-1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteBatchLoadInput'
+      responses:
+        '200':
+          description: Batch load execution report with status (COMPLETED or STOPPED_EXCESSIVE_FAILURES)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExecutionReport'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          description: Batch stopped due to excessive failures (>10%)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/crm-contacts/batches/{batchId}/report:
+    get:
+      summary: Get batch load execution report
+      description: Retrieves the durable execution report for a previously executed batch load.
+      operationId: getCRM1BatchReport
+      tags: [CRM-1]
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Batch load report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExecutionReport'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
   /api/v1/crm-contacts/duplicates/detect:
     post:
       summary: Detect exact duplicate candidates
@@ -1244,6 +1299,159 @@ components:
           type: array
           items:
             type: object
+    BatchExecutionStatus:
+      type: string
+      enum: [COMPLETED, STOPPED_EXCESSIVE_FAILURES, FAILED]
+    BatchRecordInput:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - data
+      properties:
+        sourceRow:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+        data:
+          type: object
+    ExecuteBatchLoadInput:
+      type: object
+      required:
+        - batchId
+        - records
+      properties:
+        batchId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+          default: crm-1
+        step:
+          type: string
+          enum: [extract, profile, clean, map, load, validate, reconcile]
+          default: load
+        chunkSize:
+          type: integer
+          default: 500
+        maxRetries:
+          type: integer
+          default: 3
+        failureThreshold:
+          type: number
+          default: 0.10
+        minAttemptedRows:
+          type: integer
+          default: 50
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchRecordInput'
+    BatchReceipt:
+      type: object
+      required:
+        - batchId
+        - sourceRow
+        - idempotencyKey
+        - targetId
+        - committedAt
+      properties:
+        batchId:
+          type: string
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        targetId:
+          type: string
+        kind:
+          type: string
+          enum: [created, linked]
+          default: created
+        committedAt:
+          type: string
+          format: date-time
+    FailedRow:
+      type: object
+      required:
+        - sourceRow
+        - idempotencyKey
+        - errorCode
+        - errorMessage
+        - retryAttempts
+      properties:
+        sourceRow:
+          type: integer
+        idempotencyKey:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryAttempts:
+          type: integer
+        payloadHash:
+          type: string
+    BatchExecutionReport:
+      type: object
+      required:
+        - batchId
+        - module
+        - step
+        - status
+        - totalRecords
+        - attemptedRecords
+        - committedRecords
+        - failedRecords
+        - chunksProcessed
+        - chunkSize
+        - failureRate
+        - committedReceipts
+        - failedRows
+        - executedAt
+      properties:
+        batchId:
+          type: string
+        module:
+          type: string
+          enum: [crm-1, crm-2, crm-3, crm-4, crm-5]
+        step:
+          type: string
+        status:
+          $ref: '#/components/schemas/BatchExecutionStatus'
+        totalRecords:
+          type: integer
+        attemptedRecords:
+          type: integer
+        committedRecords:
+          type: integer
+        failedRecords:
+          type: integer
+        chunksProcessed:
+          type: integer
+        chunkSize:
+          type: integer
+        failureRate:
+          type: number
+        haltReason:
+          type: string
+          nullable: true
+        committedReceipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchReceipt'
+        failedRows:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailedRow'
+        executedAt:
+          type: string
+          format: date-time
   securitySchemes:
     bearerAuth:
       type: http

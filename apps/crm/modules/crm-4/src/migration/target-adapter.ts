@@ -203,9 +203,10 @@ export class Crm4TargetAdapter implements TargetAdapter<ImportRowInput | Record<
             outcomeKind = 'linked';
           } else {
             const created = await this.service.createList({
+              id: listData['id'] ? String(listData['id']) : undefined,
               name: listName,
               description: listData['description'] ? String(listData['description']).trim() : null,
-            });
+            } as any);
             targetId = created.id;
             outcomeKind = 'created';
           }
@@ -232,10 +233,11 @@ export class Crm4TargetAdapter implements TargetAdapter<ImportRowInput | Record<
             outcomeKind = 'linked';
           } else {
             const created = await this.service.createCampaign({
+              id: campData['id'] ? String(campData['id']) : undefined,
               name: campName,
               campaignDate: String(campData['campaignDate'] ?? campData['campaign_date']),
               listId,
-            });
+            } as any);
             targetId = created.id;
             outcomeKind = 'created';
           }

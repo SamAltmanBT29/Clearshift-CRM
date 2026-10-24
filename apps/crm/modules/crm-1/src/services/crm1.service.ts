@@ -28,7 +28,13 @@ import type {
   CompanyCandidate,
   DuplicateEvaluationResult,
   CompanyDuplicateEvaluationResult,
+  Crm1ExecuteBatchLoadInput,
+  Crm1BatchExecutionReport,
 } from '@clearshift/contracts';
+import {
+  executeCrm1ChunkedBatchLoad,
+  type Crm1BatchLoaderOptions,
+} from '../domain/batch-loader.js';
 import {
   evaluateContactDuplicate,
   evaluateCompanyDuplicate,
@@ -143,6 +149,7 @@ function toLead(
 export class Crm1Service {
   private db: NodePgDatabase;
   private duplicateQueue = new DuplicateReviewQueue();
+  private batchReports: Map<string, Crm1BatchExecutionReport> = new Map();
 
   constructor(db?: NodePgDatabase) {
     this.db =
@@ -1333,5 +1340,26 @@ export class Crm1Service {
 
   public resetDuplicateStore(): void {
     this.duplicateQueue.clear();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. Chunked Batch Loading & Idempotent Retry (CRM1-13)
+  // ---------------------------------------------------------------------------
+
+  public async executeBatchLoad(
+    input: Crm1ExecuteBatchLoadInput,
+    options?: Crm1BatchLoaderOptions
+  ): Promise<Crm1BatchExecutionReport> {
+    const report = await executeCrm1ChunkedBatchLoad(input, options);
+    this.batchReports.set(report.batchId, report);
+    return report;
+  }
+
+  public getBatchReport(batchId: string): Crm1BatchExecutionReport | undefined {
+    return this.batchReports.get(batchId);
+  }
+
+  public resetBatchReports(): void {
+    this.batchReports.clear();
   }
 }
