@@ -30,9 +30,19 @@ import {
   assertRecordOwnership,
   type AuthenticatedUser,
 } from '../../src/plugins/auth.js';
+import {
+  extractTenantId,
+  assertNoImmutableFieldMutation,
+  assertObjectMutationAllowed,
+  createEndpointAuthPreHandlers,
+  IMMUTABLE_MUTATION_FIELDS,
+  IMMUTABLE_CREATION_FIELDS,
+  type Crm2TokenClaims,
+  type ObjectAuthorizationContext,
+} from '../../src/interface/authz.js';
 import { checkRouteAuth, HUB_LOGIN_PATH, ACCESS_DENIED_PATH } from '../../web/src/auth/route-guard.js';
 
-describe('CRM-2 Security, Authorization, Audit & Domain Invariants (Issue #24 / [CRM2-09])', () => {
+describe('CRM-2 Security & Authorization Policy Integration (Issues #128, #24 / [CRM2-15, CRM2-09])', () => {
   let app: ReturnType<typeof buildApp>;
   let service: Crm2Service;
   let auditService: Crm2AuditService;
@@ -1229,6 +1239,159 @@ describe('CRM-2 Security, Authorization, Audit & Domain Invariants (Issue #24 / 
       for (const endpointKey of Object.keys(CRM2_ENDPOINT_ROLES) as (keyof typeof CRM2_ENDPOINT_ROLES)[]) {
         expect(isCapabilityAllowed([Roles.ADMIN], endpointKey)).toBe(true);
       }
+    });
+  });
+
+  // ===========================================================================
+  // 13. Object-Level Authorization & Immutable Field Controls (CRM2-15 / #128)
+  // ===========================================================================
+  describe('Object-Level Authorization & Immutable Field Controls (CRM2-15 / #128)', () => {
+    it('extracts normalized tenant ID from token claims or request headers', () => {
+      const userWithTenant: Crm2TokenClaims = {
+        sub: 'usr-1',
+        roles: [Roles.EDITOR],
+        tenant_id: 'tenant-omega',
+      };
+      expect(extractTenantId(userWithTenant)).toBe('tenant-omega');
+
+      const userWithOrgId: Crm2TokenClaims = {
+        sub: 'usr-2',
+        roles: [Roles.VIEWER],
+        org_id: 'org-123',
+      };
+      expect(extractTenantId(userWithOrgId)).toBe('org-123');
+
+      const mockRequest = {
+        headers: { 'x-tenant-id': 'tenant-header-val' },
+      } as any;
+      expect(extractTenantId(undefined, mockRequest)).toBe('tenant-header-val');
+    });
+
+    it('rejects mutation of immutable fields (id, quoteNumber, createdAt, updatedAt) for non-admin users', () => {
+      const editorUser: Crm2TokenClaims = {
+        sub: 'editor-1',
+        roles: [Roles.EDITOR],
+      };
+
+      for (const field of IMMUTABLE_MUTATION_FIELDS) {
+        expect(() => {
+          assertNoImmutableFieldMutation(editorUser, { [field]: 'tampered-value', name: 'Valid Name' }, true);
+        }).toThrow(/modification of immutable field/);
+      }
+    });
+
+    it('allows non-admin mutations when only mutable fields are updated', () => {
+      const editorUser: Crm2TokenClaims = {
+        sub: 'editor-1',
+        roles: [Roles.EDITOR],
+      };
+
+      expect(() => {
+        assertNoImmutableFieldMutation(
+          editorUser,
+          {
+            name: 'Updated Deal Name',
+            value: '75000.00',
+            stage_name: 'Proposal',
+          },
+          true
+        );
+      }).not.toThrow();
+    });
+
+    it('allows ADMIN role to bypass immutable field restriction for emergency data correction', () => {
+      const adminUser: Crm2TokenClaims = {
+        sub: 'admin-1',
+        roles: [Roles.ADMIN],
+      };
+
+      expect(() => {
+        assertNoImmutableFieldMutation(
+          adminUser,
+          {
+            id: 'forced-id-correction',
+            quoteNumber: 'Q-9999',
+            updatedAt: '2026-10-24T00:00:00Z',
+          },
+          true
+        );
+      }).not.toThrow();
+    });
+
+    it('blocks non-admin users from forging golden identity fields on record creation', () => {
+      const editorUser: Crm2TokenClaims = {
+        sub: 'editor-1',
+        roles: [Roles.EDITOR],
+      };
+
+      for (const field of IMMUTABLE_CREATION_FIELDS) {
+        expect(() => {
+          assertNoImmutableFieldMutation(editorUser, { [field]: 'forged-golden-id' }, false);
+        }).toThrow(/modification of immutable field/);
+      }
+    });
+
+    it('assertObjectMutationAllowed enforces tenant, ownership, and immutability comprehensively', () => {
+      const user: Crm2TokenClaims = {
+        sub: 'emp-001',
+        employee_id: 'emp-001',
+        roles: [Roles.EDITOR],
+        tenant_id: 'tenant-corp',
+      };
+
+      const validCtx: ObjectAuthorizationContext = {
+        resourceType: 'deal',
+        resourceId: 'deal-101',
+        resourceOwnerId: 'emp-001',
+        resourceTenantId: 'tenant-corp',
+        payload: { value: '12000.00' },
+        isUpdate: true,
+      };
+
+      // Valid mutation passes
+      expect(() => assertObjectMutationAllowed(user, validCtx)).not.toThrow();
+
+      // Cross-tenant attempt fails
+      expect(() =>
+        assertObjectMutationAllowed(user, { ...validCtx, resourceTenantId: 'other-corp' })
+      ).toThrow(/cross-tenant record mutation forbidden/);
+
+      // Cross-user ownership attempt fails
+      expect(() =>
+        assertObjectMutationAllowed(user, { ...validCtx, resourceOwnerId: 'emp-999' })
+      ).toThrow(/unauthorized cross-user mutation/);
+
+      // Immutable field tampering fails
+      expect(() =>
+        assertObjectMutationAllowed(user, { ...validCtx, payload: { id: 'new-id' } })
+      ).toThrow(/modification of immutable field/);
+    });
+
+    it('createEndpointAuthPreHandlers generates functional preHandler chain', async () => {
+      const mockAuthenticate = async (req: any) => {
+        req.user = { sub: 'usr-1', roles: [Roles.VIEWER] };
+      };
+      const mockFastify = { authenticate: mockAuthenticate } as any;
+
+      const handlers = createEndpointAuthPreHandlers(mockFastify, {
+        endpointKey: 'DEALS_LIST',
+      });
+      expect(handlers).toHaveLength(2);
+      expect(typeof handlers[0]).toBe('function');
+      expect(typeof handlers[1]).toBe('function');
+
+      const mockReq = {
+        headers: {},
+        user: { sub: 'usr-1', roles: [Roles.VIEWER] },
+      } as any;
+      const mockReply = {} as any;
+
+      // Viewer is allowed on DEALS_LIST
+      await expect(handlers[1](mockReq, mockReply)).resolves.toBeUndefined();
+
+      // When role is not allowed, throws 403
+      const writeHandlers = createEndpointAuthPreHandlers(mockFastify, 'DEALS_CREATE');
+      await expect(writeHandlers[1](mockReq, mockReply)).rejects.toThrow(/Access denied/);
     });
   });
 });

@@ -566,6 +566,43 @@ export class ControlCenterService {
     this.reconciliations.set(report.batchId, report);
   }
 
+  public getAllRuns(): MigrationRun[] {
+    return [...this.runs];
+  }
+
+  public getAllScores(): QualityScore[] {
+    return [...this.scores];
+  }
+
+  public getAllRejects(): MigrationReject[] {
+    return [...this.rejects];
+  }
+
+  public getAllReconciliations(): ReconciliationReport[] {
+    return Array.from(this.reconciliations.values());
+  }
+
+  public snapshotState() {
+    return {
+      runs: [...this.runs],
+      scores: [...this.scores],
+      rejects: [...this.rejects],
+      reconciliations: new Map<string, ReconciliationReport>(this.reconciliations),
+    };
+  }
+
+  public restoreState(snapshot: {
+    runs: MigrationRun[];
+    scores: QualityScore[];
+    rejects: MigrationReject[];
+    reconciliations: Map<string, ReconciliationReport>;
+  }): void {
+    this.runs = [...snapshot.runs];
+    this.scores = [...snapshot.scores];
+    this.rejects = [...snapshot.rejects];
+    this.reconciliations = new Map<string, ReconciliationReport>(snapshot.reconciliations);
+  }
+
   public clear(): void {
     this.runs = [];
     this.scores = [];
@@ -775,3 +812,5 @@ export class ControlCenterService {
     return report;
   }
 }
+
+export const controlCenterService = new ControlCenterService();

@@ -206,7 +206,7 @@ describe('CRM-2 Deals, Pipeline and Quotes Public Contracts & OpenAPI', () => {
     });
   });
 
-  describe('Security & Audit Schemas and OpenAPI Specifications (CRM2-09)', () => {
+  describe('Security & Authorization Policy Schemas and OpenAPI Specifications (CRM2-15 / CRM2-09)', () => {
     it('validates CRM2AuditEventSchema with required fields and redaction structures', () => {
       const validEvent = {
         id: '123e4567-e89b-12d3-a456-426614174000',
