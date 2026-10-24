@@ -269,4 +269,71 @@ describe("CRM-1 public contracts", () => {
     expect(importOperation).toContain("#/components/schemas/ImportBatchDetail");
     expect(importOperation).toContain('"409":');
   });
+
+  describe("CRM1-13 Chunked Batch Load & Partial-Load Stop Schemas", () => {
+    it("validates Crm1ExecuteBatchLoadInput with default chunking and threshold values", async () => {
+      const {
+        Crm1ExecuteBatchLoadInputSchema,
+        CRM1_DEFAULT_CHUNK_SIZE,
+        CRM1_DEFAULT_FAILURE_THRESHOLD,
+        CRM1_DEFAULT_MAX_RETRIES,
+      } = await import("../src/crm-1.js");
+
+      const input = {
+        batchId: "batch-crm1-01",
+        records: [
+          {
+            sourceRow: 1,
+            idempotencyKey: "key-1",
+            data: { email: "lead1@example.com" },
+          },
+        ],
+      };
+
+      const parsed = Crm1ExecuteBatchLoadInputSchema.parse(input);
+      expect(parsed.chunkSize).toBe(CRM1_DEFAULT_CHUNK_SIZE);
+      expect(parsed.chunkSize).toBe(500);
+      expect(parsed.failureThreshold).toBe(CRM1_DEFAULT_FAILURE_THRESHOLD);
+      expect(parsed.failureThreshold).toBe(0.10);
+      expect(parsed.maxRetries).toBe(CRM1_DEFAULT_MAX_RETRIES);
+      expect(parsed.maxRetries).toBe(3);
+      expect(parsed.module).toBe("crm-1");
+      expect(parsed.step).toBe("load");
+    });
+
+    it("validates Crm1BatchExecutionStatusSchema allowlist", async () => {
+      const { Crm1BatchExecutionStatusSchema } = await import("../src/crm-1.js");
+      expect(Crm1BatchExecutionStatusSchema.parse("COMPLETED")).toBe("COMPLETED");
+      expect(Crm1BatchExecutionStatusSchema.parse("STOPPED_EXCESSIVE_FAILURES")).toBe(
+        "STOPPED_EXCESSIVE_FAILURES"
+      );
+      expect(Crm1BatchExecutionStatusSchema.parse("FAILED")).toBe("FAILED");
+      expect(Crm1BatchExecutionStatusSchema.safeParse("UNKNOWN").success).toBe(false);
+    });
+
+    it("documents CRM1-13 batch execution and report paths in OpenAPI", () => {
+      expect(crm1OpenApi).toContain("/api/v1/crm-contacts/batches/execute-load:");
+      expect(crm1OpenApi).toContain("/api/v1/crm-contacts/batches/{batchId}/report:");
+      expect(crm1OpenApi).toContain("BatchExecutionReport:");
+      expect(crm1OpenApi).toContain("STOPPED_EXCESSIVE_FAILURES");
+    });
+  });
+
+  describe("CRM1-05 UX Field Contract & Client Validation (Issue #10)", () => {
+    it("exports authoritative labels, helper texts, and validation rules in CRM1_FIELD_CONTRACT", async () => {
+      const { CRM1_FIELD_CONTRACT } = await import("../src/crm-1.js");
+      expect(CRM1_FIELD_CONTRACT.contact.firstName.label).toBe("First Name");
+      expect(CRM1_FIELD_CONTRACT.contact.lastName.label).toBe("Last Name");
+      expect(CRM1_FIELD_CONTRACT.contact.email.label).toBe("Email Address");
+      expect(CRM1_FIELD_CONTRACT.contact.companyId.label).toBe("Associated Company");
+      expect(CRM1_FIELD_CONTRACT.contact.leadStatus.label).toBe("Lead Status");
+      expect(CRM1_FIELD_CONTRACT.contact.goldenId.readOnly).toBe(true);
+
+      expect(CRM1_FIELD_CONTRACT.company.name.label).toBe("Company Name");
+      expect(CRM1_FIELD_CONTRACT.company.taxNumber.label).toBe("Tax Identification Number");
+
+      expect(CRM1_FIELD_CONTRACT.lead.contactId.label).toBe("Associated Contact");
+      expect(CRM1_FIELD_CONTRACT.lead.status.label).toBe("Pipeline Status");
+    });
+  });
 });

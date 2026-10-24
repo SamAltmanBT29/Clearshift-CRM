@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "template": {
+    "id": "crm2-deals-quotes-canonical",
+    "name": "CRM-2 Deals & Quotes Canonical Mapping",
+    "version": 1,
+    "module": "crm-2",
+    "entities": [
+      {
+        "name": "crm2_deals",
+        "fields": [
+          { "source": "name", "target": "name", "type": "string", "required": true },
+          { "source": "contact_id", "target": "contact_id", "type": "uuid", "required": false },
+          { "source": "value", "target": "value", "type": "decimal", "required": true },
+          { "source": "currency", "target": "currency", "type": "string", "required": true, "defaultValue": "USD" },
+          { "source": "stage_name", "target": "stage_name", "type": "string", "required": true, "defaultValue": "New" },
+          { "source": "close_date", "target": "close_date", "type": "date", "required": false },
+          { "source": "source_id", "target": "source_id", "type": "string", "required": false }
+        ]
+      },
+      {
+        "name": "crm2_quotes",
+        "fields": [
+          { "source": "quote_number", "target": "quote_number", "type": "string", "required": true },
+          { "source": "deal_id", "target": "deal_id", "type": "uuid", "required": true },
+          { "source": "quote_date", "target": "quote_date", "type": "date", "required": true },
+          { "source": "amount", "target": "amount", "type": "decimal", "required": true },
+          { "source": "currency", "target": "currency", "type": "string", "required": true, "defaultValue": "USD" },
+          { "source": "note", "target": "note", "type": "string", "required": false },
+          { "source": "source_id", "target": "source_id", "type": "string", "required": false }
+        ]
+      }
+    ]
+  }
+}

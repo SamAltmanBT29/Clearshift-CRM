@@ -110,6 +110,19 @@ export class Crm4Service {
   }
 
   /**
+   * Clears all in-memory entities and receipts.
+   */
+  public clearAll(): void {
+    this.lists.clear();
+    this.campaigns.clear();
+    this.members.clear();
+    this.consents.clear();
+    this.receipts.clear();
+    this.duplicateCandidates.clear();
+    this.duplicateAuditLogs = [];
+  }
+
+  /**
    * Resets and populates deterministic synthetic fixtures.
    */
   public seedSyntheticData(): void {
@@ -281,7 +294,7 @@ export class Crm4Service {
     }
     const nowIso = new Date().toISOString();
     const list: CRM4List = {
-      id: randomUUID(),
+      id: (data as any).id ? String((data as any).id) : randomUUID(),
       name: data.name.trim(),
       description: data.description ? data.description.trim() : null,
       campaignCount: 0,
@@ -382,7 +395,7 @@ export class Crm4Service {
 
     const nowIso = new Date().toISOString();
     const campaign: CRM4Campaign = {
-      id: randomUUID(),
+      id: (data as any).id ? String((data as any).id) : randomUUID(),
       name: data.name.trim(),
       campaignDate: data.campaignDate,
       listId: data.listId,

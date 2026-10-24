@@ -822,3 +822,88 @@ A critical non-negotiable invariant of ClearShift data reliability:
 
 ---
 
+## 14. Transactional Event Envelope, Outbox Producer & CRM-5 Projections (KIT-13)
+
+**Traceability:** SDS ClearShift Migration Kit v2.0 §§3–4, §4.9 (FR-EV-01–04), §12.1–12.7; Project Plan v3.0 §§9, 11, 17; Issue #80 `[KIT-13]`.
+
+### 14.1 Pipeline Stage Overview & The Dual-Write Problem
+
+As data flows through the seven-step migration pipeline, downstream operational read models and monitoring dashboards (specifically **CRM-5 Control Center**) need real-time, event-driven updates. However, updating a domain model and publishing a message to a queue in two distinct network calls introduces the classic **dual-write problem**: if either operation fails, the system enters an inconsistent state.
+
+To solve this, ClearShift uses the **Transactional Outbox Pattern**:
+1. Domain updates and event envelope insertion occur within the **same atomic PostgreSQL database transaction**.
+2. If the transaction commits, both the domain mutation and the event envelope in `platform.outbox` persist together.
+3. If the transaction fails or aborts, both roll back cleanly with zero ghost events or state skew.
+
+```
+       Caller Pipeline Step (e.g. Load / Clean / Profile)
+                            │
+               BEGIN TRANSACTION [PostgreSQL]
+               ├── Write domain entities (clean records, receipts, batches)
+               └── OutboxProducer.publishBatch*(tx, payload)
+                   └── INSERT INTO platform.outbox (...)
+               COMMIT TRANSACTION
+                            │
+                            ▼
+               Asynchronous Outbox Dispatcher
+                            │
+                            ▼
+                  Crm5EventProjector
+               ├── 1. Deduplication check against `platform.consumed_events`
+               │      (Replays skipped idempotently without re-execution)
+               ├── 2. Out-of-Order Delivery Tolerance
+               │      (Monotonic step precedence check: extract < profile < ... < validate)
+               └── 3. Update CRM-5 Read Models
+                      ├── crm5_runs (step, status, row counters)
+                      ├── crm5_scores (data quality, completeness)
+                      └── crm5_reconciliation_reports (source = loaded + rejected + merged + skipped)
+```
+
+### 14.2 Standard Event Envelope Taxonomy & Schemas
+
+ClearShift Migration Kit defines a strict event envelope taxonomy for all lifecycle transitions and entity reconciliations:
+
+| Event Type | Aggregate Type | Trigger / Stage | Key Payload Fields |
+| :--- | :---: | :---: | :--- |
+| **`batch.extracted`** | `kit_batch` | Step 1 (Extract) | `batch_id`, `module`, `source_file_name`, `source_file_hash`, `source_row_count` |
+| **`batch.profiled`** | `kit_batch` | Step 2 (Profile) | `batch_id`, `module`, `profile_checksum`, `total_columns`, `duplicate_candidates` |
+| **`batch.cleaned`** | `kit_batch` | Step 3 (Clean) | `batch_id`, `module`, `rules_applied_count`, `modified_cells_count`, `cleaned_rows_count` |
+| **`batch.mapped`** | `kit_batch` | Step 4 (Map) | `batch_id`, `module`, `template_id`, `template_version`, `target_entity`, `mapped_rows_count` |
+| **`batch.loaded`** | `kit_batch` | Step 6 (Load) | `batch_id`, `module`, `target_entity`, `attempted_rows`, `inserted_rows`, `updated_rows`, `rejected_rows`, `skipped_rows` |
+| **`batch.validated`**| `kit_batch` | Step 7 (Validate) | `batch_id`, `module`, `total_checked`, `validation_failures`, `is_valid`, `checksum` |
+| **`batch.failed`** | `kit_batch` | Any Step | `batch_id`, `module`, `step`, `error_code`, `error_message`, `attempt_count`, `resumable` |
+| **`contact.merged`** | `contact` | Post-Load / Merge | `master_contact_id`, `merged_contact_id`, `correlation_id`, `merge_reason` |
+
+### 14.3 Strict Confidentiality Invariant (Zero Secrets & Zero Raw Rows)
+
+A non-negotiable security and governance requirement for all event payloads:
+- **Zero Raw Rows:** Envelopes MUST NEVER include customer row payloads, raw CSV row strings, personal data, or column dictionaries.
+- **Zero Secrets / Tokens:** Envelopes MUST NEVER include access tokens, API secrets, passwords, or bearer credentials.
+- **Enforcement:** `assertNoSecretsOrRawRows(payload)` executes both at envelope factory creation and within `MigrationOutboxProducer.publishBatch*()`. Any violation throws `SecretsOrRawRowsForbiddenError` and aborts the transaction.
+
+### 14.4 Consumer Deduplication & Replay Semantics
+
+When consuming from `platform.outbox`, networks and message brokers guarantee at-least-once delivery. To prevent double-counting or corrupting balance sheets:
+1. Every event has a unique `id` (UUID).
+2. The consumer queries `platform.consumed_events` keyed by `(consumer_name, event_id)`.
+3. If the record exists, the event is immediately discarded with status `skipped_duplicate` and zero side-effects.
+4. If not yet processed, the projection is executed and `platform.consumed_events` is updated atomically.
+
+### 14.5 Out-of-Order Delivery Tolerance & Monotonic Precedence
+
+Under distributed execution or partitioned queues, events may arrive out of order (e.g. `batch.loaded` processed before delayed `batch.profiled`).
+- **Monotonic Step Precedence:** The projector enforces a total order of pipeline steps:
+  $$\text{extract} < \text{profile} < \text{clean} < \text{map} < \text{dry\_run} < \text{load} < \text{validate} < \text{reconcile}$$
+- **Non-Regression Rule:** If an incoming event has a lower step precedence than the current `crm5_runs.step`, the projector records event telemetry but **refuses to downgrade** the run step.
+- **Terminal Failure Preservation:** If a run has already reached status `'failed'`, delayed earlier step events cannot overwrite the status back to `'running'` or `'completed'`.
+
+### 14.6 CRM-5 Projections & The Reconciliation Balance Sheet
+
+The `Crm5EventProjector` updates three central CRM-5 read models:
+1. **`crm5_runs`**: Tracks pipeline execution state, active step, total row counts, duration, and error codes.
+2. **`crm5_scores`**: Captures profiled data quality scores and deduplication rates for executive reporting.
+3. **`crm5_reconciliation_reports`**: Maintains mathematical conservation balance sheet:
+   $$\text{source\_rows} = \text{loaded\_rows} + \text{rejected\_rows} + \text{merged\_rows} + \text{skipped\_rows}$$
+   $$(\text{unaccounted\_rows} = 0)$$
+
+If `contact.merged` events arrive, `merged_rows` increments and `loaded_rows` adjusts, ensuring the reconciliation equation remains strictly balanced.

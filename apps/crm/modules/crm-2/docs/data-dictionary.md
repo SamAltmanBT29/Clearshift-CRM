@@ -75,7 +75,10 @@ Commercial proposals generated for deals.
 
 ---
 
-### 2.4 `crm2.crm2_quote_lines` (Quote Line Items)
+### 2.4 `crm2.crm2_quote_lines` (Quote Line Items — V2 Out-of-Scope)
+
+> [!NOTE]
+> **V2 Scope Traceability:** Per SDS ClearShift CRM v2.0 §5.3 ("Data model changes V2") and requirement `FR-CRM2-11`, granular quote line items belong to V2. This table is defined in the database schema for forward-compatible schema evolution, but is explicitly out-of-scope for ClearShift V1 core runtime operations and Gate G4 release gating.
 
 Granular product or service line items associated with a quote.
 

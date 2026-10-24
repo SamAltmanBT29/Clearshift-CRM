@@ -23,3 +23,5 @@ export * from './pages/DuplicateReviewPage.js';
 export * from './pages/ImportsOverviewPage.js';
 export * from './pages/CleaningAuditPage.js';
 export * from './pages/MappingTemplatesPage.js';
+export * from './pages/BatchLoaderPage.js';
+export * from './src/index.js';

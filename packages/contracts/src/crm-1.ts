@@ -630,4 +630,196 @@ export const CRM1ErrorEnvelopeSchema = z.object({
 });
 export type CRM1ErrorEnvelope = z.infer<typeof CRM1ErrorEnvelopeSchema>;
 
+// ---------------------------------------------------------------------------
+// 7. CRM-1 Chunked Batch Ingestion & Idempotent Retry Contracts (CRM1-13)
+// ---------------------------------------------------------------------------
+
+export const CRM1_DEFAULT_CHUNK_SIZE = 500;
+export const CRM1_DEFAULT_FAILURE_THRESHOLD = 0.10;
+export const CRM1_DEFAULT_MIN_ATTEMPTED_ROWS = 50;
+export const CRM1_DEFAULT_MAX_RETRIES = 3;
+
+export const Crm1BatchExecutionStatusSchema = z.enum([
+  'COMPLETED',
+  'STOPPED_EXCESSIVE_FAILURES',
+  'FAILED',
+]);
+export type Crm1BatchExecutionStatus = z.infer<typeof Crm1BatchExecutionStatusSchema>;
+
+export const Crm1BatchRecordInputSchema = z.object({
+  sourceRow: z.number().int({ message: 'sourceRow must be an integer' }).min(1),
+  idempotencyKey: z.string().min(1, 'idempotencyKey is required').max(128),
+  data: z.record(z.string(), z.unknown()),
+});
+export type Crm1BatchRecordInput = z.infer<typeof Crm1BatchRecordInputSchema>;
+
+export const Crm1ExecuteBatchLoadInputSchema = z.object({
+  batchId: z.string().min(1, 'batchId is required').max(128),
+  module: z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']).default('crm-1'),
+  step: z.enum(['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']).default('load'),
+  chunkSize: z.number().int().min(1).max(1000).default(500),
+  maxRetries: z.number().int().min(0).max(5).default(3),
+  failureThreshold: z.number().min(0).max(1).default(0.10),
+  minAttemptedRows: z.number().int().min(1).default(50),
+  records: z.array(Crm1BatchRecordInputSchema).min(1, 'records must not be empty'),
+});
+export type Crm1ExecuteBatchLoadInput = z.input<typeof Crm1ExecuteBatchLoadInputSchema>;
+export type Crm1ExecuteBatchLoadOutput = z.infer<typeof Crm1ExecuteBatchLoadInputSchema>;
+
+export const Crm1BatchReceiptSchema = z.object({
+  batchId: z.string(),
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  targetId: z.string(),
+  kind: z.enum(['created', 'linked']).default('created'),
+  committedAt: z.coerce.date(),
+});
+export type Crm1BatchReceipt = z.infer<typeof Crm1BatchReceiptSchema>;
+
+export const Crm1FailedRowSchema = z.object({
+  sourceRow: z.number().int(),
+  idempotencyKey: z.string(),
+  errorCode: z.string(),
+  errorMessage: z.string(),
+  retryAttempts: z.number().int(),
+  payloadHash: z.string().optional(),
+});
+export type Crm1FailedRow = z.infer<typeof Crm1FailedRowSchema>;
+
+export const Crm1BatchExecutionReportSchema = z.object({
+  batchId: z.string(),
+  module: z.enum(['crm-1', 'crm-2', 'crm-3', 'crm-4', 'crm-5']),
+  step: z.enum(['extract', 'profile', 'clean', 'map', 'load', 'validate', 'reconcile']),
+  status: Crm1BatchExecutionStatusSchema,
+  totalRecords: z.number().int().nonnegative(),
+  attemptedRecords: z.number().int().nonnegative(),
+  committedRecords: z.number().int().nonnegative(),
+  failedRecords: z.number().int().nonnegative(),
+  chunksProcessed: z.number().int().nonnegative(),
+  chunkSize: z.number().int(),
+  failureRate: z.number().min(0).max(1),
+  haltReason: z.string().nullable().optional(),
+  committedReceipts: z.array(Crm1BatchReceiptSchema),
+  failedRows: z.array(Crm1FailedRowSchema),
+  executedAt: z.coerce.date(),
+});
+export type Crm1BatchExecutionReport = z.infer<typeof Crm1BatchExecutionReportSchema>;
+
+// ---------------------------------------------------------------------------
+// 8. CRM-1 UX Field Contract & Client Validation Metadata (CRM1-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * Authoritative field labels, helper texts, and validation error messages for CRM-1 forms.
+ * Guarantees field-level UX alignment between frontend forms and OpenAPI contract.
+ */
+export const CRM1_FIELD_CONTRACT = {
+  contact: {
+    firstName: {
+      label: 'First Name',
+      helperText: 'Enter contact first name.',
+      required: true,
+      errorRequired: 'First name is required',
+    },
+    lastName: {
+      label: 'Last Name',
+      helperText: 'Enter contact last name or family name.',
+      required: true,
+      errorRequired: 'Last name is required',
+    },
+    email: {
+      label: 'Email Address',
+      helperText: 'Primary business email address.',
+      required: false,
+      errorInvalid: 'Email must be a valid email address',
+    },
+    phone: {
+      label: 'Phone Number',
+      helperText: 'Primary telephone number with country code.',
+      required: false,
+    },
+    address: {
+      label: 'Street Address',
+      helperText: 'Physical or mailing address.',
+      required: false,
+    },
+    companyId: {
+      label: 'Associated Company',
+      helperText: 'Optional link to existing flat company UUID.',
+      required: false,
+      errorInvalid: 'Company ID must be a valid UUID',
+    },
+    leadStatus: {
+      label: 'Lead Status',
+      helperText: 'Lifecycle lead status: New, Working, Qualified, or Closed.',
+      required: false,
+      errorInvalid: 'Lead status must be one of: New, Working, Qualified, Closed',
+    },
+    goldenId: {
+      label: 'Golden Identity ID',
+      helperText: 'System-generated unique Golden ID for contact resolution.',
+      readOnly: true,
+    },
+  },
+  company: {
+    name: {
+      label: 'Company Name',
+      helperText: 'Official organization or legal entity name.',
+      required: true,
+      errorRequired: 'Company name is required',
+    },
+    taxNumber: {
+      label: 'Tax Identification Number',
+      helperText: 'Registered tax or VAT number (uppercase, stripped spaces).',
+      required: false,
+    },
+    email: {
+      label: 'Corporate Email',
+      helperText: 'Primary organization email address.',
+      required: false,
+      errorInvalid: 'Email must be a valid email address',
+    },
+    phone: {
+      label: 'Main Office Phone',
+      helperText: 'Primary corporate switchboard telephone.',
+      required: false,
+    },
+    address: {
+      label: 'Headquarters Address',
+      helperText: 'Registered business or corporate headquarters address.',
+      required: false,
+    },
+  },
+  lead: {
+    contactId: {
+      label: 'Associated Contact',
+      helperText: 'Link to target contact UUID.',
+      required: true,
+      errorRequired: 'Contact ID is required',
+      errorInvalid: 'Contact ID must be a valid UUID',
+    },
+    status: {
+      label: 'Pipeline Status',
+      helperText: 'Current lead stage in the SDS CRM allowlist.',
+      required: true,
+      errorRequired: 'Lead status is required',
+      errorInvalid: 'Lead status must be one of: New, Working, Qualified, Closed',
+    },
+  },
+  importBatch: {
+    batchId: {
+      label: 'Batch ID',
+      helperText: 'Unique UUID identifier for this migration batch.',
+      readOnly: true,
+    },
+    sourceSystem: {
+      label: 'Source System',
+      helperText: 'External legacy system origin (e.g., Salesforce, HubSpot).',
+      readOnly: true,
+    },
+  },
+} as const;
+
+export type CRM1FieldContract = typeof CRM1_FIELD_CONTRACT;
+
 export * from './import-target.js';
